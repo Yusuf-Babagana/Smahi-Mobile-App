@@ -1,16 +1,16 @@
 {
   "expo": {
-    "name": "Natively",
+    "name": "smahi",
     "slug": "Natively",
     "version": "1.0.0",
     "orientation": "portrait",
-    "icon": "./assets/images/mahi.png",
+    "icon": "./assets/images/smahi.png",
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
     "splash": {
-      "image": "./assets/images/mahi.png",
+      "image": "./assets/images/smahi.png",
       "resizeMode": "contain",
-      "backgroundColor": "#000000"
+      "backgroundColor": "#007BFF"
     },
     "ios": {
       "supportsTablet": true,
@@ -21,14 +21,14 @@
     },
     "android": {
       "adaptiveIcon": {
-        "foregroundImage": "./assets/images/mahi.png",
-        "backgroundColor": "#000000"
+        "foregroundImage": "./assets/images/smahi.png",
+        "backgroundColor": "#ffffff"
       },
       "edgeToEdgeEnabled": true,
       "package": "com.anonymous.Natively"
     },
     "web": {
-      "favicon": "./assets/images/mahi.png",
+      "favicon": "./assets/images/smahi.png",
       "bundler": "metro"
     },
     "plugins": [
@@ -45,6 +45,7 @@
       "eas": {
         "projectId": "c2c6bdb4-a08a-4618-8941-2be3172cd94f"
       }
-    }
+    },
+    "owner": "babagana1"
   }
 }

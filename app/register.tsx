@@ -1,495 +1,496 @@
-
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
-  View,
-  Text,
-  TextInput,
-  StyleSheet,
-  Alert,
-  KeyboardAvoidingView,
-  Platform,
-  ScrollView,
-  TouchableOpacity,
-  ActivityIndicator,
+  View, Text, StyleSheet, Alert, ScrollView, TouchableOpacity,
+  ActivityIndicator, KeyboardAvoidingView, Platform, ImageBackground, Switch, Dimensions
 } from 'react-native';
 import { useRouter } from 'expo-router';
-import { Picker } from '@react-native-picker/picker';
-import { authAPI } from '@/src/api/client';
+import { StatusBar } from 'expo-status-bar';
+import { authAPI, locationAPI } from '@/src/api/client';
 import { UserRole } from '@/src/types';
-import { useTheme } from '@react-navigation/native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { IconSymbol } from '@/components/IconSymbol';
-import { countries, getStatesByCountry, getLocalGovernmentsByState } from '@/src/constants/countries';
+import Animated, { FadeInRight, FadeOutLeft, LinearTransition } from 'react-native-reanimated';
+import CustomPicker from '@/components/CustomPicker';
+import { ModernInput } from '@/src/components/ModernInput';
+import { LinearGradient } from 'expo-linear-gradient';
+
+// IMPORT COMMON STYLES
+import { colors, commonStyles } from '@/styles/commonStyles';
+
+const { height } = Dimensions.get('window');
+
+// --- 1. TRANSLATION DICTIONARY ---
+const SERVICE_TRANSLATIONS: { [key: string]: string } = {
+  "AC & Fridge Repair": "Gyaran AC da Frio",
+  "Aluminum & Glass Work": "Aikin Gilashi da Aluminum",
+  "Barbing": "Aski",
+  "Bricklaying & Masonry": "Aikin Gini",
+  "Carpentry & Furniture": "Kafinta / Aikin Katako",
+  "Catering & Cooking": "Aikin Girki",
+  "Cleaning Services": "Aikin Shara & Goge-goge",
+  "Electrical Works": "Aikin Wutar Lantarki",
+  "Event Planning": "Shirya Biki da Taro",
+  "Fashion Design & Tailoring": "Telan Tufafi",
+  "Gardening": "Aikin Lambu",
+  "Generator Repair": "Gyaran Janareta",
+  "Hairdressing": "Kitso",
+  "Interior Decoration": "Ado na Cikin Gida",
+  "Laundry & Dry Cleaning": "Wanki da Guga",
+  "Makeup Artistry": "Kwalliya",
+  "Mechanic (Auto)": "Makanike",
+  "Painting": "Fenti",
+  "Pest Control": "Kashe Kwari",
+  "Phone & Laptop Repair": "Gyaran Wayoyi da Kwamfuta",
+  "Photography": "Daukar Hoto",
+  "Plumbing": "Aikin Ruwa",
+  "Satellite Dish Installation": "Aikin Dish",
+  "Solar Energy Installation": "Aikin Wutar Solar",
+  "Tiling": "Aikin Tiles",
+  "Vulcanizing": "Aikin Taya",
+  "Welding": "Aikin Walda",
+  "Woodwork": "Sassaka"
+};
 
 export default function RegisterScreen() {
   const router = useRouter();
-  const theme = useTheme();
+
+  // --- STEPS STATE ---
+  const [currentStep, setCurrentStep] = useState(1);
+  const totalSteps = 4;
+
+  // --- FORM STATE ---
+  const [acceptedTerms, setAcceptedTerms] = useState(false);
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [confirmPassword, setConfirmPassword] = useState('');
   const [phone, setPhone] = useState('');
   const [role, setRole] = useState<UserRole>('client');
-  const [country, setCountry] = useState('');
-  const [state, setState] = useState('');
-  const [localGovernment, setLocalGovernment] = useState('');
   const [loading, setLoading] = useState(false);
-  const [showPassword, setShowPassword] = useState(false);
-  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  const [errors, setErrors] = useState<{ [key: string]: string }>({});
 
-  const states = country ? getStatesByCountry(country) : [];
-  const localGovernments = country && state ? getLocalGovernmentsByState(country, state) : [];
+  // --- DATA STATE ---
+  const [services, setServices] = useState<any[]>([]);
+  const [selectedService, setSelectedService] = useState('');
+  const [countries, setCountries] = useState<any[]>([]);
+  const [states, setStates] = useState<any[]>([]);
+  const [lgas, setLgas] = useState<any[]>([]);
+
+  const [selectedCountry, setSelectedCountry] = useState('');
+  const [selectedState, setSelectedState] = useState('');
+  const [selectedLga, setSelectedLga] = useState('');
+
+  // --- DATA LOADING ---
+  useEffect(() => {
+    // 1. Fetch Countries
+    locationAPI.getCountries().then(setCountries).catch(console.error);
+
+    // 2. Fetch Services & Translate Immediately
+    authAPI.getServices().then((backendData: any[]) => {
+      // Transform the data
+      const formattedServices = backendData.map(item => {
+        // Extract the value (backend might send object or string)
+        const englishName = item.value || item.label || item;
+
+        // Find translation
+        const hausaName = SERVICE_TRANSLATIONS[englishName];
+
+        return {
+          // Format label: "English (Hausa)"
+          label: hausaName ? `${englishName} (${hausaName})` : englishName,
+          value: englishName // Keep original English value for database
+        };
+      });
+
+      // Sort Alphabetically by the new Label
+      formattedServices.sort((a, b) => a.label.localeCompare(b.label));
+
+      setServices(formattedServices);
+    }).catch(console.error);
+  }, []);
+
+  useEffect(() => {
+    if (!selectedCountry) return;
+    locationAPI.getStates(Number(selectedCountry)).then(data => {
+      setStates(data || []);
+      setSelectedState(''); setLgas([]); setSelectedLga('');
+    }).catch(console.error);
+  }, [selectedCountry]);
+
+  useEffect(() => {
+    if (!selectedState) return;
+    locationAPI.getLGAs(Number(selectedState)).then(data => {
+      setLgas(data || []);
+      setSelectedLga('');
+    }).catch(console.error);
+  }, [selectedState]);
+
+  // --- VALIDATION ---
+  const validateStep = (step: number) => {
+    let newErrors: { [key: string]: string } = {};
+
+    // STEP 1: TERMS
+    if (step === 1) {
+      if (!acceptedTerms) {
+        Alert.alert("Terms Required", "Please read and accept the Terms and Conditions to proceed.");
+        return false;
+      }
+    }
+
+    // STEP 2: ACCOUNT INFO
+    if (step === 2) {
+      if (!name) newErrors['name'] = "Full Name is required";
+      if (!email || !email.includes('@')) newErrors['email'] = "Valid email is required";
+      if (!phone) newErrors['phone'] = "Phone number is required";
+      if (!password || password.length < 6) newErrors['password'] = "Password must be 6+ chars";
+    }
+
+    // STEP 4: LOCATION (Role is Step 3)
+    if (step === 4) {
+      if (!selectedCountry) newErrors['country'] = "Select your country";
+      if (!selectedState) newErrors['state'] = "Select your state";
+      if (!selectedLga) newErrors['lga'] = "Select your city/LGA";
+      if (role === 'artisan' && !selectedService) newErrors['service'] = "Select your service";
+    }
+    setErrors(newErrors);
+    return Object.keys(newErrors).length === 0;
+  };
+
+  const nextStep = () => { if (validateStep(currentStep)) setCurrentStep(c => c + 1); };
+  const prevStep = () => setCurrentStep(c => c - 1);
 
   const handleRegister = async () => {
-    // Validation
-    if (!name || !email || !password || !confirmPassword) {
-      Alert.alert('Error', 'Please fill in all required fields');
-      return;
-    }
-
-    if (password !== confirmPassword) {
-      Alert.alert('Error', 'Passwords do not match');
-      return;
-    }
-
-    if (password.length < 6) {
-      Alert.alert('Error', 'Password must be at least 6 characters long');
-      return;
-    }
-
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    if (!emailRegex.test(email)) {
-      Alert.alert('Error', 'Please enter a valid email address');
-      return;
-    }
-
-    if (!country || !state) {
-      Alert.alert('Error', 'Please select your country and state');
-      return;
-    }
-
+    if (!validateStep(4)) return;
     setLoading(true);
     try {
       await authAPI.register({
-        name: name.trim(),
-        email: email.toLowerCase().trim(),
-        password,
-        role,
-        phone: phone.trim() || undefined,
-        country,
-        state,
-        localGovernment: localGovernment || undefined,
+        name, email, password, role, phone,
+        service_category: role === 'artisan' ? selectedService : undefined,
+        country: selectedCountry, state: selectedState, lga: selectedLga
       });
-
-      Alert.alert(
-        'Success',
-        'Account created successfully! Please login to continue.',
-        [
-          {
-            text: 'OK',
-            onPress: () => router.replace('/login'),
-          },
-        ]
-      );
+      Alert.alert('Success', 'Account created!', [{ text: 'Login Now', onPress: () => router.replace('/login') }]);
     } catch (error: any) {
-      console.error('Registration error:', error);
-      Alert.alert('Registration Failed', error.message || 'An error occurred during registration');
+      Alert.alert('Error', error.response?.data ? JSON.stringify(error.response.data) : 'Registration Failed');
     } finally {
       setLoading(false);
     }
   };
 
+  const renderProgressBar = () => (
+    <View style={styles.progressContainer}>
+      <View style={styles.track}>
+        <Animated.View
+          style={[
+            styles.indicator,
+            { width: `${(currentStep / totalSteps) * 100}%` }
+          ]}
+          layout={LinearTransition.springify()}
+        />
+      </View>
+      <Text style={styles.stepText}>Step {currentStep} of {totalSteps}</Text>
+    </View>
+  );
+
   return (
-    <SafeAreaView style={[styles.safeArea, { backgroundColor: theme.colors.background }]}>
-      <KeyboardAvoidingView
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-        style={styles.container}
+    <ImageBackground
+      source={{ uri: 'https://images.unsplash.com/photo-1557804506-669a67965ba0?q=80&w=2574&auto=format&fit=crop' }}
+      style={{ flex: 1 }}
+      resizeMode="cover"
+    >
+      <LinearGradient
+        colors={['rgba(255,255,255,0.7)', 'rgba(255,255,255,0.95)', '#FFFFFF']}
+        locations={[0, 0.6, 1]}
+        style={{ flex: 1 }}
       >
-        <ScrollView
-          contentContainerStyle={styles.scrollContent}
-          keyboardShouldPersistTaps="handled"
-          showsVerticalScrollIndicator={false}
-        >
-          <View style={styles.header}>
-            <TouchableOpacity
-              style={styles.backButton}
-              onPress={() => router.back()}
-              disabled={loading}
-            >
-              <IconSymbol name="chevron.left" size={24} color={theme.colors.primary} />
-            </TouchableOpacity>
-            <Text style={[styles.title, { color: theme.colors.text }]}>
-              Create Account
-            </Text>
-            <Text style={[styles.subtitle, { color: theme.dark ? '#98989D' : '#666' }]}>
-              Join Artisan Connect today
-            </Text>
-          </View>
+        <StatusBar style="dark" translucent={true} />
 
-          <View style={styles.form}>
-            <View style={styles.inputContainer}>
-              <Text style={[styles.label, { color: theme.colors.text }]}>Full Name *</Text>
-              <TextInput
-                style={[
-                  styles.input,
-                  {
-                    backgroundColor: theme.dark ? '#1C1C1E' : '#F2F2F7',
-                    color: theme.colors.text,
-                    borderColor: theme.colors.border,
-                  },
-                ]}
-                placeholder="Enter your full name"
-                placeholderTextColor={theme.dark ? '#98989D' : '#999'}
-                value={name}
-                onChangeText={setName}
-                autoCapitalize="words"
-                editable={!loading}
-              />
-            </View>
+        <SafeAreaView style={{ flex: 1 }}>
+          <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={{ flex: 1 }}>
 
-            <View style={styles.inputContainer}>
-              <Text style={[styles.label, { color: theme.colors.text }]}>Email *</Text>
-              <TextInput
-                style={[
-                  styles.input,
-                  {
-                    backgroundColor: theme.dark ? '#1C1C1E' : '#F2F2F7',
-                    color: theme.colors.text,
-                    borderColor: theme.colors.border,
-                  },
-                ]}
-                placeholder="Enter your email"
-                placeholderTextColor={theme.dark ? '#98989D' : '#999'}
-                value={email}
-                onChangeText={setEmail}
-                autoCapitalize="none"
-                keyboardType="email-address"
-                autoComplete="email"
-                editable={!loading}
-              />
-            </View>
-
-            <View style={styles.inputContainer}>
-              <Text style={[styles.label, { color: theme.colors.text }]}>Phone</Text>
-              <TextInput
-                style={[
-                  styles.input,
-                  {
-                    backgroundColor: theme.dark ? '#1C1C1E' : '#F2F2F7',
-                    color: theme.colors.text,
-                    borderColor: theme.colors.border,
-                  },
-                ]}
-                placeholder="Enter your phone number"
-                placeholderTextColor={theme.dark ? '#98989D' : '#999'}
-                value={phone}
-                onChangeText={setPhone}
-                keyboardType="phone-pad"
-                autoComplete="tel"
-                editable={!loading}
-              />
-            </View>
-
-            <View style={styles.inputContainer}>
-              <Text style={[styles.label, { color: theme.colors.text }]}>Password *</Text>
-              <View style={styles.passwordContainer}>
-                <TextInput
-                  style={[
-                    styles.input,
-                    styles.passwordInput,
-                    {
-                      backgroundColor: theme.dark ? '#1C1C1E' : '#F2F2F7',
-                      color: theme.colors.text,
-                      borderColor: theme.colors.border,
-                    },
-                  ]}
-                  placeholder="Enter your password"
-                  placeholderTextColor={theme.dark ? '#98989D' : '#999'}
-                  value={password}
-                  onChangeText={setPassword}
-                  secureTextEntry={!showPassword}
-                  autoComplete="password-new"
-                  editable={!loading}
-                />
-                <TouchableOpacity
-                  style={styles.eyeIcon}
-                  onPress={() => setShowPassword(!showPassword)}
-                  disabled={loading}
-                >
-                  <IconSymbol
-                    name={showPassword ? 'eye.slash' : 'eye'}
-                    size={20}
-                    color={theme.dark ? '#98989D' : '#666'}
-                  />
-                </TouchableOpacity>
-              </View>
-            </View>
-
-            <View style={styles.inputContainer}>
-              <Text style={[styles.label, { color: theme.colors.text }]}>Confirm Password *</Text>
-              <View style={styles.passwordContainer}>
-                <TextInput
-                  style={[
-                    styles.input,
-                    styles.passwordInput,
-                    {
-                      backgroundColor: theme.dark ? '#1C1C1E' : '#F2F2F7',
-                      color: theme.colors.text,
-                      borderColor: theme.colors.border,
-                    },
-                  ]}
-                  placeholder="Confirm your password"
-                  placeholderTextColor={theme.dark ? '#98989D' : '#999'}
-                  value={confirmPassword}
-                  onChangeText={setConfirmPassword}
-                  secureTextEntry={!showConfirmPassword}
-                  autoComplete="password-new"
-                  editable={!loading}
-                />
-                <TouchableOpacity
-                  style={styles.eyeIcon}
-                  onPress={() => setShowConfirmPassword(!showConfirmPassword)}
-                  disabled={loading}
-                >
-                  <IconSymbol
-                    name={showConfirmPassword ? 'eye.slash' : 'eye'}
-                    size={20}
-                    color={theme.dark ? '#98989D' : '#666'}
-                  />
-                </TouchableOpacity>
-              </View>
-            </View>
-
-            <View style={styles.inputContainer}>
-              <Text style={[styles.label, { color: theme.colors.text }]}>Role *</Text>
-              <View
-                style={[
-                  styles.pickerContainer,
-                  {
-                    backgroundColor: theme.dark ? '#1C1C1E' : '#F2F2F7',
-                    borderColor: theme.colors.border,
-                  },
-                ]}
-              >
-                <Picker
-                  selectedValue={role}
-                  onValueChange={(value) => setRole(value)}
-                  style={[styles.picker, { color: theme.colors.text }]}
-                  enabled={!loading}
-                >
-                  <Picker.Item label="Client" value="client" />
-                  <Picker.Item label="Artisan" value="artisan" />
-                  <Picker.Item label="Agent" value="agent" />
-                </Picker>
-              </View>
-            </View>
-
-            <View style={styles.inputContainer}>
-              <Text style={[styles.label, { color: theme.colors.text }]}>Country *</Text>
-              <View
-                style={[
-                  styles.pickerContainer,
-                  {
-                    backgroundColor: theme.dark ? '#1C1C1E' : '#F2F2F7',
-                    borderColor: theme.colors.border,
-                  },
-                ]}
-              >
-                <Picker
-                  selectedValue={country}
-                  onValueChange={(value) => {
-                    setCountry(value);
-                    setState('');
-                    setLocalGovernment('');
-                  }}
-                  style={[styles.picker, { color: theme.colors.text }]}
-                  enabled={!loading}
-                >
-                  <Picker.Item label="Select Country" value="" />
-                  {countries.map((c) => (
-                    <Picker.Item key={c.code} label={c.name} value={c.code} />
-                  ))}
-                </Picker>
-              </View>
-            </View>
-
-            {country && (
-              <View style={styles.inputContainer}>
-                <Text style={[styles.label, { color: theme.colors.text }]}>State *</Text>
-                <View
-                  style={[
-                    styles.pickerContainer,
-                    {
-                      backgroundColor: theme.dark ? '#1C1C1E' : '#F2F2F7',
-                      borderColor: theme.colors.border,
-                    },
-                  ]}
-                >
-                  <Picker
-                    selectedValue={state}
-                    onValueChange={(value) => {
-                      setState(value);
-                      setLocalGovernment('');
-                    }}
-                    style={[styles.picker, { color: theme.colors.text }]}
-                    enabled={!loading}
-                  >
-                    <Picker.Item label="Select State" value="" />
-                    {states.map((s) => (
-                      <Picker.Item key={s.name} label={s.name} value={s.name} />
-                    ))}
-                  </Picker>
+            {/* Header */}
+            <View style={styles.header}>
+              <TouchableOpacity onPress={() => currentStep === 1 ? router.back() : prevStep()} style={styles.backBtn}>
+                <View style={styles.backBtnCircle}>
+                  <IconSymbol name="chevron.left" size={24} color={colors.text} />
                 </View>
-              </View>
-            )}
+              </TouchableOpacity>
 
-            {country && state && localGovernments.length > 0 && (
-              <View style={styles.inputContainer}>
-                <Text style={[styles.label, { color: theme.colors.text }]}>
-                  Local Government
+              <View>
+                <Text style={styles.headerTitle}>
+                  {currentStep === 1 ? "Terms & Conditions" : currentStep === 2 ? "Create Account" : currentStep === 3 ? "Select Role" : "Finalize Profile"}
                 </Text>
-                <View
-                  style={[
-                    styles.pickerContainer,
-                    {
-                      backgroundColor: theme.dark ? '#1C1C1E' : '#F2F2F7',
-                      borderColor: theme.colors.border,
-                    },
-                  ]}
-                >
-                  <Picker
-                    selectedValue={localGovernment}
-                    onValueChange={setLocalGovernment}
-                    style={[styles.picker, { color: theme.colors.text }]}
-                    enabled={!loading}
-                  >
-                    <Picker.Item label="Select Local Government" value="" />
-                    {localGovernments.map((lg) => (
-                      <Picker.Item key={lg} label={lg} value={lg} />
-                    ))}
-                  </Picker>
-                </View>
+                <Text style={styles.headerSubtitle}>
+                  {currentStep === 1 ? "Review corporate policy" : currentStep === 2 ? "Let's get to know you" : currentStep === 3 ? "How will you use the app?" : "Where are you based?"}
+                </Text>
               </View>
-            )}
+            </View>
 
-            <TouchableOpacity
-              style={[
-                styles.registerButton,
-                { backgroundColor: theme.colors.primary },
-                loading && styles.registerButtonDisabled,
-              ]}
-              onPress={handleRegister}
-              disabled={loading}
-            >
-              {loading ? (
-                <ActivityIndicator color="#fff" />
-              ) : (
-                <Text style={styles.registerButtonText}>Create Account</Text>
-              )}
-            </TouchableOpacity>
+            {renderProgressBar()}
 
-            <TouchableOpacity
-              style={styles.loginLink}
-              onPress={() => router.back()}
-              disabled={loading}
+            <ScrollView
+              contentContainerStyle={styles.scrollContent}
+              showsVerticalScrollIndicator={false}
+              keyboardShouldPersistTaps="handled"
             >
-              <Text style={[styles.loginLinkText, { color: theme.colors.primary }]}>
-                Already have an account? Sign In
-              </Text>
-            </TouchableOpacity>
-          </View>
-        </ScrollView>
-      </KeyboardAvoidingView>
-    </SafeAreaView>
+              <Animated.View
+                key={currentStep}
+                entering={FadeInRight.duration(400).springify()}
+                exiting={FadeOutLeft.duration(400)}
+                layout={LinearTransition}
+              >
+
+                {/* STEP 1: TERMS AND CONDITIONS */}
+                {currentStep === 1 && (
+                  <View style={styles.termsContainer}>
+                    <View style={styles.glassCard}>
+                      <Text style={styles.corporateTitle}>S. MAHI GLOBAL SERVICE LTD</Text>
+                      <Text style={styles.corporateSubtitle}>TERMS, CONDITIONS & CORPORATE OVERVIEW</Text>
+
+                      <ScrollView style={styles.termsScroll} nestedScrollEnabled>
+                        <Text style={styles.termsText}>
+                          <Text style={styles.bold}>1. Mission and Vision</Text>{'\n'}
+                          S MAHI Global Services specializes in bridging the gap between skilled professionals and global opportunities through comprehensive training, AI-driven certification, and strategic job placement services across 195 countries.{'\n\n'}
+
+                          <Text style={styles.bold}>2. Service Guarantee & Certification Policy</Text>{'\n'}
+                          <Text style={styles.bold}>• Certified Professionals:</Text> S MAHI Global Services stands as a guarantor for any professional who holds an official S MAHI Training Certificate. In case of professional misconduct or damage, the company will investigate and mediate compensation.{'\n'}
+                          <Text style={styles.bold}>• Independent Experts:</Text> For unverified experts on our platform, the transaction and risk are strictly between the Client and the Service Provider. S MAHI provides the connection but does not offer a guarantee for unverified workmanship.{'\n\n'}
+
+                          <Text style={styles.bold}>3. The S MAHI Token Wallet</Text>{'\n'}
+                          Our proprietary Token system facilitates seamless international payments, eliminating currency exchange barriers. Employers can pay workers globally, and tokens can be redeemed through S MAHI for local currency.{'\n\n'}
+
+                          <Text style={styles.bold}>4. Human-to-Human Support</Text>{'\n'}
+                          To ensure security and conflict resolution, S MAHI maintains a physical presence:{'\n'}
+                          • <Text style={styles.bold}>LGA Agents:</Text> Six (6) trained agents in every Local Government Area (LGA) to resolve disputes and verify artisans.{'\n'}
+                          • <Text style={styles.bold}>State Coordinators:</Text> One supervisor per state to manage agents and ensure quality control.{'\n\n'}
+
+                          <Text style={styles.bold}>5. AI-Powered Verification & Security</Text>{'\n'}
+                          We utilize Artificial Intelligence (AI) for:{'\n'}
+                          • <Text style={styles.bold}>Data Accuracy:</Text> AI analyzes professional data to ensure honesty and competence.{'\n'}
+                          • <Text style={styles.bold}>Automatic Translation:</Text> Our platform features real-time translation to facilitate communication between clients and experts of different languages.{'\n\n'}
+
+                          <Text style={styles.bold}>6. Mutual Respect & Code of Conduct</Text>{'\n'}
+                          S MAHI upholds a strict policy of mutual respect. It is mandatory for the service provider to respect the client, and the client must likewise respect the professional. We have zero tolerance for harassment, bullying, or indignity. Any violation will result in the immediate termination of the user's account.{'\n\n'}
+
+                          <Text style={styles.bold}>7. Annual Account Renewal</Text>{'\n'}
+                          To ensure all registered members are active and to update any changes in their biodata or professional status, an annual registration renewal is mandatory. This process ensures our database remains accurate.{'\n\n'}
+
+                          <Text style={styles.bold}>8. Registration Fees</Text>{'\n'}
+                          Registration fees are structured based on the economic status of each country.{'\n'}
+                          • <Text style={styles.bold}>In Nigeria:</Text> The registration fee for every professional/artisan is set at N2,500.{'\n\n'}
+
+                          <Text style={styles.bold}>9. Acceptable Use & Illegal Activity</Text>{'\n'}
+                          S MAHI maintains a zero-tolerance policy for fraud, impersonation, or unlawful recruitment. Any breach of these terms will result in account termination and referral to the Police, EFCC, or relevant International Embassies.{'\n\n'}
+
+                          <Text style={styles.bold}>10. Privacy & Data Protection</Text>{'\n'}
+                          We are committed to protecting user data. Information collected is used strictly for professional matching and verification. We do not support the unauthorized sale of user data.{'\n\n'}
+
+                          <Text style={styles.bold}>11. Contact & Support</Text>{'\n'}
+                          CEO: ceo@smahiglobalservices.com{'\n'}
+                          Support: customer@smahiglobalservices.com{'\n'}
+                          Hotline: +2349066062541 / +2349052373245
+                        </Text>
+                      </ScrollView>
+                    </View>
+
+                    <TouchableOpacity
+                      activeOpacity={0.8}
+                      onPress={() => setAcceptedTerms(!acceptedTerms)}
+                      style={styles.switchRow}
+                    >
+                      <Switch
+                        value={acceptedTerms}
+                        onValueChange={setAcceptedTerms}
+                        trackColor={{ false: "#767577", true: colors.primary }}
+                        thumbColor={acceptedTerms ? "#f4f3f4" : "#f4f3f4"}
+                      />
+                      <Text style={styles.switchText}>I have read and agree to the Terms</Text>
+                    </TouchableOpacity>
+                  </View>
+                )}
+
+                {/* STEP 2: ACCOUNT INFO */}
+                {currentStep === 2 && (
+                  <View style={styles.formSection}>
+                    <ModernInput label="Full Name" placeholder="John Doe" value={name} onChangeText={setName} error={errors.name} icon="person" />
+                    <ModernInput label="Email Address" placeholder="john@example.com" value={email} onChangeText={setEmail} keyboardType="email-address" autoCapitalize="none" error={errors.email} icon="envelope" />
+                    <ModernInput label="Phone Number" placeholder="+234 800 000 0000" value={phone} onChangeText={setPhone} keyboardType="phone-pad" error={errors.phone} icon="phone" />
+                    <ModernInput label="Password" placeholder="••••••••" value={password} onChangeText={setPassword} isPassword error={errors.password} icon="lock" />
+                  </View>
+                )}
+
+                {/* STEP 3: ROLE SELECTION */}
+                {currentStep === 3 && (
+                  <View style={styles.formSection}>
+                    <RoleCard title="Hire Artisans" subtitle="Find verified professionals" icon="person.2" selected={role === 'client'} onPress={() => setRole('client')} />
+                    <RoleCard title="Work as an Artisan" subtitle="Offer services & earn tokens" icon="hammer" selected={role === 'artisan'} onPress={() => setRole('artisan')} />
+                    <RoleCard title="Register as Agent" subtitle="Manage artisans in your LGA" icon="briefcase" selected={role === 'agent'} onPress={() => setRole('agent')} />
+                  </View>
+                )}
+
+                {/* STEP 4: LOCATION & SERVICE */}
+                {currentStep === 4 && (
+                  <View style={styles.formSection}>
+                    {role === 'artisan' && (
+                      <View style={styles.glassCardSimple}>
+                        <Text style={styles.cardTitle}>🛠️ Your Expertise</Text>
+                        <CustomPicker label="Service Provided" placeholder="Select Service" value={selectedService} onValueChange={setSelectedService} items={services} />
+                        {errors.service && <Text style={commonStyles.errorText}>{errors.service}</Text>}
+                      </View>
+                    )}
+
+                    <CustomPicker label="Country" placeholder="Select Country" value={selectedCountry} onValueChange={setSelectedCountry} items={countries.map(c => ({ label: c.name, value: c.id.toString() }))} />
+
+                    <View style={styles.row}>
+                      <View style={{ flex: 1, marginRight: 8 }}>
+                        <CustomPicker label="State" placeholder="State" value={selectedState} onValueChange={setSelectedState} items={states.map(s => ({ label: s.name, value: s.id.toString() }))} />
+                      </View>
+                      <View style={{ flex: 1, marginLeft: 8 }}>
+                        <CustomPicker label="LGA" placeholder="City / LGA" value={selectedLga} onValueChange={setSelectedLga} items={lgas.map(l => ({ label: l.name, value: l.id.toString() }))} />
+                      </View>
+                    </View>
+                    {(errors.country || errors.state || errors.lga) && <Text style={commonStyles.errorText}>Please complete all location fields</Text>}
+                  </View>
+                )}
+
+              </Animated.View>
+            </ScrollView>
+
+            {/* FLOATING ACTION BUTTON */}
+            <View style={styles.footer}>
+              <TouchableOpacity
+                activeOpacity={0.9}
+                style={[styles.btn, { backgroundColor: currentStep === 1 && !acceptedTerms ? '#ccc' : colors.primary }]}
+                onPress={currentStep === totalSteps ? handleRegister : nextStep}
+                disabled={loading || (currentStep === 1 && !acceptedTerms)}
+              >
+                <LinearGradient
+                  colors={currentStep === 1 && !acceptedTerms ? ['#ccc', '#bbb'] : [colors.primary, '#0056b3']}
+                  style={styles.btnGradient}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 0 }}
+                >
+                  {loading ? <ActivityIndicator color="#fff" /> : (
+                    <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                      <Text style={styles.btnText}>
+                        {currentStep === 1 ? "I Agree & Continue" : currentStep === totalSteps ? "Create Account" : "Continue"}
+                      </Text>
+                      <IconSymbol name="chevron.right" size={20} color="white" style={{ marginLeft: 8 }} />
+                    </View>
+                  )}
+                </LinearGradient>
+              </TouchableOpacity>
+            </View>
+
+          </KeyboardAvoidingView>
+        </SafeAreaView>
+      </LinearGradient>
+    </ImageBackground>
   );
 }
 
+// --- SUB COMPONENTS ---
+
+const RoleCard = ({ title, subtitle, icon, selected, onPress }: any) => (
+  <TouchableOpacity
+    onPress={onPress}
+    activeOpacity={0.9}
+    style={[
+      styles.roleCard,
+      {
+        borderColor: selected ? colors.primary : '#E5E7EB',
+        borderWidth: selected ? 2 : 1,
+        backgroundColor: selected ? '#F0F9FF' : 'rgba(255,255,255,0.8)',
+      }
+    ]}
+  >
+    <View style={[styles.iconCircle, { backgroundColor: selected ? colors.primary : '#F3F4F6' }]}>
+      <IconSymbol name={icon} size={24} color={selected ? '#FFF' : '#6B7280'} />
+    </View>
+    <View style={{ flex: 1 }}>
+      <Text style={[styles.roleTitle, { color: selected ? colors.primary : colors.text }]}>{title}</Text>
+      <Text style={styles.roleSubtitle}>{subtitle}</Text>
+    </View>
+    {selected && (
+      <View style={styles.checkIcon}>
+        <IconSymbol name="checkmark.circle.fill" size={24} color={colors.primary} />
+      </View>
+    )}
+  </TouchableOpacity>
+);
+
 const styles = StyleSheet.create({
-  safeArea: {
-    flex: 1,
+  // HEADER STYLES
+  header: { paddingHorizontal: 24, paddingTop: 10, paddingBottom: 10 },
+  backBtn: { marginBottom: 16, alignSelf: 'flex-start' },
+  backBtnCircle: {
+    width: 40, height: 40, borderRadius: 20, backgroundColor: 'rgba(255,255,255,0.9)',
+    justifyContent: 'center', alignItems: 'center',
+    shadowColor: "#000", shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.1, shadowRadius: 4, elevation: 3
   },
-  container: {
-    flex: 1,
+  headerTitle: { fontSize: 28, fontWeight: '800', color: '#111827', marginBottom: 4, letterSpacing: -0.5 },
+  headerSubtitle: { fontSize: 16, color: '#6B7280', fontWeight: '500' },
+
+  // PROGRESS BAR
+  progressContainer: { paddingHorizontal: 24, marginBottom: 24, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  track: { flex: 1, height: 6, backgroundColor: '#E5E7EB', borderRadius: 3, marginRight: 12 },
+  indicator: { height: '100%', backgroundColor: colors.primary, borderRadius: 3 },
+  stepText: { fontSize: 12, fontWeight: '700', color: colors.primary },
+
+  // FORM CONTENT
+  scrollContent: { paddingHorizontal: 24, paddingBottom: 120 },
+  formSection: { gap: 4 },
+
+  // TERMS STYLES
+  termsContainer: { marginTop: 10 },
+  corporateTitle: { fontSize: 18, fontWeight: '900', color: colors.primary, textAlign: 'center', marginBottom: 4 },
+  corporateSubtitle: { fontSize: 12, fontWeight: '700', color: '#6B7280', textAlign: 'center', marginBottom: 16, letterSpacing: 1 },
+  termsScroll: { height: height * 0.45, paddingRight: 8 },
+  termsText: { fontSize: 14, lineHeight: 22, color: '#4B5563', textAlign: 'justify' },
+  bold: { fontWeight: '800', color: '#111827' },
+
+  switchRow: {
+    flexDirection: 'row', alignItems: 'center', marginTop: 20,
+    padding: 16, backgroundColor: 'rgba(255,255,255,0.8)',
+    borderRadius: 16, borderWidth: 1, borderColor: '#E5E7EB'
   },
-  scrollContent: {
-    flexGrow: 1,
-    padding: 20,
+  switchText: { marginLeft: 12, fontSize: 15, fontWeight: '600', color: '#374151' },
+
+  // FOOTER
+  footer: {
+    position: 'absolute', bottom: 0, left: 0, right: 0,
+    padding: 24, backgroundColor: 'rgba(255,255,255,0.9)',
+    borderTopWidth: 1, borderTopColor: '#F3F4F6'
   },
-  header: {
-    marginBottom: 30,
-    marginTop: 10,
+  btn: {
+    height: 56, borderRadius: 28, overflow: 'hidden',
+    shadowColor: colors.primary, shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.3, shadowRadius: 12, elevation: 8
   },
-  backButton: {
-    marginBottom: 20,
-    alignSelf: 'flex-start',
+  btnGradient: { flex: 1, justifyContent: 'center', alignItems: 'center', flexDirection: 'row' },
+  btnText: { color: 'white', fontWeight: '700', fontSize: 18 },
+
+  // CARDS
+  roleCard: {
+    flexDirection: 'row', alignItems: 'center', padding: 16,
+    borderRadius: 20, marginBottom: 16,
+    shadowColor: "#000", shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.05, shadowRadius: 4, elevation: 2
   },
-  title: {
-    fontSize: 32,
-    fontWeight: '700',
-    marginBottom: 8,
+  glassCard: {
+    backgroundColor: 'rgba(255,255,255,0.75)',
+    borderWidth: 1, borderColor: '#E5E7EB',
+    padding: 24, borderRadius: 24,
+    shadowColor: "#000", shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.05, shadowRadius: 8, elevation: 3
   },
-  subtitle: {
-    fontSize: 16,
+  glassCardSimple: {
+    backgroundColor: 'rgba(255,255,255,0.8)',
+    borderWidth: 1, borderColor: '#E5E7EB',
+    padding: 20, borderRadius: 20, marginBottom: 24,
+    shadowColor: "#000", shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.05, shadowRadius: 8, elevation: 3
   },
-  form: {
-    marginBottom: 30,
-  },
-  inputContainer: {
-    marginBottom: 20,
-  },
-  label: {
-    fontSize: 16,
-    fontWeight: '600',
-    marginBottom: 8,
-  },
-  input: {
-    height: 50,
-    borderRadius: 12,
-    paddingHorizontal: 16,
-    fontSize: 16,
-    borderWidth: 1,
-  },
-  passwordContainer: {
-    position: 'relative',
-  },
-  passwordInput: {
-    paddingRight: 50,
-  },
-  eyeIcon: {
-    position: 'absolute',
-    right: 16,
-    top: 15,
-    padding: 4,
-  },
-  pickerContainer: {
-    borderRadius: 12,
-    borderWidth: 1,
-    overflow: 'hidden',
-  },
-  picker: {
-    height: 50,
-  },
-  registerButton: {
-    height: 50,
-    borderRadius: 12,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginTop: 10,
-  },
-  registerButtonDisabled: {
-    opacity: 0.6,
-  },
-  registerButtonText: {
-    color: '#fff',
-    fontSize: 16,
-    fontWeight: '600',
-  },
-  loginLink: {
-    marginTop: 20,
-    alignItems: 'center',
-  },
-  loginLinkText: {
-    fontSize: 16,
-    fontWeight: '500',
-  },
+  iconCircle: { width: 50, height: 50, borderRadius: 25, justifyContent: 'center', alignItems: 'center', marginRight: 16 },
+  roleTitle: { fontSize: 17, fontWeight: '700', marginBottom: 4 },
+  roleSubtitle: { fontSize: 13, color: '#6B7280' },
+  checkIcon: { marginLeft: 10 },
+  cardTitle: { fontWeight: '700', marginBottom: 12, fontSize: 15, color: '#374151' },
+
+  row: { flexDirection: 'row' },
 });

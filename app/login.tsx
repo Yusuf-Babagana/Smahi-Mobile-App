@@ -1,22 +1,32 @@
-
 import React, { useState } from 'react';
 import {
   View,
   Text,
-  TextInput,
   StyleSheet,
   Alert,
   KeyboardAvoidingView,
   Platform,
   ScrollView,
+  Pressable,
+  ImageBackground,
   TouchableOpacity,
   ActivityIndicator,
+  Dimensions
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { authAPI } from '@/src/api/client';
 import { useTheme } from '@react-navigation/native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import Animated, { FadeInDown, FadeInUp, LinearTransition } from 'react-native-reanimated';
+import { StatusBar } from 'expo-status-bar';
+import { LinearGradient } from 'expo-linear-gradient';
+
+// Components
 import { IconSymbol } from '@/components/IconSymbol';
+import { ModernInput } from '@/src/components/ModernInput'; // Using ModernInput for consistency
+import { colors } from '@/styles/commonStyles'; // Use fixed colors for better readability against gradient
+
+const { width } = Dimensions.get('window');
 
 export default function LoginScreen() {
   const router = useRouter();
@@ -24,300 +34,250 @@ export default function LoginScreen() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
-  const [showPassword, setShowPassword] = useState(false);
 
   const handleLogin = async () => {
     if (!email || !password) {
-      Alert.alert('Error', 'Please enter both email and password');
-      return;
-    }
-
-    // Basic email validation
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    if (!emailRegex.test(email)) {
-      Alert.alert('Error', 'Please enter a valid email address');
+      Alert.alert('Missing Fields', 'Please enter both email and password.');
       return;
     }
 
     setLoading(true);
     try {
       const { user } = await authAPI.login(email.toLowerCase().trim(), password);
-      console.log('Login successful, user role:', user.role);
 
-      // Navigate based on role
-      switch (user.role) {
-        case 'client':
-          router.replace('/(tabs)/(home)/');
-          break;
-        case 'artisan':
-          router.replace('/artisan/dashboard');
-          break;
-        case 'agent':
-          router.replace('/agent/dashboard');
-          break;
-        case 'super_admin':
-          router.replace('/admin/dashboard');
-          break;
-        default:
-          router.replace('/(tabs)/(home)/');
-      }
+      const routes = {
+        client: '/(tabs)/(home)',
+        artisan: '/artisan/dashboard',
+        agent: '/agent/dashboard',
+        admin: '/admin/dashboard'
+      } as const;
+
+      router.replace(routes[user.role as keyof typeof routes] || '/(tabs)/(home)');
+
     } catch (error: any) {
-      console.error('Login error:', error);
-      Alert.alert('Login Failed', error.message || 'Invalid email or password');
+      Alert.alert('Login Failed', error.message || 'Invalid credentials');
     } finally {
       setLoading(false);
     }
   };
 
+  const fillDemo = (role: string) => {
+    setEmail(`${role}@example.com`);
+    setPassword('password123');
+  };
+
   return (
-    <SafeAreaView style={[styles.safeArea, { backgroundColor: theme.colors.background }]}>
-      <KeyboardAvoidingView
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-        style={styles.container}
+    <ImageBackground
+      source={{ uri: 'https://images.unsplash.com/photo-1557804506-669a67965ba0?q=80&w=2574&auto=format&fit=crop' }}
+      style={{ flex: 1 }}
+      resizeMode="cover"
+    >
+      {/* 2. REFINED GRADIENT: Subtle fade to allow image to show top, solid white bottom */}
+      <LinearGradient
+        colors={['rgba(255,255,255,0.60)', 'rgba(255,255,255,0.95)', '#FFFFFF']}
+        locations={[0, 0.6, 1]}
+        style={{ flex: 1 }}
       >
-        <ScrollView
-          contentContainerStyle={styles.scrollContent}
-          keyboardShouldPersistTaps="handled"
-        >
-          <View style={styles.header}>
-            <Text style={[styles.title, { color: theme.colors.text }]}>
-              Welcome Back
-            </Text>
-            <Text style={[styles.subtitle, { color: theme.dark ? '#98989D' : '#666' }]}>
-              Sign in to continue to Artisan Connect
-            </Text>
-          </View>
+        <StatusBar style="dark" translucent={true} backgroundColor="transparent" />
 
-          <View style={styles.form}>
-            <View style={styles.inputContainer}>
-              <Text style={[styles.label, { color: theme.colors.text }]}>Email</Text>
-              <TextInput
-                style={[
-                  styles.input,
-                  {
-                    backgroundColor: theme.dark ? '#1C1C1E' : '#F2F2F7',
-                    color: theme.colors.text,
-                    borderColor: theme.colors.border,
-                  },
-                ]}
-                placeholder="Enter your email"
-                placeholderTextColor={theme.dark ? '#98989D' : '#999'}
-                value={email}
-                onChangeText={setEmail}
-                autoCapitalize="none"
-                keyboardType="email-address"
-                autoComplete="email"
-                editable={!loading}
-              />
-            </View>
+        <SafeAreaView style={styles.safeArea}>
+          <KeyboardAvoidingView
+            behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+            style={styles.container}
+          >
+            <ScrollView
+              contentContainerStyle={styles.scrollContent}
+              showsVerticalScrollIndicator={false}
+              keyboardShouldPersistTaps="handled"
+            >
 
-            <View style={styles.inputContainer}>
-              <Text style={[styles.label, { color: theme.colors.text }]}>Password</Text>
-              <View style={styles.passwordContainer}>
-                <TextInput
-                  style={[
-                    styles.input,
-                    styles.passwordInput,
-                    {
-                      backgroundColor: theme.dark ? '#1C1C1E' : '#F2F2F7',
-                      color: theme.colors.text,
-                      borderColor: theme.colors.border,
-                    },
-                  ]}
-                  placeholder="Enter your password"
-                  placeholderTextColor={theme.dark ? '#98989D' : '#999'}
-                  value={password}
-                  onChangeText={setPassword}
-                  secureTextEntry={!showPassword}
-                  autoComplete="password"
-                  editable={!loading}
-                />
-                <TouchableOpacity
-                  style={styles.eyeIcon}
-                  onPress={() => setShowPassword(!showPassword)}
-                  disabled={loading}
-                >
-                  <IconSymbol
-                    name={showPassword ? 'eye.slash' : 'eye'}
-                    size={20}
-                    color={theme.dark ? '#98989D' : '#666'}
+              {/* Header Section */}
+              <Animated.View entering={FadeInUp.delay(200).duration(1000).springify()} style={styles.header}>
+                <View style={styles.logoGlassContainer}>
+                  <LinearGradient
+                    colors={[colors.primary, '#0056b3']}
+                    style={styles.logoCircle}
+                  >
+                    <IconSymbol name="person.2.fill" size={36} color="white" />
+                  </LinearGradient>
+                </View>
+
+                <Text style={styles.title}>Welcome Back</Text>
+                <Text style={styles.subtitle}>
+                  Sign in to manage your artisan needs
+                </Text>
+              </Animated.View>
+
+              {/* Form Section */}
+              <Animated.View entering={FadeInDown.delay(400).springify()} style={styles.formContainer}>
+
+                {/* Glass Card Effect */}
+                <View style={styles.glassCard}>
+                  <ModernInput
+                    label="Email Address"
+                    placeholder="name@example.com"
+                    value={email}
+                    onChangeText={setEmail}
+                    keyboardType="email-address"
+                    autoCapitalize="none"
+                    icon="envelope.fill"
                   />
-                </TouchableOpacity>
-              </View>
-            </View>
 
-            <TouchableOpacity
-              style={[
-                styles.loginButton,
-                { backgroundColor: theme.colors.primary },
-                loading && styles.loginButtonDisabled,
-              ]}
-              onPress={handleLogin}
-              disabled={loading}
-            >
-              {loading ? (
-                <ActivityIndicator color="#fff" />
-              ) : (
-                <Text style={styles.loginButtonText}>Sign In</Text>
-              )}
-            </TouchableOpacity>
+                  <ModernInput
+                    label="Password"
+                    placeholder="••••••••"
+                    value={password}
+                    onChangeText={setPassword}
+                    isPassword
+                    icon="lock.fill"
+                  />
 
-            <View style={styles.divider}>
-              <View style={[styles.dividerLine, { backgroundColor: theme.colors.border }]} />
-              <Text style={[styles.dividerText, { color: theme.dark ? '#98989D' : '#666' }]}>
-                OR
-              </Text>
-              <View style={[styles.dividerLine, { backgroundColor: theme.colors.border }]} />
-            </View>
+                  <View style={styles.forgotContainer}>
+                    <Pressable onPress={() => Alert.alert("Reset", "Password reset flow")}>
+                      <Text style={styles.forgotText}>Forgot Password?</Text>
+                    </Pressable>
+                  </View>
 
-            <TouchableOpacity
-              style={[
-                styles.registerButton,
-                { borderColor: theme.colors.border },
-              ]}
-              onPress={() => router.push('/register')}
-              disabled={loading}
-            >
-              <Text style={[styles.registerButtonText, { color: theme.colors.primary }]}>
-                Create New Account
-              </Text>
-            </TouchableOpacity>
-          </View>
+                  <TouchableOpacity
+                    activeOpacity={0.9}
+                    style={styles.loginBtnShadow}
+                    onPress={handleLogin}
+                    disabled={loading}
+                  >
+                    <LinearGradient
+                      colors={[colors.primary, '#0056b3']}
+                      start={{ x: 0, y: 0 }}
+                      end={{ x: 1, y: 0 }}
+                      style={styles.loginBtnGradient}
+                    >
+                      {loading ? (
+                        <ActivityIndicator color="#fff" />
+                      ) : (
+                        <Text style={styles.loginBtnText}>Sign In</Text>
+                      )}
+                    </LinearGradient>
+                  </TouchableOpacity>
+                </View>
 
-          <View style={styles.demoCredentials}>
-            <Text style={[styles.demoTitle, { color: theme.colors.text }]}>
-              Demo Credentials:
-            </Text>
-            <Text style={[styles.demoText, { color: theme.dark ? '#98989D' : '#666' }]}>
-              Client: aminatu@example.com
-            </Text>
-            <Text style={[styles.demoText, { color: theme.dark ? '#98989D' : '#666' }]}>
-              Artisan: muhammad@example.com
-            </Text>
-            <Text style={[styles.demoText, { color: theme.dark ? '#98989D' : '#666' }]}>
-              Agent: aliyu@example.com
-            </Text>
-            <Text style={[styles.demoText, { color: theme.dark ? '#98989D' : '#666' }]}>
-              Admin: admin@example.com
-            </Text>
-            <Text style={[styles.demoText, { color: theme.dark ? '#98989D' : '#666' }]}>
-              Password: password123
-            </Text>
-          </View>
-        </ScrollView>
-      </KeyboardAvoidingView>
-    </SafeAreaView>
+                <View style={styles.footer}>
+                  <Text style={{ color: colors.textSecondary, fontSize: 15 }}>
+                    Don't have an account?{' '}
+                  </Text>
+                  <Pressable onPress={() => router.push('/register')}>
+                    <Text style={[styles.linkText, { color: colors.primary }]}>
+                      Create Account
+                    </Text>
+                  </Pressable>
+                </View>
+
+              </Animated.View>
+
+              {/* Quick Demo Login */}
+              <Animated.View entering={FadeInDown.delay(600)} style={styles.demoSection}>
+                <Text style={styles.demoLabel}>Quick Demo Login</Text>
+                <View style={styles.demoRow}>
+                  {['Client', 'Artisan', 'Agent'].map((role) => (
+                    <TouchableOpacity
+                      key={role}
+                      activeOpacity={0.7}
+                      onPress={() => fillDemo(role.toLowerCase())}
+                      style={styles.demoChip}
+                    >
+                      <Text style={styles.demoChipText}>{role}</Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              </Animated.View>
+
+            </ScrollView>
+          </KeyboardAvoidingView>
+        </SafeAreaView>
+      </LinearGradient>
+    </ImageBackground>
   );
 }
 
 const styles = StyleSheet.create({
-  safeArea: {
-    flex: 1,
-  },
-  container: {
-    flex: 1,
-  },
+  safeArea: { flex: 1 },
+  container: { flex: 1 },
   scrollContent: {
     flexGrow: 1,
-    padding: 20,
+    padding: 24,
     justifyContent: 'center',
+    paddingBottom: 50,
   },
-  header: {
-    marginBottom: 40,
-    alignItems: 'center',
+
+  // Header
+  header: { alignItems: 'center', marginBottom: 32 },
+  logoGlassContainer: {
+    padding: 8,
+    backgroundColor: 'rgba(255,255,255,0.5)',
+    borderRadius: 50,
+    marginBottom: 20,
+    borderWidth: 1,
+    borderColor: '#FFF',
+  },
+  logoCircle: {
+    width: 70, height: 70, borderRadius: 35,
+    alignItems: 'center', justifyContent: 'center',
+    shadowColor: colors.primary, shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3, shadowRadius: 8, elevation: 6,
   },
   title: {
-    fontSize: 32,
-    fontWeight: '700',
-    marginBottom: 8,
+    fontSize: 32, fontWeight: '800',
+    color: '#111827', marginBottom: 8,
+    textAlign: 'center', letterSpacing: -0.5,
   },
   subtitle: {
-    fontSize: 16,
-    textAlign: 'center',
+    fontSize: 16, color: '#6B7280',
+    textAlign: 'center', maxWidth: '80%', lineHeight: 22,
   },
-  form: {
-    marginBottom: 30,
-  },
-  inputContainer: {
-    marginBottom: 20,
-  },
-  label: {
-    fontSize: 16,
-    fontWeight: '600',
-    marginBottom: 8,
-  },
-  input: {
-    height: 50,
-    borderRadius: 12,
-    paddingHorizontal: 16,
-    fontSize: 16,
+
+  // Form
+  formContainer: { width: '100%' },
+  glassCard: {
+    backgroundColor: 'rgba(255,255,255,0.85)',
+    borderRadius: 24,
+    padding: 24,
     borderWidth: 1,
+    borderColor: '#FFFFFF',
+    shadowColor: "#000", shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.05, shadowRadius: 10, elevation: 4,
+    marginBottom: 24,
   },
-  passwordContainer: {
-    position: 'relative',
+
+  // Forgot Password
+  forgotContainer: { alignItems: 'flex-end', marginBottom: 24, marginTop: -4 },
+  forgotText: { fontWeight: '600', fontSize: 14, color: colors.primary },
+
+  // Button
+  loginBtnShadow: {
+    shadowColor: colors.primary, shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.3, shadowRadius: 12, elevation: 8,
+    borderRadius: 16,
   },
-  passwordInput: {
-    paddingRight: 50,
+  loginBtnGradient: {
+    height: 56, borderRadius: 16,
+    justifyContent: 'center', alignItems: 'center',
   },
-  eyeIcon: {
-    position: 'absolute',
-    right: 16,
-    top: 15,
-    padding: 4,
+  loginBtnText: { color: 'white', fontWeight: 'bold', fontSize: 18 },
+
+  // Footer Link
+  footer: { flexDirection: 'row', justifyContent: 'center', alignItems: 'center' },
+  linkText: { fontWeight: '700', fontSize: 15 },
+
+  // Demo Section
+  demoSection: { marginTop: 40, alignItems: 'center' },
+  demoLabel: {
+    fontSize: 12, marginBottom: 16,
+    textTransform: 'uppercase', letterSpacing: 1.2,
+    color: '#9CA3AF', fontWeight: '600',
   },
-  loginButton: {
-    height: 50,
-    borderRadius: 12,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginTop: 10,
+  demoRow: { flexDirection: 'row', gap: 12 },
+  demoChip: {
+    paddingHorizontal: 16, paddingVertical: 10,
+    borderRadius: 20, backgroundColor: '#F3F4F6',
+    borderWidth: 1, borderColor: '#E5E7EB',
   },
-  loginButtonDisabled: {
-    opacity: 0.6,
-  },
-  loginButtonText: {
-    color: '#fff',
-    fontSize: 16,
-    fontWeight: '600',
-  },
-  divider: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginVertical: 24,
-  },
-  dividerLine: {
-    flex: 1,
-    height: 1,
-  },
-  dividerText: {
-    marginHorizontal: 16,
-    fontSize: 14,
-    fontWeight: '500',
-  },
-  registerButton: {
-    height: 50,
-    borderRadius: 12,
-    justifyContent: 'center',
-    alignItems: 'center',
-    borderWidth: 2,
-  },
-  registerButtonText: {
-    fontSize: 16,
-    fontWeight: '600',
-  },
-  demoCredentials: {
-    padding: 16,
-    borderRadius: 12,
-    backgroundColor: 'rgba(0, 122, 255, 0.1)',
-    marginTop: 20,
-  },
-  demoTitle: {
-    fontSize: 14,
-    fontWeight: '600',
-    marginBottom: 8,
-  },
-  demoText: {
-    fontSize: 13,
-    marginBottom: 4,
-  },
+  demoChipText: { fontSize: 13, fontWeight: '600', color: '#374151' },
 });

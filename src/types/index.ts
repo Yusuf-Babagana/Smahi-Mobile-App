@@ -1,39 +1,78 @@
-
-export type UserRole = 'client' | 'artisan' | 'agent' | 'super_admin';
+export type UserRole = 'client' | 'artisan' | 'agent' | 'admin';
 
 export type VerificationStatus = 'pending' | 'approved' | 'rejected' | 'none';
 
 export type BookingStatus = 'pending' | 'confirmed' | 'completed' | 'cancelled';
 
-export type ArtisanCategory = 
-  | 'Plumber'
-  | 'Electrician'
-  | 'Carpenter'
-  | 'Painter'
-  | 'Mechanic'
-  | 'Tailor'
-  | 'Hairdresser'
-  | 'Mason'
-  | 'Welder'
-  | 'Other';
+// Matches the 20 Services in Backend
+export type ArtisanService =
+  | 'plumbing'
+  | 'electrical'
+  | 'carpentry'
+  | 'painting'
+  | 'masonry'
+  | 'welding'
+  | 'mechanic'
+  | 'generator'
+  | 'ac_fridge'
+  | 'fashion'
+  | 'hair'
+  | 'makeup'
+  | 'catering'
+  | 'photography'
+  | 'events'
+  | 'cleaning'
+  | 'tiling'
+  | 'aluminum'
+  | 'tech_repair'
+  | 'interior'
+  | 'other';
 
+// The User object returned from Django
 export interface User {
-  id: string;
-  name: string;
+  id: number;
+  email: string;
+  first_name: string;
+  last_name: string;
+  role: UserRole;
+  service_category?: ArtisanService; // Only for artisans
+  phone_number?: string;
+  address?: string;
+  profile_picture?: string;
+
+  // Location IDs (numbers in Django)
+  country?: number;
+  state?: number;
+  lga?: number;
+
+  is_verified: boolean;
+  created_at?: string;
+}
+
+// The data collected from the Register Form
+export interface RegisterData {
+  name: string;      // "John Doe" (Frontend combines this)
   email: string;
   password: string;
   role: UserRole;
-  phone?: string;
-  country?: string;
-  state?: string;
-  localGovernment?: string;
-  createdAt: string;
+  service_category?: string; // Optional (only if artisan)
+  phone: string;
+
+  // Location IDs as strings (from Dropdown Pickers)
+  country: string;
+  state: string;
+  lga: string;
+}
+
+export interface LoginCredentials {
+  email: string;
+  password: string;
 }
 
 export interface Artisan {
   id: string;
   userId: string;
-  category: ArtisanCategory;
+  category: ArtisanService;
   description: string;
   experience: string;
   hourlyRate: number;
@@ -57,25 +96,4 @@ export interface Booking {
   location: string;
   estimatedCost?: number;
   createdAt: string;
-}
-
-export interface Verification {
-  id: string;
-  artisanId: string;
-  status: VerificationStatus;
-  requestedAt: string;
-  reviewedAt?: string;
-  reviewedBy?: string;
-  notes?: string;
-}
-
-export interface Country {
-  name: string;
-  code: string;
-  states: State[];
-}
-
-export interface State {
-  name: string;
-  localGovernments: string[];
 }

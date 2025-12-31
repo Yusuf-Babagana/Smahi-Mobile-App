@@ -3,11 +3,11 @@ module.exports = function (api) {
 
   const EDITABLE_COMPONENTS =
     process.env.EXPO_PUBLIC_ENABLE_EDIT_MODE === "TRUE" &&
-    process.env.NODE_ENV === "development"
+      process.env.NODE_ENV === "development"
       ? [
-          ["./babel-plugins/editable-elements.js", {}],
-          ["./babel-plugins/inject-source-location.js", {}],
-        ]
+        ["./babel-plugins/editable-elements.js", {}],
+        ["./babel-plugins/inject-source-location.js", {}],
+      ]
       : [];
 
   return {

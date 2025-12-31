@@ -1,64 +1,63 @@
-
 import React, { useEffect, useState } from 'react';
-import { View, ActivityIndicator, StyleSheet } from 'react-native';
-import { Redirect } from 'expo-router';
+import { View, ActivityIndicator, StyleSheet, Image } from 'react-native';
+import { useRouter } from 'expo-router';
+import { useTheme } from '@react-navigation/native';
 import { storage } from '@/src/utils/storage';
-import { seedMockData } from '@/src/api/seedData';
-import { User } from '@/src/types';
+import { authAPI } from '@/src/api/client';
+import * as SplashScreen from 'expo-splash-screen';
 
 export default function Index() {
-  const [isLoading, setIsLoading] = useState(true);
-  const [currentUser, setCurrentUser] = useState<User | null>(null);
+  const router = useRouter();
+  const theme = useTheme();
+  const [isReady, setIsReady] = useState(false);
 
   useEffect(() => {
-    initializeApp();
+    checkLoginStatus();
   }, []);
 
-  const initializeApp = async () => {
+  const checkLoginStatus = async () => {
     try {
-      console.log('Initializing app...');
-      
-      // Seed mock data if needed
-      await seedMockData();
-      
-      // Check if user is logged in
+      // 1. Check if we have a user saved in SecureStore
       const user = await storage.getCurrentUser();
-      console.log('Current user:', user?.email || 'none');
-      
-      setCurrentUser(user);
+
+      if (user) {
+        // Optional: Verify token with backend (checks if session is still valid)
+        // const freshProfile = await authAPI.getCurrentUser();
+        // if (!freshProfile) throw new Error('Session expired');
+
+        // 2. Navigate based on role (Client vs Artisan)
+        if (user.role === 'artisan') {
+          router.replace('/artisan/dashboard');
+        } else if (user.role === 'admin') {
+          router.replace('/admin/dashboard');
+        } else if (user.role === 'agent') {
+          router.replace('/agent/dashboard');
+        } else {
+          // Default to Client Home
+          router.replace('/(tabs)/(home)/');
+        }
+      } else {
+        // 3. No user found, go to Login
+        router.replace('/login');
+      }
     } catch (error) {
-      console.error('Error initializing app:', error);
+      console.log('Session check failed:', error);
+      router.replace('/login');
     } finally {
-      setIsLoading(false);
+      setIsReady(true);
+      SplashScreen.hideAsync();
     }
   };
 
-  if (isLoading) {
-    return (
-      <View style={styles.container}>
-        <ActivityIndicator size="large" color="#007AFF" />
-      </View>
-    );
-  }
-
-  // Redirect based on authentication status
-  if (!currentUser) {
-    return <Redirect href="/login" />;
-  }
-
-  // Redirect based on user role
-  switch (currentUser.role) {
-    case 'client':
-      return <Redirect href="/(tabs)/(home)/" />;
-    case 'artisan':
-      return <Redirect href="/artisan/dashboard" />;
-    case 'agent':
-      return <Redirect href="/agent/dashboard" />;
-    case 'super_admin':
-      return <Redirect href="/admin/dashboard" />;
-    default:
-      return <Redirect href="/login" />;
-  }
+  return (
+    <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
+      <Image
+        source={require('@/assets/images/icon.png')} // Make sure you have an icon or remove this line
+        style={{ width: 100, height: 100, marginBottom: 20, borderRadius: 20 }}
+      />
+      <ActivityIndicator size="large" color={theme.colors.primary} />
+    </View>
+  );
 }
 
 const styles = StyleSheet.create({
@@ -66,6 +65,5 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: '#fff',
   },
 });

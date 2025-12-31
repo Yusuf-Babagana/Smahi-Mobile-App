@@ -1,321 +1,150 @@
+import apiClient from './config';
+import * as SecureStore from 'expo-secure-store';
+import { RegisterData } from '../types';
 
-import { User, Artisan, Booking, Verification, UserRole, ArtisanCategory, BookingStatus, VerificationStatus } from '../types';
-import { storage } from '../utils/storage';
-import { MOCK_DELAY } from '../constants/config';
+// Helper to unwrap Django Pagination
+const getData = (response: any) => {
+  if (response.data && response.data.results && Array.isArray(response.data.results)) {
+    return response.data.results;
+  }
+  return response.data;
+};
 
-// Helper to simulate API delay
-const delay = (ms: number = MOCK_DELAY) => new Promise(resolve => setTimeout(resolve, ms));
-
-// Generate unique ID
-const generateId = () => `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
-
-// Auth API
+// --- AUTHENTICATION ---
 export const authAPI = {
-  async login(email: string, password: string): Promise<{ user: User; token: string }> {
-    await delay();
-    console.log('API: Login attempt', email);
-    
-    const users: User[] = await storage.getUsers();
-    const user = users.find(u => u.email === email && u.password === password);
-    
-    if (!user) {
-      throw new Error('Invalid email or password');
+  login: async (email: string, password: string) => {
+    const response = await apiClient.post('/auth/login/', { email, password });
+    if (response.data.tokens) {
+      await SecureStore.setItemAsync('accessToken', response.data.tokens.access);
+      await SecureStore.setItemAsync('refreshToken', response.data.tokens.refresh);
     }
-    
-    const token = `token_${user.id}_${Date.now()}`;
-    await storage.setAuthToken(token);
-    await storage.setCurrentUser(user);
-    
-    console.log('API: Login successful', user.role);
-    return { user, token };
+    if (response.data.user) {
+      await SecureStore.setItemAsync('user', JSON.stringify(response.data.user));
+    }
+    return response.data;
   },
 
-  async register(userData: Omit<User, 'id' | 'createdAt'>): Promise<User> {
-    await delay();
-    console.log('API: Register attempt', userData.email);
-    
-    const users: User[] = await storage.getUsers();
-    
-    // Check if email already exists
-    if (users.find(u => u.email === userData.email)) {
-      throw new Error('Email already registered');
-    }
-    
-    const newUser: User = {
-      ...userData,
-      id: generateId(),
-      createdAt: new Date().toISOString(),
+  register: async (data: RegisterData) => {
+    const safeName = data.name || 'User';
+    const nameParts = safeName.trim().split(' ');
+    const firstName = nameParts[0];
+    const lastName = nameParts.slice(1).join(' ') || 'User';
+
+    const payload = {
+      email: data.email,
+      password: data.password,
+      password_confirm: data.password,
+      first_name: firstName,
+      last_name: lastName,
+      role: data.role,
+      service_category: data.service_category, // <--- Sent to backend
+      phone_number: data.phone,
+      country: data.country,
+      state: data.state,
+      lga: data.lga
     };
-    
-    users.push(newUser);
-    await storage.setUsers(users);
-    
-    console.log('API: Registration successful', newUser.id);
-    return newUser;
+
+    const response = await apiClient.post('/auth/register/', payload);
+    if (response.data.tokens) {
+      await SecureStore.setItemAsync('accessToken', response.data.tokens.access);
+      await SecureStore.setItemAsync('refreshToken', response.data.tokens.refresh);
+    }
+    return response.data;
   },
 
-  async logout(): Promise<void> {
-    await delay();
-    console.log('API: Logout');
-    await storage.clearAuth();
+  // --- NEW FUNCTION: Fetch Services from Backend ---
+  getServices: async () => {
+    console.log("Fetching services from backend...");
+    const response = await apiClient.get('/auth/services/');
+    console.log("Services fetched:", response.data.length);
+    return response.data;
   },
 
-  async getCurrentUser(): Promise<User | null> {
-    return await storage.getCurrentUser();
+  logout: async () => {
+    await SecureStore.deleteItemAsync('accessToken');
+    await SecureStore.deleteItemAsync('refreshToken');
+    await SecureStore.deleteItemAsync('user');
   },
+
+  getCurrentUser: async () => {
+    try {
+      const response = await apiClient.get('/auth/profile/');
+      return response.data;
+    } catch (e) {
+      return null;
+    }
+  }
 };
 
-// Artisan API
-export const artisanAPI = {
-  async getArtisans(category?: ArtisanCategory): Promise<Artisan[]> {
-    await delay();
-    console.log('API: Get artisans', category);
-    
-    let artisans: Artisan[] = await storage.getArtisans();
-    
-    if (category && category !== 'All') {
-      artisans = artisans.filter(a => a.category === category);
-    }
-    
-    // Only return verified artisans for public listing
-    artisans = artisans.filter(a => a.verificationStatus === 'approved');
-    
-    console.log('API: Found artisans', artisans.length);
-    return artisans;
+// --- LOCATIONS ---
+export const locationAPI = {
+  getCountries: async () => {
+    const response = await apiClient.get('/locations/countries/');
+    return getData(response);
   },
 
-  async getArtisanById(id: string): Promise<Artisan | null> {
-    await delay();
-    console.log('API: Get artisan by ID', id);
-    
-    const artisans: Artisan[] = await storage.getArtisans();
-    return artisans.find(a => a.id === id) || null;
+  getStates: async (countryId: number) => {
+    const response = await apiClient.get(`/locations/states/?country_id=${countryId}`);
+    return getData(response);
   },
 
-  async getArtisanByUserId(userId: string): Promise<Artisan | null> {
-    await delay();
-    console.log('API: Get artisan by user ID', userId);
-    
-    const artisans: Artisan[] = await storage.getArtisans();
-    return artisans.find(a => a.userId === userId) || null;
+  getLGAs: async (stateId: number) => {
+    const response = await apiClient.get(`/locations/lgas/?state_id=${stateId}`);
+    return getData(response);
   },
 
-  async updateArtisan(id: string, updates: Partial<Artisan>): Promise<Artisan> {
-    await delay();
-    console.log('API: Update artisan', id);
-    
-    const artisans: Artisan[] = await storage.getArtisans();
-    const index = artisans.findIndex(a => a.id === id);
-    
-    if (index === -1) {
-      throw new Error('Artisan not found');
-    }
-    
-    artisans[index] = { ...artisans[index], ...updates };
-    await storage.setArtisans(artisans);
-    
-    console.log('API: Artisan updated');
-    return artisans[index];
-  },
-
-  async createArtisanProfile(userId: string, data: Omit<Artisan, 'id' | 'userId' | 'createdAt' | 'verificationStatus' | 'rating' | 'reviewCount'>): Promise<Artisan> {
-    await delay();
-    console.log('API: Create artisan profile', userId);
-    
-    const artisans: Artisan[] = await storage.getArtisans();
-    
-    const newArtisan: Artisan = {
-      ...data,
-      id: generateId(),
-      userId,
-      verificationStatus: 'none',
-      rating: 0,
-      reviewCount: 0,
-      createdAt: new Date().toISOString(),
-    };
-    
-    artisans.push(newArtisan);
-    await storage.setArtisans(artisans);
-    
-    console.log('API: Artisan profile created');
-    return newArtisan;
-  },
+  searchLocations: async (query: string) => {
+    const response = await apiClient.get(`/locations/search/?q=${query}`);
+    return response.data;
+  }
 };
 
-// Booking API
+// --- BOOKINGS ---
 export const bookingAPI = {
-  async createBooking(bookingData: Omit<Booking, 'id' | 'createdAt' | 'status'>): Promise<Booking> {
-    await delay();
-    console.log('API: Create booking');
-    
-    const bookings: Booking[] = await storage.getBookings();
-    
-    const newBooking: Booking = {
-      ...bookingData,
-      id: generateId(),
-      status: 'pending',
-      createdAt: new Date().toISOString(),
-    };
-    
-    bookings.push(newBooking);
-    await storage.setBookings(bookings);
-    
-    console.log('API: Booking created', newBooking.id);
-    return newBooking;
+  getBookings: async () => {
+    const response = await apiClient.get('/bookings/');
+    return getData(response);
   },
 
-  async getBookingsByClient(clientId: string): Promise<Booking[]> {
-    await delay();
-    console.log('API: Get bookings by client', clientId);
-    
-    const bookings: Booking[] = await storage.getBookings();
-    return bookings.filter(b => b.clientId === clientId);
-  },
-
-  async getBookingsByArtisan(artisanId: string): Promise<Booking[]> {
-    await delay();
-    console.log('API: Get bookings by artisan', artisanId);
-    
-    const bookings: Booking[] = await storage.getBookings();
-    return bookings.filter(b => b.artisanId === artisanId);
-  },
-
-  async updateBookingStatus(id: string, status: BookingStatus): Promise<Booking> {
-    await delay();
-    console.log('API: Update booking status', id, status);
-    
-    const bookings: Booking[] = await storage.getBookings();
-    const index = bookings.findIndex(b => b.id === id);
-    
-    if (index === -1) {
-      throw new Error('Booking not found');
-    }
-    
-    bookings[index].status = status;
-    await storage.setBookings(bookings);
-    
-    console.log('API: Booking status updated');
-    return bookings[index];
-  },
+  createBooking: async (data: any) => {
+    const response = await apiClient.post('/bookings/', data);
+    return response.data;
+  }
 };
 
-// Verification API
-export const verificationAPI = {
-  async requestVerification(artisanId: string): Promise<Verification> {
-    await delay();
-    console.log('API: Request verification', artisanId);
-    
-    const verifications: Verification[] = await storage.getVerifications();
-    
-    // Check if there's already a pending verification
-    const existing = verifications.find(v => v.artisanId === artisanId && v.status === 'pending');
-    if (existing) {
-      throw new Error('Verification request already pending');
+// --- ARTISANS ---
+export const artisanAPI = {
+  getArtisans: async (filters?: { service?: string; search?: string }) => {
+    console.log("[API] Fetching artisans from USER table...");
+
+    try {
+      // 1. Call the new endpoint /artisans-list/
+      // This assumes your baseURL is .../api, so this becomes .../api/artisans-list/
+      const response = await apiClient.get('/artisans-list/');
+
+      console.log("[API] Artisans Found:", response.data.length || response.data.results?.length || 0);
+
+      // 2. Return the array directly
+      let results = response.data.results || response.data;
+      return Array.isArray(results) ? results : [];
+
+    } catch (error: any) {
+      console.error("[API] Error fetching artisans:", error.response?.status, error.message);
+      return [];
     }
-    
-    const newVerification: Verification = {
-      id: generateId(),
-      artisanId,
-      status: 'pending',
-      requestedAt: new Date().toISOString(),
-    };
-    
-    verifications.push(newVerification);
-    await storage.setVerifications(verifications);
-    
-    // Update artisan verification status
-    const artisans: Artisan[] = await storage.getArtisans();
-    const artisanIndex = artisans.findIndex(a => a.id === artisanId);
-    if (artisanIndex !== -1) {
-      artisans[artisanIndex].verificationStatus = 'pending';
-      await storage.setArtisans(artisans);
-    }
-    
-    console.log('API: Verification requested');
-    return newVerification;
   },
 
-  async getPendingVerifications(): Promise<Verification[]> {
-    await delay();
-    console.log('API: Get pending verifications');
-    
-    const verifications: Verification[] = await storage.getVerifications();
-    return verifications.filter(v => v.status === 'pending');
-  },
-
-  async updateVerification(id: string, status: VerificationStatus, reviewedBy: string, notes?: string): Promise<Verification> {
-    await delay();
-    console.log('API: Update verification', id, status);
-    
-    const verifications: Verification[] = await storage.getVerifications();
-    const index = verifications.findIndex(v => v.id === id);
-    
-    if (index === -1) {
-      throw new Error('Verification not found');
+  getArtisanById: async (id: number) => {
+    // We can just use the user detail for now since we rely on User table
+    // Note: ensure your backend has a route for /users/<id>/ or similar if needed, 
+    // otherwise fallback to fetching the list and finding the item.
+    try {
+      const response = await apiClient.get(`/auth/users/${id}/`);
+      return response.data;
+    } catch (error) {
+      console.error("Error fetching artisan details", error);
+      return null;
     }
-    
-    verifications[index] = {
-      ...verifications[index],
-      status,
-      reviewedAt: new Date().toISOString(),
-      reviewedBy,
-      notes,
-    };
-    
-    await storage.setVerifications(verifications);
-    
-    // Update artisan verification status
-    const artisans: Artisan[] = await storage.getArtisans();
-    const artisanIndex = artisans.findIndex(a => a.id === verifications[index].artisanId);
-    if (artisanIndex !== -1) {
-      artisans[artisanIndex].verificationStatus = status;
-      await storage.setArtisans(artisans);
-    }
-    
-    console.log('API: Verification updated');
-    return verifications[index];
-  },
+  }
 };
 
-// Admin API
-export const adminAPI = {
-  async getAllUsers(): Promise<User[]> {
-    await delay();
-    console.log('API: Get all users');
-    return await storage.getUsers();
-  },
-
-  async getAllArtisans(): Promise<Artisan[]> {
-    await delay();
-    console.log('API: Get all artisans');
-    return await storage.getArtisans();
-  },
-
-  async getAllBookings(): Promise<Booking[]> {
-    await delay();
-    console.log('API: Get all bookings');
-    return await storage.getBookings();
-  },
-
-  async getStats(): Promise<{
-    totalUsers: number;
-    totalArtisans: number;
-    totalBookings: number;
-    pendingVerifications: number;
-  }> {
-    await delay();
-    console.log('API: Get stats');
-    
-    const users = await storage.getUsers();
-    const artisans = await storage.getArtisans();
-    const bookings = await storage.getBookings();
-    const verifications = await storage.getVerifications();
-    
-    return {
-      totalUsers: users.length,
-      totalArtisans: artisans.length,
-      totalBookings: bookings.length,
-      pendingVerifications: verifications.filter(v => v.status === 'pending').length,
-    };
-  },
-};
