@@ -19,38 +19,6 @@ import { colors, commonStyles } from '@/styles/commonStyles';
 
 const { height } = Dimensions.get('window');
 
-// --- 1. TRANSLATION DICTIONARY ---
-const SERVICE_TRANSLATIONS: { [key: string]: string } = {
-  "AC & Fridge Repair": "Gyaran AC da Frio",
-  "Aluminum & Glass Work": "Aikin Gilashi da Aluminum",
-  "Barbing": "Aski",
-  "Bricklaying & Masonry": "Aikin Gini",
-  "Carpentry & Furniture": "Kafinta / Aikin Katako",
-  "Catering & Cooking": "Aikin Girki",
-  "Cleaning Services": "Aikin Shara & Goge-goge",
-  "Electrical Works": "Aikin Wutar Lantarki",
-  "Event Planning": "Shirya Biki da Taro",
-  "Fashion Design & Tailoring": "Telan Tufafi",
-  "Gardening": "Aikin Lambu",
-  "Generator Repair": "Gyaran Janareta",
-  "Hairdressing": "Kitso",
-  "Interior Decoration": "Ado na Cikin Gida",
-  "Laundry & Dry Cleaning": "Wanki da Guga",
-  "Makeup Artistry": "Kwalliya",
-  "Mechanic (Auto)": "Makanike",
-  "Painting": "Fenti",
-  "Pest Control": "Kashe Kwari",
-  "Phone & Laptop Repair": "Gyaran Wayoyi da Kwamfuta",
-  "Photography": "Daukar Hoto",
-  "Plumbing": "Aikin Ruwa",
-  "Satellite Dish Installation": "Aikin Dish",
-  "Solar Energy Installation": "Aikin Wutar Solar",
-  "Tiling": "Aikin Tiles",
-  "Vulcanizing": "Aikin Taya",
-  "Welding": "Aikin Walda",
-  "Woodwork": "Sassaka"
-};
-
 export default function RegisterScreen() {
   const router = useRouter();
 
@@ -69,7 +37,7 @@ export default function RegisterScreen() {
   const [errors, setErrors] = useState<{ [key: string]: string }>({});
 
   // --- DATA STATE ---
-  const [services, setServices] = useState<any[]>([]);
+  const [services, setServices] = useState<any[]>([]); // Will contain [{label: "English (Hausa)", value: "English"}]
   const [selectedService, setSelectedService] = useState('');
   const [countries, setCountries] = useState<any[]>([]);
   const [states, setStates] = useState<any[]>([]);
@@ -81,31 +49,10 @@ export default function RegisterScreen() {
 
   // --- DATA LOADING ---
   useEffect(() => {
-    // 1. Fetch Countries
     locationAPI.getCountries().then(setCountries).catch(console.error);
 
-    // 2. Fetch Services & Translate Immediately
-    authAPI.getServices().then((backendData: any[]) => {
-      // Transform the data
-      const formattedServices = backendData.map(item => {
-        // Extract the value (backend might send object or string)
-        const englishName = item.value || item.label || item;
-
-        // Find translation
-        const hausaName = SERVICE_TRANSLATIONS[englishName];
-
-        return {
-          // Format label: "English (Hausa)"
-          label: hausaName ? `${englishName} (${hausaName})` : englishName,
-          value: englishName // Keep original English value for database
-        };
-      });
-
-      // Sort Alphabetically by the new Label
-      formattedServices.sort((a, b) => a.label.localeCompare(b.label));
-
-      setServices(formattedServices);
-    }).catch(console.error);
+    // ✅ FETCH SERVICES: The backend now returns them translated and sorted.
+    authAPI.getServices().then(setServices).catch(console.error);
   }, []);
 
   useEffect(() => {
@@ -128,7 +75,6 @@ export default function RegisterScreen() {
   const validateStep = (step: number) => {
     let newErrors: { [key: string]: string } = {};
 
-    // STEP 1: TERMS
     if (step === 1) {
       if (!acceptedTerms) {
         Alert.alert("Terms Required", "Please read and accept the Terms and Conditions to proceed.");
@@ -136,7 +82,6 @@ export default function RegisterScreen() {
       }
     }
 
-    // STEP 2: ACCOUNT INFO
     if (step === 2) {
       if (!name) newErrors['name'] = "Full Name is required";
       if (!email || !email.includes('@')) newErrors['email'] = "Valid email is required";
@@ -144,7 +89,6 @@ export default function RegisterScreen() {
       if (!password || password.length < 6) newErrors['password'] = "Password must be 6+ chars";
     }
 
-    // STEP 4: LOCATION (Role is Step 3)
     if (step === 4) {
       if (!selectedCountry) newErrors['country'] = "Select your country";
       if (!selectedState) newErrors['state'] = "Select your state";

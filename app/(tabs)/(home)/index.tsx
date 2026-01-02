@@ -1,18 +1,21 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import {
   View, Text, StyleSheet, FlatList, TextInput,
-  TouchableOpacity, ActivityIndicator, ScrollView, RefreshControl
+  TouchableOpacity, ActivityIndicator, ScrollView, RefreshControl, Alert
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
-import { artisanAPI, authAPI } from '@/src/api/client';
-import { ArtisanCard } from '@/src/components/ArtisanCard';
-import { IconSymbol } from '@/components/IconSymbol';
-import { colors, commonStyles } from '@/styles/commonStyles';
 import { useRouter } from 'expo-router';
+import AsyncStorage from '@react-native-async-storage/async-storage'; // ✅ Import Storage
+
+import { artisanAPI } from '@/src/api/client';
+import { ArtisanCard } from '@/components/ArtisanCard';
+import { IconSymbol } from '@/components/IconSymbol';
+import { colors } from '@/styles/commonStyles';
 
 // Categories for filter
 const CATEGORIES = ["All", "Plumbing", "Electrical", "Carpentry", "Cleaning", "Mechanic"];
+const CACHE_KEY = 'cached_artisans_list'; // ✅ Key for storage
 
 export default function ClientHomeScreen() {
   const router = useRouter();
@@ -22,48 +25,75 @@ export default function ClientHomeScreen() {
   const [selectedCategory, setSelectedCategory] = useState('All');
   const [refreshing, setRefreshing] = useState(false);
 
-  // --- FETCH ARTISANS ---
-  const fetchArtisans = useCallback(async () => {
+  // --- 1. LOAD CACHE ON MOUNT ---
+  useEffect(() => {
+    const loadCache = async () => {
+      try {
+        const cachedData = await AsyncStorage.getItem(CACHE_KEY);
+        if (cachedData) {
+          console.log('Loaded artisans from cache');
+          setArtisans(JSON.parse(cachedData));
+          setLoading(false); // Show content immediately
+        }
+      } catch (e) {
+        console.error("Failed to load cache", e);
+      }
+    };
+    loadCache();
+  }, []);
+
+  // --- 2. FETCH FROM API ---
+  const fetchArtisans = useCallback(async (isRefresh = false) => {
     try {
-      setLoading(true);
-      // Pass filters to the API
+      // Only show full-screen loader if we have NO data and aren't refreshing
+      if (artisans.length === 0 && !isRefresh) setLoading(true);
+
       const filters = {
         service: selectedCategory === 'All' ? undefined : selectedCategory,
         search: searchQuery
       };
 
       const data = await artisanAPI.getArtisans(filters);
-      setArtisans(data);
+
+      if (data) {
+        setArtisans(data);
+
+        // ✅ Save to Cache only if viewing "All" (Main list)
+        if (selectedCategory === 'All' && searchQuery === '') {
+          await AsyncStorage.setItem(CACHE_KEY, JSON.stringify(data));
+        }
+      }
     } catch (error) {
       console.error("Failed to fetch artisans", error);
+      // ❌ DO NOT clear artisans here. We keep the old data visible.
+      if (isRefresh) {
+        Alert.alert("Network Error", "Could not update the list. Showing saved artisans.");
+      }
     } finally {
       setLoading(false);
       setRefreshing(false);
     }
   }, [selectedCategory, searchQuery]);
 
-  // Initial Load & Refresh
+  // Initial Fetch (Network update)
   useEffect(() => {
     fetchArtisans();
   }, [fetchArtisans]);
 
   const onRefresh = () => {
     setRefreshing(true);
-    fetchArtisans();
+    fetchArtisans(true);
   };
 
-  // --- HANDLERS ---
   const handleBook = (artisanId: number) => {
-    // Navigate to booking screen (We will build this next)
-    // router.push(`/booking/new?artisanId=${artisanId}`);
-    alert(`Booking feature for Artisan #${artisanId} coming next!`);
+    Alert.alert("Coming Soon", `Booking feature for Artisan #${artisanId} is coming next!`);
   };
 
   return (
     <SafeAreaView style={styles.container}>
       <StatusBar style="dark" />
 
-      {/* 1. HEADER & SEARCH */}
+      {/* HEADER & SEARCH */}
       <View style={styles.header}>
         <View>
           <Text style={styles.greeting}>Find a Pro</Text>
@@ -82,11 +112,11 @@ export default function ClientHomeScreen() {
           value={searchQuery}
           onChangeText={setSearchQuery}
           returnKeyType="search"
-          onSubmitEditing={fetchArtisans}
+          onSubmitEditing={() => fetchArtisans()}
         />
       </View>
 
-      {/* 2. CATEGORY FILTER */}
+      {/* CATEGORY FILTER */}
       <View>
         <ScrollView
           horizontal
@@ -111,13 +141,17 @@ export default function ClientHomeScreen() {
         </ScrollView>
       </View>
 
-      {/* 3. ARTISAN LIST */}
+      {/* ARTISAN LIST */}
       <View style={styles.listContainer}>
         <Text style={styles.sectionTitle}>
-          {loading ? "Searching..." : `${artisans.length} Artisans Found`}
+          {loading && artisans.length === 0 ? "Loading..." : `${artisans.length} Artisans Found`}
         </Text>
 
-        {loading && !refreshing ? (
+        {/* ✅ UI LOGIC: 
+           If loading AND no data -> Show Spinner
+           If data exists (even if loading) -> Show List
+        */}
+        {loading && artisans.length === 0 ? (
           <ActivityIndicator size="large" color={colors.primary} style={{ marginTop: 50 }} />
         ) : (
           <FlatList
@@ -126,7 +160,10 @@ export default function ClientHomeScreen() {
             renderItem={({ item }) => (
               <ArtisanCard
                 artisan={item}
-                onPress={() => console.log('View profile')}
+                onPress={() => router.push({
+                  pathname: '/artisan-profile',
+                  params: { id: item.id }
+                })}
                 onBook={() => handleBook(item.id)}
               />
             )}

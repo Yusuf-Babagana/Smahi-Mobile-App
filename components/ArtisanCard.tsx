@@ -1,61 +1,79 @@
 import React from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Image } from 'react-native';
-import { IconSymbol } from '@/components/IconSymbol';
+import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
+import { Ionicons } from '@expo/vector-icons'; // ✅ Standard Expo Icons
 import { colors, shadows } from '@/styles/commonStyles';
-import { LinearGradient } from 'expo-linear-gradient';
 
 interface ArtisanCardProps {
-    artisan: {
-        id: number;
-        user: {
-            first_name: string;
-            last_name: string;
-            email: string;
-        };
-        service_category: string;
-        business_name?: string;
-        state?: string;
-        lga?: string;
-        rating?: number; // Assuming backend sends this, default to 0 if not
-    };
+    artisan: any;
     onPress: () => void;
     onBook: () => void;
 }
 
 export const ArtisanCard = ({ artisan, onPress, onBook }: ArtisanCardProps) => {
-    // Format Name
-    const displayName = artisan.business_name || `${artisan.user.first_name} ${artisan.user.last_name}`;
-    const location = `${artisan.lga}, ${artisan.state}`;
+    if (!artisan) return null;
+
+    // 1. SAFE DATA EXTRACTION
+    const data = artisan.user || artisan;
+
+    // 2. Get Details
+    const firstName = data.first_name || '';
+    const lastName = data.last_name || '';
+    const email = data.email || 'Unknown';
+
+    // 3. Construct Display Name
+    const displayName = (firstName || lastName)
+        ? `${firstName} ${lastName}`.trim()
+        : email.split('@')[0];
+
+    // 4. Get Service & Phone
+    const service = data.service_category || "Professional Artisan";
+    const phone = data.phone_number || "No Phone";
+
+    // 5. Get Location
+    const stateName = data.state_details?.name;
+    const lgaName = data.lga_details?.name;
+    const location = stateName ? `${lgaName || ''}, ${stateName}` : "Location Unknown";
 
     return (
         <TouchableOpacity activeOpacity={0.9} onPress={onPress} style={styles.card}>
             <View style={styles.row}>
-                {/* Avatar / Icon */}
+                {/* Avatar Placeholder */}
                 <View style={styles.avatarContainer}>
-                    <IconSymbol name="person.fill" size={32} color="#FFF" />
+                    <Text style={styles.avatarText}>
+                        {(displayName[0] || '?').toUpperCase()}
+                    </Text>
                 </View>
 
-                {/* Info */}
+                {/* Info Section */}
                 <View style={styles.infoContainer}>
                     <Text style={styles.name}>{displayName}</Text>
-                    <Text style={styles.service}>{artisan.service_category}</Text>
+                    <Text style={styles.role}>{service}</Text>
 
-                    <View style={styles.locationRow}>
-                        <IconSymbol name="location.fill" size={14} color={colors.textSecondary} />
-                        <Text style={styles.location}>{location}</Text>
+                    {/* Location Row */}
+                    <View style={styles.detailRow}>
+                        <Ionicons name="location-sharp" size={12} color={colors.textSecondary} />
+                        <Text style={styles.detailText}>{location}</Text>
                     </View>
-                </View>
 
-                {/* Rating (Static for now if backend doesn't send it) */}
-                <View style={styles.ratingContainer}>
-                    <IconSymbol name="star.fill" size={16} color="#FFD700" />
-                    <Text style={styles.ratingText}>4.8</Text>
+                    {/* Email Row */}
+                    <View style={styles.detailRow}>
+                        <Ionicons name="mail" size={12} color={colors.textSecondary} />
+                        <Text style={styles.detailText}>{email}</Text>
+                    </View>
+
+                    {/* Phone Row */}
+                    {phone !== "No Phone" && (
+                        <View style={styles.detailRow}>
+                            <Ionicons name="call" size={12} color={colors.textSecondary} />
+                            <Text style={styles.detailText}>{phone}</Text>
+                        </View>
+                    )}
                 </View>
             </View>
 
             <View style={styles.divider} />
 
-            {/* Actions */}
+            {/* Buttons */}
             <View style={styles.actionRow}>
                 <TouchableOpacity onPress={onPress}>
                     <Text style={styles.viewProfileText}>View Profile</Text>
@@ -71,42 +89,27 @@ export const ArtisanCard = ({ artisan, onPress, onBook }: ArtisanCardProps) => {
 
 const styles = StyleSheet.create({
     card: {
-        backgroundColor: '#FFF',
-        borderRadius: 16,
-        padding: 16,
-        marginBottom: 16,
-        borderWidth: 1,
-        borderColor: '#F0F0F0',
-        ...shadows.small,
+        backgroundColor: '#FFF', borderRadius: 16, padding: 16, marginBottom: 16,
+        borderWidth: 1, borderColor: '#F0F0F0', ...shadows.small,
     },
     row: { flexDirection: 'row', alignItems: 'center' },
     avatarContainer: {
-        width: 56, height: 56, borderRadius: 28,
-        backgroundColor: colors.primary,
-        justifyContent: 'center', alignItems: 'center',
-        marginRight: 16,
+        width: 50, height: 50, borderRadius: 25, backgroundColor: colors.primary,
+        justifyContent: 'center', alignItems: 'center', marginRight: 16,
     },
+    avatarText: { color: 'white', fontSize: 20, fontWeight: 'bold' },
     infoContainer: { flex: 1 },
     name: { fontSize: 16, fontWeight: '700', color: colors.text, marginBottom: 4 },
-    service: {
-        fontSize: 12, fontWeight: '600', color: colors.primary,
-        backgroundColor: '#EBF5FF', paddingHorizontal: 8, paddingVertical: 2,
-        borderRadius: 8, alignSelf: 'flex-start', marginBottom: 6
+    role: {
+        fontSize: 12, fontWeight: '600', color: colors.primary, marginBottom: 6,
+        backgroundColor: '#EFF6FF', alignSelf: 'flex-start', paddingHorizontal: 8,
+        paddingVertical: 2, borderRadius: 4
     },
-    locationRow: { flexDirection: 'row', alignItems: 'center' },
-    location: { fontSize: 13, color: colors.textSecondary, marginLeft: 4 },
-
-    ratingContainer: { alignItems: 'flex-end' },
-    ratingText: { fontWeight: '700', marginTop: 4, color: colors.text },
-
+    detailRow: { flexDirection: 'row', alignItems: 'center', marginTop: 3 },
+    detailText: { fontSize: 13, color: colors.textSecondary, marginLeft: 6 },
     divider: { height: 1, backgroundColor: '#F0F0F0', marginVertical: 12 },
-
     actionRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-    viewProfileText: { color: colors.textSecondary, fontWeight: '600' },
-    bookButton: {
-        backgroundColor: colors.text,
-        paddingVertical: 8, paddingHorizontal: 20,
-        borderRadius: 20
-    },
+    viewProfileText: { color: colors.textSecondary, fontWeight: '600', fontSize: 14 },
+    bookButton: { backgroundColor: colors.text, paddingVertical: 8, paddingHorizontal: 20, borderRadius: 20 },
     bookButtonText: { color: '#FFF', fontWeight: '700', fontSize: 13 },
 });
