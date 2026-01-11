@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import {
   View, Text, StyleSheet, Alert, ScrollView, TouchableOpacity,
-  ActivityIndicator, KeyboardAvoidingView, Platform, ImageBackground, Switch, Dimensions
+  ActivityIndicator, KeyboardAvoidingView, Platform, ImageBackground, Switch, Dimensions, Image
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
@@ -186,6 +186,16 @@ export default function RegisterScreen() {
                 {currentStep === 1 && (
                   <View style={styles.termsContainer}>
                     <View style={styles.glassCard}>
+
+                      {/* LOGO */}
+                      <View style={{ alignItems: 'center', marginBottom: 16 }}>
+                        <Image
+                          source={require('../assets/images/smahi.png')}
+                          style={styles.logoImage}
+                          resizeMode="contain"
+                        />
+                      </View>
+
                       <Text style={styles.corporateTitle}>S. MAHI GLOBAL SERVICE LTD</Text>
                       <Text style={styles.corporateSubtitle}>TERMS, CONDITIONS & CORPORATE OVERVIEW</Text>
 
@@ -342,7 +352,7 @@ const RoleCard = ({ title, subtitle, icon, selected, onPress }: any) => (
       {
         borderColor: selected ? colors.primary : '#E5E7EB',
         borderWidth: selected ? 2 : 1,
-        backgroundColor: selected ? '#F0F9FF' : 'rgba(255,255,255,0.8)',
+        backgroundColor: selected ? '#F0F9FF' : 'rgba(255,255,255,0.9)', // Increased opacity
       }
     ]}
   >
@@ -385,6 +395,7 @@ const styles = StyleSheet.create({
 
   // TERMS STYLES
   termsContainer: { marginTop: 10 },
+  logoImage: { width: 80, height: 80, marginBottom: 8 }, // Logo style
   corporateTitle: { fontSize: 18, fontWeight: '900', color: colors.primary, textAlign: 'center', marginBottom: 4 },
   corporateSubtitle: { fontSize: 12, fontWeight: '700', color: '#6B7280', textAlign: 'center', marginBottom: 16, letterSpacing: 1 },
   termsScroll: { height: height * 0.45, paddingRight: 8 },
@@ -393,7 +404,7 @@ const styles = StyleSheet.create({
 
   switchRow: {
     flexDirection: 'row', alignItems: 'center', marginTop: 20,
-    padding: 16, backgroundColor: 'rgba(255,255,255,0.8)',
+    padding: 16, backgroundColor: 'rgba(255,255,255,0.9)', // Increased opacity
     borderRadius: 16, borderWidth: 1, borderColor: '#E5E7EB'
   },
   switchText: { marginLeft: 12, fontSize: 15, fontWeight: '600', color: '#374151' },
@@ -401,7 +412,7 @@ const styles = StyleSheet.create({
   // FOOTER
   footer: {
     position: 'absolute', bottom: 0, left: 0, right: 0,
-    padding: 24, backgroundColor: 'rgba(255,255,255,0.9)',
+    padding: 24, backgroundColor: 'rgba(255,255,255,0.95)', // Increased opacity
     borderTopWidth: 1, borderTopColor: '#F3F4F6'
   },
   btn: {
@@ -419,16 +430,16 @@ const styles = StyleSheet.create({
     shadowColor: "#000", shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.05, shadowRadius: 4, elevation: 2
   },
   glassCard: {
-    backgroundColor: 'rgba(255,255,255,0.75)',
-    borderWidth: 1, borderColor: '#E5E7EB',
+    backgroundColor: 'rgba(255,255,255,0.9)', // Increased opacity
+    borderWidth: 1, borderColor: '#FFF',
     padding: 24, borderRadius: 24,
-    shadowColor: "#000", shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.05, shadowRadius: 8, elevation: 3
+    shadowColor: "#000", shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.08, shadowRadius: 12, elevation: 4
   },
   glassCardSimple: {
-    backgroundColor: 'rgba(255,255,255,0.8)',
-    borderWidth: 1, borderColor: '#E5E7EB',
+    backgroundColor: 'rgba(255,255,255,0.9)', // Increased opacity
+    borderWidth: 1, borderColor: '#FFF',
     padding: 20, borderRadius: 20, marginBottom: 24,
-    shadowColor: "#000", shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.05, shadowRadius: 8, elevation: 3
+    shadowColor: "#000", shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.08, shadowRadius: 12, elevation: 4
   },
   iconCircle: { width: 50, height: 50, borderRadius: 25, justifyContent: 'center', alignItems: 'center', marginRight: 16 },
   roleTitle: { fontSize: 17, fontWeight: '700', marginBottom: 4 },

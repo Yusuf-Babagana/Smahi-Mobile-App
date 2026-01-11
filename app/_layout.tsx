@@ -18,6 +18,11 @@ import {
 import { StatusBar } from "expo-status-bar";
 import { WidgetProvider } from "@/contexts/WidgetContext";
 
+// ✅ 1. Import the Notification Provider
+import { NotificationProvider } from '@/src/context/NotificationContext';
+import '@/src/i18n';
+
+
 SplashScreen.preventAutoHideAsync();
 
 export default function RootLayout() {
@@ -33,7 +38,7 @@ export default function RootLayout() {
     }
   }, [loaded]);
 
-  // Network check (optional, kept from your code)
+  // Network check
   useEffect(() => {
     if (
       !networkState.isConnected &&
@@ -56,7 +61,7 @@ export default function RootLayout() {
     dark: false,
     colors: {
       primary: "rgb(0, 122, 255)",
-      background: "rgb(242, 242, 247)", // This is that nice light gray
+      background: "rgb(242, 242, 247)",
       card: "rgb(255, 255, 255)",
       text: "rgb(0, 0, 0)",
       border: "rgb(216, 216, 220)",
@@ -81,22 +86,34 @@ export default function RootLayout() {
   return (
     <ThemeProvider value={theme}>
       <WidgetProvider>
-        {/* FIX: Added style={{ flex: 1 }} to fill the screen */}
-        <GestureHandlerRootView style={{ flex: 1 }}>
-          <StatusBar style={colorScheme === "dark" ? "light" : "dark"} />
+        {/* ✅ 2. Wrap App in NotificationProvider */}
+        <NotificationProvider>
+          <GestureHandlerRootView style={{ flex: 1 }}>
+            <StatusBar style={colorScheme === "dark" ? "light" : "dark"} />
 
-          <Stack screenOptions={{ contentStyle: { backgroundColor: theme.colors.background } }}>
-            <Stack.Screen name="index" options={{ headerShown: false }} />
-            <Stack.Screen name="login" options={{ headerShown: false }} />
-            <Stack.Screen name="register" options={{ headerShown: false }} />
-            <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-            <Stack.Screen name="artisan/dashboard" options={{ headerShown: false }} />
-            <Stack.Screen name="agent/dashboard" options={{ headerShown: false }} />
-            <Stack.Screen name="admin/dashboard" options={{ headerShown: false }} />
-          </Stack>
+            <Stack screenOptions={{ contentStyle: { backgroundColor: theme.colors.background } }}>
+              {/* Auth & Base Screens */}
+              <Stack.Screen name="index" options={{ headerShown: false }} />
+              <Stack.Screen name="login" options={{ headerShown: false }} />
+              <Stack.Screen name="register" options={{ headerShown: false }} />
+              <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
 
-          <SystemBars style="auto" />
-        </GestureHandlerRootView>
+              {/* Dashboard Screens */}
+              <Stack.Screen name="artisan/dashboard" options={{ headerShown: false }} />
+              <Stack.Screen name="agent/dashboard" options={{ headerShown: false }} />
+              <Stack.Screen name="admin/dashboard" options={{ headerShown: false }} />
+
+              {/* ✅ 3. Add Chat & Profile Screens */}
+              <Stack.Screen name="artisan-profile" options={{ headerShown: false }} />
+              <Stack.Screen name="chat/index" options={{ headerShown: false }} />
+              <Stack.Screen name="chat/[id]" options={{ headerShown: false }} />
+
+              <Stack.Screen name="+not-found" />
+            </Stack>
+
+            <SystemBars style="auto" />
+          </GestureHandlerRootView>
+        </NotificationProvider>
       </WidgetProvider>
     </ThemeProvider>
   );

@@ -1,115 +1,329 @@
-import React from 'react';
-import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
-import { Ionicons } from '@expo/vector-icons'; // ✅ Standard Expo Icons
+import React, { useState } from 'react';
+import { View, Text, StyleSheet, TouchableOpacity, Linking, Alert, Image, Animated, Pressable } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { colors, shadows } from '@/styles/commonStyles';
 
+// --- Types ---
 interface ArtisanCardProps {
     artisan: any;
     onPress: () => void;
-    onBook: () => void;
+    formattedLocation?: string;
+    formattedPhone?: string;
 }
 
-export const ArtisanCard = ({ artisan, onPress, onBook }: ArtisanCardProps) => {
+// --- Helper: Image URL Optimizer ---
+const getOptimizedUrl = (url: string | null | undefined) => {
+    if (!url) return null;
+    let finalUrl = url;
+    if (finalUrl.startsWith('/')) finalUrl = `https://smahi1.pythonanywhere.com${finalUrl}`;
+    if (finalUrl.includes('res.cloudinary.com')) {
+        if (finalUrl.startsWith('http:')) finalUrl = finalUrl.replace('http:', 'https:');
+        if (finalUrl.includes('upload/') && !finalUrl.includes('w_')) {
+            finalUrl = finalUrl.replace('upload/', 'upload/w_250,h_250,c_fill,q_auto,f_auto/');
+        }
+    }
+    return finalUrl;
+};
+
+export const ArtisanCard = ({ artisan, onPress, formattedLocation, formattedPhone }: ArtisanCardProps) => {
+    const [imageError, setImageError] = useState(false);
+    const scaleAnim = React.useRef(new Animated.Value(1)).current;
+
     if (!artisan) return null;
 
-    // 1. SAFE DATA EXTRACTION
+    // --- Data Extraction ---
     const data = artisan.user || artisan;
-
-    // 2. Get Details
     const firstName = data.first_name || '';
     const lastName = data.last_name || '';
     const email = data.email || 'Unknown';
 
-    // 3. Construct Display Name
     const displayName = (firstName || lastName)
         ? `${firstName} ${lastName}`.trim()
         : email.split('@')[0];
 
-    // 4. Get Service & Phone
+    const initials = (displayName[0] || '?').toUpperCase();
     const service = data.service_category || "Professional Artisan";
-    const phone = data.phone_number || "No Phone";
+    const phone = formattedPhone || data.phone || data.phone_number || "No Phone";
+    const profilePic = getOptimizedUrl(data.profile_picture);
+    const rating = data.rating || 4.8; // Fallback or mock
+    const reviewCount = data.review_count || 24; // Fallback or mock
+    const isVerified = data.is_verified || false;
 
-    // 5. Get Location
-    const stateName = data.state_details?.name;
-    const lgaName = data.lga_details?.name;
-    const location = stateName ? `${lgaName || ''}, ${stateName}` : "Location Unknown";
+    // --- Location Logic ---
+    let location = formattedLocation;
+    if (!location) {
+        const stateName = data.state_details?.name || data.state;
+        const lgaName = data.lga_details?.name || data.lga;
+        const isStateId = typeof stateName === 'number';
+        const isLgaId = typeof lgaName === 'number';
+
+        if (stateName && !isStateId) {
+            location = `${lgaName && !isLgaId ? lgaName + ', ' : ''}${stateName}`;
+        } else {
+            location = "Location Hidden";
+        }
+    }
+
+    // --- Handlers ---
+    const handleCall = () => {
+        if (phone && phone !== "No Phone") {
+            Linking.openURL(`tel:${phone}`);
+        } else {
+            Alert.alert("No Contact", "Phone number not available.");
+        }
+    };
+
+    const handlePressIn = () => {
+        Animated.spring(scaleAnim, { toValue: 0.98, useNativeDriver: true, speed: 20 }).start();
+    };
+
+    const handlePressOut = () => {
+        Animated.spring(scaleAnim, { toValue: 1, useNativeDriver: true, speed: 20 }).start();
+    };
 
     return (
-        <TouchableOpacity activeOpacity={0.9} onPress={onPress} style={styles.card}>
-            <View style={styles.row}>
-                {/* Avatar Placeholder */}
-                <View style={styles.avatarContainer}>
-                    <Text style={styles.avatarText}>
-                        {(displayName[0] || '?').toUpperCase()}
-                    </Text>
+        <Animated.View style={{ transform: [{ scale: scaleAnim }] }}>
+            <Pressable
+                onPress={onPress}
+                onPressIn={handlePressIn}
+                onPressOut={handlePressOut}
+                style={styles.container}
+            >
+                {/* --- HEADER --- */}
+                <View style={styles.header}>
+                    <View style={styles.avatarContainer}>
+                        {profilePic && !imageError ? (
+                            <Image
+                                source={{ uri: profilePic }}
+                                style={styles.avatar}
+                                onError={() => setImageError(true)}
+                            />
+                        ) : (
+                            <View style={[styles.avatar, styles.avatarPlaceholder]}>
+                                <Text style={styles.avatarText}>{initials}</Text>
+                            </View>
+                        )}
+                        <View style={styles.onlineStatus} />
+                    </View>
+
+                    <View style={styles.infoColumn}>
+                        <View style={styles.nameRow}>
+                            <Text style={styles.name} numberOfLines={1}>{displayName}</Text>
+                            {isVerified && (
+                                <Ionicons name="checkmark-circle" size={16} color={colors.success || '#10B981'} style={{ marginLeft: 4 }} />
+                            )}
+                        </View>
+                        <View style={styles.badge}>
+                            <Text style={styles.badgeText}>{service}</Text>
+                        </View>
+
+                        <View style={styles.ratingRow}>
+                            <Ionicons name="star" size={14} color="#F59E0B" />
+                            <Text style={styles.ratingVaule}>{rating}</Text>
+                            <Text style={styles.reviewCount}>({reviewCount})</Text>
+                        </View>
+                    </View>
                 </View>
 
-                {/* Info Section */}
-                <View style={styles.infoContainer}>
-                    <Text style={styles.name}>{displayName}</Text>
-                    <Text style={styles.role}>{service}</Text>
+                <View style={styles.divider} />
 
-                    {/* Location Row */}
-                    <View style={styles.detailRow}>
-                        <Ionicons name="location-sharp" size={12} color={colors.textSecondary} />
-                        <Text style={styles.detailText}>{location}</Text>
-                    </View>
-
-                    {/* Email Row */}
-                    <View style={styles.detailRow}>
-                        <Ionicons name="mail" size={12} color={colors.textSecondary} />
-                        <Text style={styles.detailText}>{email}</Text>
-                    </View>
-
-                    {/* Phone Row */}
-                    {phone !== "No Phone" && (
-                        <View style={styles.detailRow}>
-                            <Ionicons name="call" size={12} color={colors.textSecondary} />
-                            <Text style={styles.detailText}>{phone}</Text>
+                {/* --- DETAILS --- */}
+                <View style={styles.detailsContainer}>
+                    <View style={styles.detailItem}>
+                        <View style={styles.iconBox}>
+                            <Ionicons name="location-sharp" size={14} color={colors.error || '#DC3545'} />
                         </View>
+                        <Text style={styles.detailText} numberOfLines={1}>{location}</Text>
+                    </View>
+
+                    {phone !== "No Phone" && (
+                        <TouchableOpacity onPress={handleCall} style={styles.detailItem}>
+                            <View style={[styles.iconBox, { backgroundColor: '#EFF6FF' }]}>
+                                <Ionicons name="call" size={14} color={colors.primary} />
+                            </View>
+                            <Text style={[styles.detailText, { color: colors.primary, fontWeight: '600' }]}>
+                                {phone}
+                            </Text>
+                        </TouchableOpacity>
                     )}
                 </View>
-            </View>
 
-            <View style={styles.divider} />
+                {/* --- FOOTER ACTIONS --- */}
+                <View style={styles.footer}>
+                    <TouchableOpacity style={styles.profileBtn} onPress={onPress}>
+                        <Text style={styles.profileBtnText}>View Profile</Text>
+                    </TouchableOpacity>
 
-            {/* Buttons */}
-            <View style={styles.actionRow}>
-                <TouchableOpacity onPress={onPress}>
-                    <Text style={styles.viewProfileText}>View Profile</Text>
-                </TouchableOpacity>
+                    <TouchableOpacity style={styles.bookBtn} onPress={onPress}>
+                        <Text style={styles.bookBtnText}>Book Now</Text>
+                        <Ionicons name="arrow-forward" size={14} color="#FFF" />
+                    </TouchableOpacity>
+                </View>
 
-                <TouchableOpacity onPress={onBook} style={styles.bookButton}>
-                    <Text style={styles.bookButtonText}>Book Now</Text>
-                </TouchableOpacity>
-            </View>
-        </TouchableOpacity>
+            </Pressable>
+        </Animated.View>
     );
 };
 
 const styles = StyleSheet.create({
-    card: {
-        backgroundColor: '#FFF', borderRadius: 16, padding: 16, marginBottom: 16,
-        borderWidth: 1, borderColor: '#F0F0F0', ...shadows.small,
+    container: {
+        backgroundColor: '#FFF',
+        borderRadius: 20,
+        marginBottom: 20,
+        padding: 16,
+        ...shadows.medium, // Utilizing the pre-defined shadow
+        borderWidth: 1,
+        borderColor: '#F3F4F6', // Subtle border
     },
-    row: { flexDirection: 'row', alignItems: 'center' },
+    header: {
+        flexDirection: 'row',
+        alignItems: 'center',
+    },
     avatarContainer: {
-        width: 50, height: 50, borderRadius: 25, backgroundColor: colors.primary,
-        justifyContent: 'center', alignItems: 'center', marginRight: 16,
+        position: 'relative',
+        marginRight: 16,
     },
-    avatarText: { color: 'white', fontSize: 20, fontWeight: 'bold' },
-    infoContainer: { flex: 1 },
-    name: { fontSize: 16, fontWeight: '700', color: colors.text, marginBottom: 4 },
-    role: {
-        fontSize: 12, fontWeight: '600', color: colors.primary, marginBottom: 6,
-        backgroundColor: '#EFF6FF', alignSelf: 'flex-start', paddingHorizontal: 8,
-        paddingVertical: 2, borderRadius: 4
+    avatar: {
+        width: 64,
+        height: 64,
+        borderRadius: 24, // Squircle shape for modern look
+        backgroundColor: '#F3F4F6',
     },
-    detailRow: { flexDirection: 'row', alignItems: 'center', marginTop: 3 },
-    detailText: { fontSize: 13, color: colors.textSecondary, marginLeft: 6 },
-    divider: { height: 1, backgroundColor: '#F0F0F0', marginVertical: 12 },
-    actionRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-    viewProfileText: { color: colors.textSecondary, fontWeight: '600', fontSize: 14 },
-    bookButton: { backgroundColor: colors.text, paddingVertical: 8, paddingHorizontal: 20, borderRadius: 20 },
-    bookButtonText: { color: '#FFF', fontWeight: '700', fontSize: 13 },
+    avatarPlaceholder: {
+        justifyContent: 'center',
+        alignItems: 'center',
+        backgroundColor: colors.primary,
+    },
+    avatarText: {
+        color: '#FFF',
+        fontSize: 24,
+        fontWeight: '700',
+    },
+    onlineStatus: {
+        position: 'absolute',
+        bottom: -2,
+        right: -2,
+        width: 16,
+        height: 16,
+        borderRadius: 8,
+        backgroundColor: colors.success || '#28A745',
+        borderWidth: 2,
+        borderColor: '#FFF',
+    },
+    infoColumn: {
+        flex: 1,
+        justifyContent: 'center',
+    },
+    nameRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        marginBottom: 4,
+    },
+    name: {
+        fontSize: 18,
+        fontWeight: '800',
+        color: '#1F2937',
+        fontFamily: 'System', // Use system font
+        letterSpacing: 0.3,
+    },
+    badge: {
+        backgroundColor: '#F3F4F6',
+        paddingHorizontal: 8,
+        paddingVertical: 4,
+        borderRadius: 8,
+        alignSelf: 'flex-start',
+        marginBottom: 6,
+    },
+    badgeText: {
+        fontSize: 12,
+        color: '#4B5563',
+        fontWeight: '600',
+        textTransform: 'uppercase',
+    },
+    ratingRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+    },
+    ratingVaule: {
+        fontSize: 13,
+        fontWeight: '700',
+        color: '#1F2937',
+        marginLeft: 4,
+    },
+    reviewCount: {
+        fontSize: 13,
+        color: '#9CA3AF',
+        marginLeft: 4,
+    },
+    divider: {
+        height: 1,
+        backgroundColor: '#F3F4F6',
+        marginVertical: 16,
+    },
+    detailsContainer: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        marginBottom: 16,
+        gap: 12,
+    },
+    detailItem: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        flex: 1,
+        backgroundColor: '#FAFAFA',
+        padding: 8,
+        borderRadius: 12,
+    },
+    iconBox: {
+        width: 28,
+        height: 28,
+        borderRadius: 8,
+        backgroundColor: '#FEF2F2', // Light red for location
+        justifyContent: 'center',
+        alignItems: 'center',
+        marginRight: 8,
+    },
+    detailText: {
+        fontSize: 13,
+        color: '#4B5563',
+        fontWeight: '500',
+        flexShrink: 1,
+    },
+    footer: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        gap: 12,
+    },
+    profileBtn: {
+        flex: 1,
+        paddingVertical: 12,
+        justifyContent: 'center',
+        alignItems: 'center',
+        borderRadius: 14,
+        borderWidth: 1,
+        borderColor: '#E5E7EB',
+        backgroundColor: '#FFF',
+    },
+    profileBtnText: {
+        color: '#374151',
+        fontWeight: '600',
+        fontSize: 14,
+    },
+    bookBtn: {
+        flex: 1,
+        paddingVertical: 12,
+        flexDirection: 'row',
+        justifyContent: 'center',
+        alignItems: 'center',
+        borderRadius: 14,
+        backgroundColor: '#111827', // Dark aesthetics
+        gap: 8,
+        ...shadows.small,
+    },
+    bookBtnText: {
+        color: '#FFF',
+        fontWeight: '700',
+        fontSize: 14,
+    },
 });

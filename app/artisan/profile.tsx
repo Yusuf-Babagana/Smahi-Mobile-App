@@ -1,25 +1,31 @@
 import React, { useState, useEffect } from "react";
 import { View, Text, StyleSheet, ScrollView, Pressable, Image, TextInput, Alert, ActivityIndicator } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { IconSymbol } from "@/components/IconSymbol";
-import { useTheme } from "@react-navigation/native";
+import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
+import * as ImagePicker from 'expo-image-picker'; // ✅ Import ImagePicker
 import Animated, { FadeInDown, FadeInUp } from "react-native-reanimated";
+import axios from 'axios';
+import * as SecureStore from 'expo-secure-store';
+
 import { artisanAPI, authAPI } from "@/src/api/client";
 import { storage } from "@/src/utils/storage";
-import { User, Artisan } from "@/src/types";
+import { colors, shadows } from '@/styles/commonStyles'; // Adjusted to match standard path
+
+const BASE_URL = 'https://smahi1.pythonanywhere.com/api';
+const CLOUD_NAME = 'dvj6cw5dq';
 
 export default function ArtisanProfileScreen() {
-    const theme = useTheme();
     const router = useRouter();
     const [loading, setLoading] = useState(true);
-    const [user, setUser] = useState<User | null>(null);
-    const [artisan, setArtisan] = useState<Artisan | null>(null);
+    const [uploadingProfile, setUploadingProfile] = useState(false); // ✅ Loading state for avatar
+    const [user, setUser] = useState<any>(null);
+    const [artisan, setArtisan] = useState<any>(null);
     const [isEditing, setIsEditing] = useState(false);
+    const [portfolioImages, setPortfolioImages] = useState<any[]>([]);
 
     // Form State
     const [bio, setBio] = useState("");
-    const [hourlyRate, setHourlyRate] = useState("");
 
     useEffect(() => {
         loadData();
@@ -31,12 +37,23 @@ export default function ArtisanProfileScreen() {
             if (!currentUser) return router.replace('/login');
             setUser(currentUser);
 
-            const profile = await artisanAPI.getArtisanByUserId(currentUser.id);
-            setArtisan(profile);
-            if (profile) {
-                setBio(profile.bio || "I am a skilled artisan dedicated to quality work.");
-                setHourlyRate(profile.hourlyRate?.toString() || "5000");
+            try {
+                const profile = await artisanAPI.getArtisanByUserId(currentUser.id);
+                setArtisan(profile);
+                if (profile) setBio(profile.bio || "I am a skilled artisan dedicated to quality work.");
+            } catch (e) {
+                console.log("Artisan profile pending");
             }
+
+            const token = await SecureStore.getItemAsync('accessToken');
+            const response = await axios.get(`${BASE_URL}/auth/profile/`, {
+                headers: { Authorization: `Bearer ${token}` }
+            });
+
+            // Update User with latest profile data (including new picture)
+            setUser(response.data);
+            setPortfolioImages(response.data.portfolio_images || []);
+
         } catch (error) {
             console.error(error);
         } finally {
@@ -44,128 +61,196 @@ export default function ArtisanProfileScreen() {
         }
     };
 
+    // --- 1. PICK PROFILE PICTURE ---
+    const pickProfileImage = async () => {
+        const { granted } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+        if (!granted) {
+            Alert.alert("Permission", "Allow access to photos to change profile picture.");
+            return;
+        }
+
+        const result = await ImagePicker.launchImageLibraryAsync({
+            mediaTypes: ['images'],
+            allowsEditing: true,
+            aspect: [1, 1], // Square for profile pics
+            quality: 0.5,
+        });
+
+        if (!result.canceled) {
+            uploadProfileImage(result.assets[0]);
+        }
+    };
+
+    // --- 2. UPLOAD PROFILE PICTURE ---
+    const uploadProfileImage = async (asset: ImagePicker.ImagePickerAsset) => {
+        setUploadingProfile(true);
+        try {
+            const token = await SecureStore.getItemAsync('accessToken');
+            const formData = new FormData();
+
+            // @ts-ignore
+            formData.append('profile_picture', {
+                uri: asset.uri,
+                name: asset.uri.split('/').pop(),
+                type: 'image/jpeg',
+            });
+
+            const response = await axios.post(`${BASE_URL}/auth/profile/picture/`, formData, {
+                headers: {
+                    'Content-Type': 'multipart/form-data',
+                    Authorization: `Bearer ${token}`,
+                },
+            });
+
+            Alert.alert("Success", "Profile picture updated!");
+            // Update local user state with new image
+            setUser((prev: any) => ({ ...prev, profile_picture: response.data.profile_picture }));
+
+        } catch (error) {
+            Alert.alert("Error", "Failed to update profile picture.");
+        } finally {
+            setUploadingProfile(false);
+        }
+    };
+
     const handleSave = async () => {
-        // Here you would call the API to update the profile
         setIsEditing(false);
         Alert.alert("Success", "Profile updated successfully!");
     };
 
+    const getDisplayName = () => {
+        if (!user) return 'Artisan';
+        if (user.first_name && user.last_name) return `${user.first_name} ${user.last_name}`;
+        if (user.first_name) return user.first_name;
+        return 'Artisan';
+    };
+
+    // Robust Image URL Resolver
+    const getImageUrl = (imgData: any) => {
+        if (!imgData) return null;
+        let url = typeof imgData === 'string' ? imgData : imgData.url;
+        if (!url) return null;
+
+        if (!url.startsWith('http') && url.includes('image/upload')) {
+            return `https://res.cloudinary.com/${CLOUD_NAME}/${url}`;
+        }
+        if (url.startsWith('http:')) {
+            return url.replace('http:', 'https:');
+        }
+        return url;
+    };
+
     if (loading) return (
-        <View style={[styles.center, { backgroundColor: theme.colors.background }]}>
-            <ActivityIndicator size="large" color={theme.colors.primary} />
+        <View style={styles.center}>
+            <ActivityIndicator size="large" color={colors.primary} />
         </View>
     );
 
+    const displayName = getDisplayName();
+    const profilePicUrl = getImageUrl(user?.profile_picture);
+    const initials = displayName.charAt(0).toUpperCase();
+
     return (
-        <SafeAreaView style={[styles.container, { backgroundColor: theme.colors.background }]}>
+        <SafeAreaView style={styles.container}>
             <ScrollView contentContainerStyle={styles.content}>
 
-                {/* 1. Navbar */}
+                {/* Navbar */}
                 <Animated.View entering={FadeInUp.duration(600)} style={styles.navBar}>
-                    <Pressable onPress={() => router.back()} style={[styles.iconBtn, { backgroundColor: theme.colors.card }]}>
-                        <IconSymbol name="arrow.left" size={20} color={theme.colors.text} />
+                    <Pressable onPress={() => router.back()} style={styles.iconBtn}>
+                        <Ionicons name="arrow-back" size={24} color="#333" />
                     </Pressable>
-                    <Text style={[styles.navTitle, { color: theme.colors.text }]}>My Profile</Text>
+                    <Text style={styles.navTitle}>My Profile</Text>
                     <Pressable
                         onPress={() => isEditing ? handleSave() : setIsEditing(true)}
-                        style={[styles.editBtn, { backgroundColor: isEditing ? theme.colors.primary : theme.colors.card }]}
+                        style={[styles.editBtn, { backgroundColor: isEditing ? colors.primary : '#FFF' }]}
                     >
-                        {isEditing ? (
-                            <Text style={styles.saveText}>Save</Text>
-                        ) : (
-                            <IconSymbol name="pencil" size={20} color={theme.colors.text} />
-                        )}
+                        {isEditing ? <Text style={styles.saveText}>Save</Text> : <Ionicons name="pencil" size={20} color="#333" />}
                     </Pressable>
                 </Animated.View>
 
-                {/* 2. Profile Header */}
+                {/* Profile Header */}
                 <Animated.View entering={FadeInDown.delay(100)} style={styles.header}>
-                    <View style={[styles.avatarContainer, { borderColor: theme.colors.card }]}>
-                        {/* Placeholder Avatar */}
-                        <View style={[styles.avatarPlaceholder, { backgroundColor: theme.colors.primary }]}>
-                            <Text style={styles.avatarInitials}>{user?.name?.[0] || 'A'}</Text>
-                        </View>
-                        <View style={styles.verifiedBadge}>
-                            <IconSymbol name="checkmark.circle.fill" size={20} color="#34C759" />
-                        </View>
-                    </View>
+                    {/* ✅ CLICKABLE AVATAR */}
+                    <Pressable onPress={pickProfileImage} disabled={uploadingProfile} style={styles.avatarContainer}>
+                        {uploadingProfile ? (
+                            <View style={[styles.avatarPlaceholder, { backgroundColor: '#EEE' }]}>
+                                <ActivityIndicator color={colors.primary} />
+                            </View>
+                        ) : profilePicUrl ? (
+                            <Image source={{ uri: profilePicUrl }} style={styles.avatarImage} />
+                        ) : (
+                            <View style={styles.avatarPlaceholder}>
+                                <Text style={styles.avatarInitials}>{initials}</Text>
+                            </View>
+                        )}
 
-                    <Text style={[styles.name, { color: theme.colors.text }]}>{user?.name}</Text>
-                    <Text style={styles.profession}>{artisan?.category || "General Contractor"}</Text>
+                        {/* Camera Icon Overlay */}
+                        <View style={styles.cameraBadge}>
+                            <Ionicons name="camera" size={14} color="#FFF" />
+                        </View>
+                    </Pressable>
+
+                    <Text style={styles.name}>{displayName}</Text>
+                    <Text style={styles.profession}>{artisan?.service_category || "Service Provider"}</Text>
 
                     <View style={styles.locationRow}>
-                        <IconSymbol name="location.fill" size={14} color="#999" />
-                        <Text style={styles.location}>{user?.localGovernment}, {user?.state}</Text>
+                        <Ionicons name="location" size={14} color="#999" />
+                        <Text style={styles.location}>{user?.lga || "LGA"}, {user?.state || "State"}</Text>
                     </View>
                 </Animated.View>
 
-                {/* 3. Stats Row */}
-                <Animated.View entering={FadeInDown.delay(200)} style={[styles.statsRow, { backgroundColor: theme.colors.card }]}>
+                {/* Stats Row */}
+                <Animated.View entering={FadeInDown.delay(200)} style={styles.statsRow}>
                     <View style={styles.statItem}>
-                        <Text style={[styles.statValue, { color: theme.colors.text }]}>{artisan?.rating.toFixed(1)}</Text>
+                        <Text style={styles.statValue}>{artisan?.rating ? artisan.rating.toFixed(1) : "5.0"}</Text>
                         <Text style={styles.statLabel}>Rating</Text>
                     </View>
-                    <View style={[styles.divider, { backgroundColor: theme.colors.border }]} />
+                    <View style={styles.divider} />
                     <View style={styles.statItem}>
-                        <Text style={[styles.statValue, { color: theme.colors.text }]}>{artisan?.reviewCount}</Text>
+                        <Text style={styles.statValue}>0</Text>
                         <Text style={styles.statLabel}>Reviews</Text>
                     </View>
-                    <View style={[styles.divider, { backgroundColor: theme.colors.border }]} />
+                    <View style={styles.divider} />
                     <View style={styles.statItem}>
-                        <Text style={[styles.statValue, { color: theme.colors.text }]}>3+</Text>
+                        <Text style={styles.statValue}>1+</Text>
                         <Text style={styles.statLabel}>Years Exp.</Text>
                     </View>
                 </Animated.View>
 
-                {/* 4. About Me Section */}
+                {/* About Me */}
                 <Animated.View entering={FadeInDown.delay(300)} style={styles.section}>
-                    <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>About Me</Text>
+                    <Text style={styles.sectionTitle}>About Me</Text>
                     {isEditing ? (
-                        <TextInput
-                            style={[styles.bioInput, { color: theme.colors.text, backgroundColor: theme.colors.card }]}
-                            multiline
-                            value={bio}
-                            onChangeText={setBio}
-                        />
+                        <TextInput style={styles.bioInput} multiline value={bio} onChangeText={setBio} />
                     ) : (
-                        <Text style={[styles.bioText, { color: theme.dark ? '#CCC' : '#666' }]}>
-                            {bio}
-                        </Text>
+                        <Text style={styles.bioText}>{bio}</Text>
                     )}
                 </Animated.View>
 
-                {/* 5. Portfolio Section (The "World Class" Touch) */}
+                {/* Portfolio */}
                 <Animated.View entering={FadeInDown.delay(400)} style={styles.section}>
                     <View style={styles.sectionHeader}>
-                        <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>Portfolio</Text>
-                        <Pressable>
-                            <Text style={{ color: theme.colors.primary }}>+ Add Photo</Text>
+                        <Text style={styles.sectionTitle}>Portfolio</Text>
+                        <Pressable onPress={() => router.push('/artisan/portfolio')}>
+                            <Text style={{ color: colors.primary, fontWeight: '600' }}>Manage Photos</Text>
                         </Pressable>
                     </View>
 
                     <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.portfolioScroll}>
-                        {[1, 2, 3].map((item) => (
-                            <View key={item} style={[styles.portfolioItem, { backgroundColor: theme.colors.card }]}>
-                                <IconSymbol name="photo.fill" size={32} color={theme.colors.border} />
-                            </View>
-                        ))}
+                        {portfolioImages.length === 0 ? (
+                            <Text style={{ color: '#999', fontStyle: 'italic' }}>No photos added yet.</Text>
+                        ) : (
+                            portfolioImages.map((item, index) => {
+                                const url = getImageUrl(item);
+                                if (!url) return null;
+                                return (
+                                    <View key={index} style={styles.portfolioItem}>
+                                        <Image source={{ uri: url }} style={styles.portfolioImage} resizeMode="cover" />
+                                    </View>
+                                );
+                            })
+                        )}
                     </ScrollView>
-                </Animated.View>
-
-                {/* 6. Settings / Logout */}
-                <Animated.View entering={FadeInDown.delay(500)} style={styles.footer}>
-                    <Pressable style={[styles.actionBtn, { borderColor: theme.colors.border }]}>
-                        <IconSymbol name="gear" size={20} color={theme.colors.text} />
-                        <Text style={[styles.actionText, { color: theme.colors.text }]}>Settings</Text>
-                    </Pressable>
-
-                    <Pressable
-                        onPress={() => { authAPI.logout(); router.replace('/login'); }}
-                        style={[styles.actionBtn, { borderColor: '#FF3B30' }]}
-                    >
-                        <IconSymbol name="rectangle.portrait.and.arrow.right" size={20} color="#FF3B30" />
-                        <Text style={[styles.actionText, { color: '#FF3B30' }]}>Log Out</Text>
-                    </Pressable>
                 </Animated.View>
 
                 <View style={{ height: 40 }} />
@@ -175,79 +260,47 @@ export default function ArtisanProfileScreen() {
 }
 
 const styles = StyleSheet.create({
-    container: { flex: 1 },
+    container: { flex: 1, backgroundColor: '#F8F9FA' },
     center: { flex: 1, justifyContent: 'center', alignItems: 'center' },
     content: { padding: 20 },
 
-    navBar: {
-        flexDirection: 'row',
-        justifyContent: 'space-between',
-        alignItems: 'center',
-        marginBottom: 24,
-    },
-    iconBtn: {
-        width: 40, height: 40, borderRadius: 12,
-        justifyContent: 'center', alignItems: 'center',
-        shadowColor: "#000", shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.1, shadowRadius: 4, elevation: 2,
-    },
-    editBtn: {
-        paddingHorizontal: 16, height: 40, borderRadius: 12,
-        justifyContent: 'center', alignItems: 'center',
-        shadowColor: "#000", shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.1, shadowRadius: 4, elevation: 2,
-    },
+    navBar: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 },
+    iconBtn: { width: 40, height: 40, borderRadius: 12, backgroundColor: '#FFF', justifyContent: 'center', alignItems: 'center', ...shadows.small },
+    editBtn: { paddingHorizontal: 16, height: 40, borderRadius: 12, justifyContent: 'center', alignItems: 'center', ...shadows.small },
     saveText: { color: 'white', fontWeight: '700' },
-    navTitle: { fontSize: 18, fontWeight: '700' },
+    navTitle: { fontSize: 18, fontWeight: '700', color: '#333' },
 
     header: { alignItems: 'center', marginBottom: 24 },
     avatarContainer: { marginBottom: 16, position: 'relative' },
-    avatarPlaceholder: {
-        width: 100, height: 100, borderRadius: 50,
-        justifyContent: 'center', alignItems: 'center',
-        borderWidth: 4, borderColor: 'white',
-        shadowColor: "#000", shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.1, shadowRadius: 8, elevation: 5,
-    },
+    avatarPlaceholder: { width: 100, height: 100, borderRadius: 50, backgroundColor: colors.primary, justifyContent: 'center', alignItems: 'center', borderWidth: 4, borderColor: 'white', ...shadows.medium },
+    avatarImage: { width: 100, height: 100, borderRadius: 50, borderWidth: 4, borderColor: 'white' },
     avatarInitials: { fontSize: 40, color: 'white', fontWeight: '700' },
-    verifiedBadge: {
+
+    // New Camera Badge Style
+    cameraBadge: {
         position: 'absolute', bottom: 0, right: 0,
-        backgroundColor: 'white', borderRadius: 12, padding: 2,
+        backgroundColor: '#333', borderRadius: 15, width: 30, height: 30,
+        justifyContent: 'center', alignItems: 'center', borderWidth: 2, borderColor: '#FFF'
     },
-    name: { fontSize: 24, fontWeight: '700', marginBottom: 4 },
-    profession: { fontSize: 16, color: '#007AFF', fontWeight: '600', marginBottom: 8 },
+
+    name: { fontSize: 24, fontWeight: '700', marginBottom: 4, color: '#333' },
+    profession: { fontSize: 16, color: colors.primary, fontWeight: '600', marginBottom: 8 },
     locationRow: { flexDirection: 'row', alignItems: 'center', gap: 4 },
     location: { color: '#999', fontSize: 14 },
 
-    statsRow: {
-        flexDirection: 'row',
-        justifyContent: 'space-around',
-        alignItems: 'center',
-        padding: 20,
-        borderRadius: 20,
-        marginBottom: 24,
-        shadowColor: "#000", shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.05, shadowRadius: 4, elevation: 2,
-    },
+    statsRow: { flexDirection: 'row', justifyContent: 'space-around', alignItems: 'center', padding: 20, borderRadius: 20, marginBottom: 24, backgroundColor: '#FFF', ...shadows.small },
     statItem: { alignItems: 'center' },
-    statValue: { fontSize: 20, fontWeight: '700', marginBottom: 4 },
+    statValue: { fontSize: 20, fontWeight: '700', marginBottom: 4, color: '#333' },
     statLabel: { fontSize: 12, color: '#999' },
-    divider: { width: 1, height: 24 },
+    divider: { width: 1, height: 24, backgroundColor: '#EEE' },
 
     section: { marginBottom: 24 },
     sectionHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 },
-    sectionTitle: { fontSize: 18, fontWeight: '700', marginBottom: 8 },
-    bioText: { fontSize: 16, lineHeight: 24 },
-    bioInput: {
-        borderRadius: 12, padding: 16, fontSize: 16, minHeight: 100, textAlignVertical: 'top',
-    },
+    sectionTitle: { fontSize: 18, fontWeight: '700', marginBottom: 8, color: '#333' },
+    bioText: { fontSize: 16, lineHeight: 24, color: '#666' },
+    bioInput: { borderRadius: 12, padding: 16, fontSize: 16, minHeight: 100, textAlignVertical: 'top', backgroundColor: '#FFF', color: '#333', borderWidth: 1, borderColor: '#DDD' },
 
     portfolioScroll: { gap: 12 },
-    portfolioItem: {
-        width: 120, height: 120, borderRadius: 16,
-        justifyContent: 'center', alignItems: 'center',
-    },
-
-    footer: { gap: 12 },
-    actionBtn: {
-        flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8,
-        padding: 16, borderRadius: 16, borderWidth: 1,
-    },
-    actionText: { fontSize: 16, fontWeight: '600' },
+    portfolioItem: { width: 120, height: 120, borderRadius: 16, overflow: 'hidden', backgroundColor: '#EEE', ...shadows.small },
+    portfolioImage: { width: '100%', height: '100%' },
 });

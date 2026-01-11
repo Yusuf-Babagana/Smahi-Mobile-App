@@ -1,0 +1,22 @@
+{
+    "greeting": "Nemi Kwararre",
+    "subGreeting": "Waye kake bukata yau?",
+    "searchPlaceholder": "Bincika (misali Mai Aikin Ruwa)...",
+    "messages": "Sako",
+    "home": "Gida",
+    "profile": "Tarihi",
+    "loadMore": "Karin Masu Aiki",
+    "noResults": "Ba a sami kwararru ba.",
+    "categories": {
+        "All": "Duka",
+        "Plumbing": "Aikin Ruwa",
+        "Electrical": "Aikin Wuta",
+        "Carpentry": "Kafinta",
+        "Cleaning": "Shara/Wanki",
+        "Mechanic": "Makanike"
+    },
+    "settings": {
+        "language": "Harshe",
+        "select": "Zabi Harshe"
+    }
+}

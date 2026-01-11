@@ -11,20 +11,20 @@ import {
   ImageBackground,
   TouchableOpacity,
   ActivityIndicator,
-  Dimensions
+  Dimensions,
+  Image
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { authAPI } from '@/src/api/client';
 import { useTheme } from '@react-navigation/native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import Animated, { FadeInDown, FadeInUp, LinearTransition } from 'react-native-reanimated';
+import Animated, { FadeInDown, FadeInUp } from 'react-native-reanimated';
 import { StatusBar } from 'expo-status-bar';
 import { LinearGradient } from 'expo-linear-gradient';
 
 // Components
-import { IconSymbol } from '@/components/IconSymbol';
-import { ModernInput } from '@/src/components/ModernInput'; // Using ModernInput for consistency
-import { colors } from '@/styles/commonStyles'; // Use fixed colors for better readability against gradient
+import { ModernInput } from '@/src/components/ModernInput';
+import { colors } from '@/styles/commonStyles';
 
 const { width } = Dimensions.get('window');
 
@@ -72,9 +72,8 @@ export default function LoginScreen() {
       style={{ flex: 1 }}
       resizeMode="cover"
     >
-      {/* 2. REFINED GRADIENT: Subtle fade to allow image to show top, solid white bottom */}
       <LinearGradient
-        colors={['rgba(255,255,255,0.60)', 'rgba(255,255,255,0.95)', '#FFFFFF']}
+        colors={['rgba(255,255,255,0.7)', 'rgba(255,255,255,0.95)', '#FFFFFF']}
         locations={[0, 0.6, 1]}
         style={{ flex: 1 }}
       >
@@ -93,13 +92,12 @@ export default function LoginScreen() {
 
               {/* Header Section */}
               <Animated.View entering={FadeInUp.delay(200).duration(1000).springify()} style={styles.header}>
-                <View style={styles.logoGlassContainer}>
-                  <LinearGradient
-                    colors={[colors.primary, '#0056b3']}
-                    style={styles.logoCircle}
-                  >
-                    <IconSymbol name="person.2.fill" size={36} color="white" />
-                  </LinearGradient>
+                <View style={styles.logoContainer}>
+                  <Image
+                    source={require('../assets/images/smahi.png')}
+                    style={styles.logoImage}
+                    resizeMode="contain"
+                  />
                 </View>
 
                 <Text style={styles.title}>Welcome Back</Text>
@@ -209,58 +207,53 @@ const styles = StyleSheet.create({
 
   // Header
   header: { alignItems: 'center', marginBottom: 32 },
-  logoGlassContainer: {
-    padding: 8,
-    backgroundColor: 'rgba(255,255,255,0.5)',
-    borderRadius: 50,
-    marginBottom: 20,
-    borderWidth: 1,
-    borderColor: '#FFF',
+  logoContainer: {
+    width: 100, height: 100,
+    marginBottom: 16,
+    justifyContent: 'center', alignItems: 'center',
+    // removed complex borders/shadows to let the logo shine
   },
-  logoCircle: {
-    width: 70, height: 70, borderRadius: 35,
-    alignItems: 'center', justifyContent: 'center',
-    shadowColor: colors.primary, shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3, shadowRadius: 8, elevation: 6,
+  logoImage: {
+    width: '100%', height: '100%',
   },
   title: {
-    fontSize: 32, fontWeight: '800',
+    fontSize: 28, fontWeight: '800',
     color: '#111827', marginBottom: 8,
     textAlign: 'center', letterSpacing: -0.5,
   },
   subtitle: {
     fontSize: 16, color: '#6B7280',
-    textAlign: 'center', maxWidth: '80%', lineHeight: 22,
+    textAlign: 'center', maxWidth: '85%', lineHeight: 22,
   },
 
   // Form
   formContainer: { width: '100%' },
   glassCard: {
-    backgroundColor: 'rgba(255,255,255,0.85)',
+    backgroundColor: 'rgba(255,255,255,0.9)', // Slightly more opaque for better readability
     borderRadius: 24,
     padding: 24,
     borderWidth: 1,
-    borderColor: '#FFFFFF',
+    borderColor: '#FFF',
     shadowColor: "#000", shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.05, shadowRadius: 10, elevation: 4,
+    shadowOpacity: 0.08, shadowRadius: 16, elevation: 4,
     marginBottom: 24,
   },
 
   // Forgot Password
   forgotContainer: { alignItems: 'flex-end', marginBottom: 24, marginTop: -4 },
-  forgotText: { fontWeight: '600', fontSize: 14, color: colors.primary },
+  forgotText: { fontWeight: '600', fontSize: 13, color: colors.primary },
 
   // Button
   loginBtnShadow: {
     shadowColor: colors.primary, shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.3, shadowRadius: 12, elevation: 8,
+    shadowOpacity: 0.25, shadowRadius: 12, elevation: 6,
     borderRadius: 16,
   },
   loginBtnGradient: {
-    height: 56, borderRadius: 16,
+    height: 52, borderRadius: 16, // Slightly compact
     justifyContent: 'center', alignItems: 'center',
   },
-  loginBtnText: { color: 'white', fontWeight: 'bold', fontSize: 18 },
+  loginBtnText: { color: 'white', fontWeight: 'bold', fontSize: 16 },
 
   // Footer Link
   footer: { flexDirection: 'row', justifyContent: 'center', alignItems: 'center' },
@@ -269,15 +262,17 @@ const styles = StyleSheet.create({
   // Demo Section
   demoSection: { marginTop: 40, alignItems: 'center' },
   demoLabel: {
-    fontSize: 12, marginBottom: 16,
+    fontSize: 11, marginBottom: 16,
     textTransform: 'uppercase', letterSpacing: 1.2,
     color: '#9CA3AF', fontWeight: '600',
   },
-  demoRow: { flexDirection: 'row', gap: 12 },
+  demoRow: { flexDirection: 'row', gap: 10 },
   demoChip: {
-    paddingHorizontal: 16, paddingVertical: 10,
-    borderRadius: 20, backgroundColor: '#F3F4F6',
+    paddingHorizontal: 16, paddingVertical: 8,
+    borderRadius: 20, backgroundColor: '#FFF',
     borderWidth: 1, borderColor: '#E5E7EB',
+    shadowColor: "#000", shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05, shadowRadius: 2, elevation: 1
   },
-  demoChipText: { fontSize: 13, fontWeight: '600', color: '#374151' },
+  demoChipText: { fontSize: 12, fontWeight: '600', color: '#4B5563' },
 });

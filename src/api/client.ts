@@ -109,42 +109,81 @@ export const bookingAPI = {
   createBooking: async (data: any) => {
     const response = await apiClient.post('/bookings/', data);
     return response.data;
-  }
+  },
+  // ✅ ADD THIS MISSING FUNCTION
+  getBookingsByArtisan: async (artisanId: number) => {
+    try {
+      const response = await apiClient.get(`/bookings/`, { params: { artisan: artisanId } });
+      return response.data;
+    } catch (error) {
+      console.log("Error fetching bookings:", error);
+      return []; // Return empty array on error so app doesn't crash
+    }
+  },
 };
 
-// --- ARTISANS ---
 export const artisanAPI = {
-  getArtisans: async (filters?: { service?: string; search?: string }) => {
-    console.log("[API] Fetching artisans from USER table...");
+  // ✅ List Fetch: Added '/auth' prefix
+  getArtisans: async (filters?: { service?: string; search?: string }, page: number = 1) => {
+    console.log(`[API] Fetching artisans (Page ${page})...`);
 
     try {
-      // 1. Call the new endpoint /artisans-list/
-      // This assumes your baseURL is .../api, so this becomes .../api/artisans-list/
-      const response = await apiClient.get('/artisans-list/');
+      const params: any = { page: page };
+      if (filters?.search) params.search = filters.search;
+      if (filters?.service && filters.service !== 'All') params.service_category = filters.service;
 
-      console.log("[API] Artisans Found:", response.data.length || response.data.results?.length || 0);
-
-      // 2. Return the array directly
-      let results = response.data.results || response.data;
-      return Array.isArray(results) ? results : [];
+      // FIX: Added /auth/ before artisans-list/
+      const response = await apiClient.get('/auth/artisans-list/', { params });
+      return response.data;
 
     } catch (error: any) {
-      console.error("[API] Error fetching artisans:", error.response?.status, error.message);
-      return [];
+      if (error.response && error.response.status === 404) {
+        return { results: [], next: null };
+      }
+      console.error("[API] Error fetching artisans:", error.message);
+      throw error;
     }
   },
 
   getArtisanById: async (id: number) => {
-    // We can just use the user detail for now since we rely on User table
-    // Note: ensure your backend has a route for /users/<id>/ or similar if needed, 
-    // otherwise fallback to fetching the list and finding the item.
     try {
+      // FIX: Added /auth/ prefix
       const response = await apiClient.get(`/auth/users/${id}/`);
       return response.data;
     } catch (error) {
       console.error("Error fetching artisan details", error);
       return null;
     }
-  }
+  },
+
+  // ✅ Detail Fetch: Added '/auth' prefix
+  getArtisanByUserId: async (userId: number) => {
+    // FIX: Added /auth/ before artisans-list/
+    const response = await apiClient.get(`/auth/artisans-list/${userId}/`);
+    return response.data;
+  },
 };
 
+
+export const chatAPI = {
+  getConversations: async () => {
+    const response = await apiClient.get('/chat/conversations/');
+    return response.data;
+  },
+
+  getMessages: async (conversationId: number) => {
+    const response = await apiClient.get(`/chat/conversations/${conversationId}/messages/`);
+    return response.data;
+  },
+
+  sendMessage: async (data: { recipient_id?: number; conversation_id?: number; text: string }) => {
+    const response = await apiClient.post('/chat/send/', data);
+    return response.data;
+  },
+
+  // ✅ NEW FUNCTION
+  findConversation: async (recipientId: number) => {
+    const response = await apiClient.get(`/chat/find/${recipientId}/`);
+    return response.data;
+  }
+};

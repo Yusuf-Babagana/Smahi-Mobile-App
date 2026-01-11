@@ -1,0 +1,22 @@
+{
+    "greeting": "Find a Pro",
+    "subGreeting": "Who do you need today?",
+    "searchPlaceholder": "Search (e.g. Plumber, Musa)...",
+    "messages": "Messages",
+    "home": "Home",
+    "profile": "Profile",
+    "loadMore": "Load More Artisans",
+    "noResults": "No artisans found.",
+    "categories": {
+        "All": "All",
+        "Plumbing": "Plumbing",
+        "Electrical": "Electrical",
+        "Carpentry": "Carpentry",
+        "Cleaning": "Cleaning",
+        "Mechanic": "Mechanic"
+    },
+    "settings": {
+        "language": "Language",
+        "select": "Select Language"
+    }
+}
