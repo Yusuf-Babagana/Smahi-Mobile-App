@@ -43,19 +43,46 @@ export default function LoginScreen() {
 
     setLoading(true);
     try {
+      // 1. API Call
       const { user } = await authAPI.login(email.toLowerCase().trim(), password);
 
+      // 2. SECURITY CHECK: Locked Account?
+      if (user.account_status === 'locked') {
+        Alert.alert(
+          'Activation Required',
+          'Your dashboard is locked. Please enter your Serial Number to activate.',
+          [{ text: 'Activate Now', onPress: () => router.replace('/auth/activate') }]
+        );
+        return;
+      }
+
+      // 3. SECURITY CHECK: Suspended?
+      if (user.account_status === 'suspended') {
+        Alert.alert('Access Denied', 'Your account has been suspended. Please contact Admin.');
+        return;
+      }
+
+      // 4. Normal Routing
       const routes = {
         client: '/(tabs)/(home)',
         artisan: '/artisan/dashboard',
         agent: '/agent/dashboard',
+        lga_admin: '/agent/dashboard',        // Temporarily route admins to agent dashboard
+        state_coordinator: '/agent/dashboard',// until dedicated screens are built
         admin: '/admin/dashboard'
       } as const;
 
-      router.replace(routes[user.role as keyof typeof routes] || '/(tabs)/(home)');
+      // Note: Cast user.role to ensure TS is happy with the string
+      const targetRoute = routes[user.role as keyof typeof routes] || '/(tabs)/(home)';
+      router.replace(targetRoute);
 
     } catch (error: any) {
-      Alert.alert('Login Failed', error.message || 'Invalid credentials');
+      const msg = error.message || 'Invalid credentials';
+      if (msg.includes('suspended')) {
+        Alert.alert('Access Denied', 'Your account is suspended.');
+      } else {
+        Alert.alert('Login Failed', msg);
+      }
     } finally {
       setLoading(false);
     }
@@ -94,7 +121,7 @@ export default function LoginScreen() {
               <Animated.View entering={FadeInUp.delay(200).duration(1000).springify()} style={styles.header}>
                 <View style={styles.logoContainer}>
                   <Image
-                    source={require('../assets/images/smahi.png')}
+                    source={require('@/assets/images/smahi.png')} // Adjusted path to standard alias
                     style={styles.logoImage}
                     resizeMode="contain"
                   />
@@ -211,7 +238,6 @@ const styles = StyleSheet.create({
     width: 100, height: 100,
     marginBottom: 16,
     justifyContent: 'center', alignItems: 'center',
-    // removed complex borders/shadows to let the logo shine
   },
   logoImage: {
     width: '100%', height: '100%',
@@ -229,7 +255,7 @@ const styles = StyleSheet.create({
   // Form
   formContainer: { width: '100%' },
   glassCard: {
-    backgroundColor: 'rgba(255,255,255,0.9)', // Slightly more opaque for better readability
+    backgroundColor: 'rgba(255,255,255,0.9)',
     borderRadius: 24,
     padding: 24,
     borderWidth: 1,
@@ -250,7 +276,7 @@ const styles = StyleSheet.create({
     borderRadius: 16,
   },
   loginBtnGradient: {
-    height: 52, borderRadius: 16, // Slightly compact
+    height: 52, borderRadius: 16,
     justifyContent: 'center', alignItems: 'center',
   },
   loginBtnText: { color: 'white', fontWeight: 'bold', fontSize: 16 },
