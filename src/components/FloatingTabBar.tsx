@@ -9,7 +9,7 @@ import {
 } from 'react-native';
 import { useRouter, usePathname } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { IconSymbol } from '@/components/IconSymbol';
+import { IconSymbol } from '@/src/components/IconSymbol';
 import { BlurView } from 'expo-blur';
 import { useTheme } from '@react-navigation/native';
 import Animated, {
@@ -93,7 +93,7 @@ export default function FloatingTabBar({
   }, [activeTabIndex, animatedValue]);
 
   const handleTabPress = (route: string) => {
-    router.push(route);
+    router.push(route as any);
   };
 
   // Remove unnecessary tabBarStyle animation to prevent flickering
@@ -183,7 +183,7 @@ export default function FloatingTabBar({
                 >
                   <View style={styles.tabContent}>
                     <IconSymbol
-                      name={tab.icon}
+                      name={tab.icon as any}
                       size={24}
                       color={isActive ? theme.colors.primary : (theme.dark ? '#98989D' : '#8E8E93')}
                     />

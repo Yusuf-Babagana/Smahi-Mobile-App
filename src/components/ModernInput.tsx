@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { View, Text, TextInput, StyleSheet, TextInputProps, TouchableOpacity } from 'react-native';
-import { IconSymbol } from '@/components/IconSymbol';
+import { IconSymbol } from '@/src/components/IconSymbol';
 import { colors } from '@/styles/commonStyles'; // Import fixed colors
 
 interface ModernInputProps extends TextInputProps {

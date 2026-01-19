@@ -1,260 +1,329 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Image } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, Linking, Alert, Image, Animated, Pressable } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { colors, shadows } from '@/styles/commonStyles';
 
-interface Artisan {
-  id: number;
-  first_name: string;
-  last_name: string;
-  business_name?: string;
-  service_category: string;
-  lga?: string;
-  state?: string;
-  profile_picture?: string | null;
-  rating?: number;
-  review_count?: number;
+// --- Types ---
+interface ArtisanCardProps {
+    artisan: any;
+    onPress: () => void;
+    formattedLocation?: string;
+    formattedPhone?: string;
 }
 
-interface Props {
-  artisan: Artisan;
-  onPress: () => void;
-}
-
-export const ArtisanCard = ({ artisan, onPress }: Props) => {
-  const [imageError, setImageError] = useState(false);
-
-  // 1. Get Display Name
-  const displayName = artisan.business_name || `${artisan.first_name} ${artisan.last_name}`;
-
-  // 2. Get Initials for Placeholder
-  const getInitials = () => {
-    const first = artisan.first_name ? artisan.first_name.charAt(0) : '';
-    const last = artisan.last_name ? artisan.last_name.charAt(0) : '';
-    return (first + last).toUpperCase() || '?';
-  };
-
-  // 3. Smart Cloudinary URL Fixer
-  const getOptimizedUrl = (url: string | null | undefined) => {
+// --- Helper: Image URL Optimizer ---
+const getOptimizedUrl = (url: string | null | undefined) => {
     if (!url) return null;
-
     let finalUrl = url;
-
-    // A. Fix Relative Paths from Django (if any slip through)
-    if (finalUrl.startsWith('/')) {
-      finalUrl = `https://smahi1.pythonanywhere.com${finalUrl}`;
-    }
-
-    // B. Fix Cloudinary: Force HTTPS and Optimize Size
+    if (finalUrl.startsWith('/')) finalUrl = `https://smahi1.pythonanywhere.com${finalUrl}`;
     if (finalUrl.includes('res.cloudinary.com')) {
-      // 1. Force HTTPS
-      if (finalUrl.startsWith('http:')) {
-        finalUrl = finalUrl.replace('http:', 'https:');
-      }
+        if (finalUrl.startsWith('http:')) finalUrl = finalUrl.replace('http:', 'https:');
+        if (finalUrl.includes('upload/') && !finalUrl.includes('w_')) {
+            finalUrl = finalUrl.replace('upload/', 'upload/w_250,h_250,c_fill,q_auto,f_auto/');
+        }
+    }
+    return finalUrl;
+};
 
-      // 2. Inject Resizing (Fetch a small 150x150 thumbnail instead of full size)
-      // Checks if 'upload/' exists and doesn't already have params
-      if (finalUrl.includes('upload/') && !finalUrl.includes('w_')) {
-        finalUrl = finalUrl.replace('upload/', 'upload/w_150,h_150,c_fill,q_auto,f_auto/');
-      }
+export const ArtisanCard = ({ artisan, onPress, formattedLocation, formattedPhone }: ArtisanCardProps) => {
+    const [imageError, setImageError] = useState(false);
+    const scaleAnim = React.useRef(new Animated.Value(1)).current;
+
+    if (!artisan) return null;
+
+    // --- Data Extraction ---
+    const data = artisan.user || artisan;
+    const firstName = data.first_name || '';
+    const lastName = data.last_name || '';
+    const email = data.email || 'Unknown';
+
+    const displayName = (firstName || lastName)
+        ? `${firstName} ${lastName}`.trim()
+        : email.split('@')[0];
+
+    const initials = (displayName[0] || '?').toUpperCase();
+    const service = data.service_category || "Professional Artisan";
+    const phone = formattedPhone || data.phone || data.phone_number || "No Phone";
+    const profilePic = getOptimizedUrl(data.profile_picture);
+    const rating = data.rating || 4.8; // Fallback or mock
+    const reviewCount = data.review_count || 24; // Fallback or mock
+    const isVerified = data.is_verified || false;
+
+    // --- Location Logic ---
+    let location = formattedLocation;
+    if (!location) {
+        const stateName = data.state_details?.name || data.state;
+        const lgaName = data.lga_details?.name || data.lga;
+        const isStateId = typeof stateName === 'number';
+        const isLgaId = typeof lgaName === 'number';
+
+        if (stateName && !isStateId) {
+            location = `${lgaName && !isLgaId ? lgaName + ', ' : ''}${stateName}`;
+        } else {
+            location = "Location Hidden";
+        }
     }
 
-    return finalUrl;
-  };
+    // --- Handlers ---
+    const handleCall = () => {
+        if (phone && phone !== "No Phone") {
+            Linking.openURL(`tel:${phone}`);
+        } else {
+            Alert.alert("No Contact", "Phone number not available.");
+        }
+    };
 
-  const imageUrl = getOptimizedUrl(artisan.profile_picture);
-  const location = [artisan.lga, artisan.state].filter(Boolean).join(', ');
+    const handlePressIn = () => {
+        Animated.spring(scaleAnim, { toValue: 0.98, useNativeDriver: true, speed: 20 }).start();
+    };
 
-  return (
-    <TouchableOpacity style={styles.card} onPress={onPress} activeOpacity={0.9}>
+    const handlePressOut = () => {
+        Animated.spring(scaleAnim, { toValue: 1, useNativeDriver: true, speed: 20 }).start();
+    };
 
-      {/* --- LEFT: PROFILE IMAGE --- */}
-      <View style={styles.imageContainer}>
-        {imageUrl && !imageError ? (
-          <Image
-            source={{ uri: imageUrl }}
-            style={styles.image}
-            resizeMode="cover"
-            onError={(e) => {
-              console.log(`[Image Failed] ID: ${artisan.id} URL: ${imageUrl}`);
-              console.log("Error:", e.nativeEvent.error);
-              setImageError(true);
-            }}
-          />
-        ) : (
-          <View style={[styles.image, styles.placeholder]}>
-            <Text style={styles.initials}>{getInitials()}</Text>
-          </View>
-        )}
+    return (
+        <Animated.View style={{ transform: [{ scale: scaleAnim }] }}>
+            <Pressable
+                onPress={onPress}
+                onPressIn={handlePressIn}
+                onPressOut={handlePressOut}
+                style={styles.container}
+            >
+                {/* --- HEADER --- */}
+                <View style={styles.header}>
+                    <View style={styles.avatarContainer}>
+                        {profilePic && !imageError ? (
+                            <Image
+                                source={{ uri: profilePic }}
+                                style={styles.avatar}
+                                onError={() => setImageError(true)}
+                            />
+                        ) : (
+                            <View style={[styles.avatar, styles.avatarPlaceholder]}>
+                                <Text style={styles.avatarText}>{initials}</Text>
+                            </View>
+                        )}
+                        <View style={styles.onlineStatus} />
+                    </View>
 
-        {/* Verified Badge */}
-        {/* Only show if actually verified (assuming artisan obj has verification_status, otherwise decorative) */}
-        <View style={styles.verifiedBadge}>
-          <Ionicons name="checkmark" size={10} color="#FFF" />
-        </View>
-      </View>
+                    <View style={styles.infoColumn}>
+                        <View style={styles.nameRow}>
+                            <Text style={styles.name} numberOfLines={1}>{displayName}</Text>
+                            {isVerified && (
+                                <Ionicons name="checkmark-circle" size={16} color={colors.success || '#10B981'} style={{ marginLeft: 4 }} />
+                            )}
+                        </View>
+                        <View style={styles.badge}>
+                            <Text style={styles.badgeText}>{service}</Text>
+                        </View>
 
-      {/* --- RIGHT: DETAILS --- */}
-      <View style={styles.infoContainer}>
+                        <View style={styles.ratingRow}>
+                            <Ionicons name="star" size={14} color="#F59E0B" />
+                            <Text style={styles.ratingVaule}>{rating}</Text>
+                            <Text style={styles.reviewCount}>({reviewCount})</Text>
+                        </View>
+                    </View>
+                </View>
 
-        {/* Header Row */}
-        <View style={styles.headerRow}>
-          <View style={styles.categoryBadge}>
-            <Text style={styles.category}>{artisan.service_category || 'Artisan'}</Text>
-          </View>
-          <View style={styles.ratingContainer}>
-            <Ionicons name="star" size={12} color="#EAB308" />
-            <Text style={styles.ratingText}>4.8</Text>
-          </View>
-        </View>
+                <View style={styles.divider} />
 
-        {/* Name */}
-        <Text style={styles.name} numberOfLines={1}>{displayName}</Text>
+                {/* --- DETAILS --- */}
+                <View style={styles.detailsContainer}>
+                    <View style={styles.detailItem}>
+                        <View style={styles.iconBox}>
+                            <Ionicons name="location-sharp" size={14} color={colors.error || '#DC3545'} />
+                        </View>
+                        <Text style={styles.detailText} numberOfLines={1}>{location}</Text>
+                    </View>
 
-        {/* Location */}
-        <View style={styles.row}>
-          <Ionicons name="location-outline" size={14} color="#9CA3AF" />
-          <Text style={styles.location} numberOfLines={1}>{location || 'Location hidden'}</Text>
-        </View>
+                    {phone !== "No Phone" && (
+                        <TouchableOpacity onPress={handleCall} style={styles.detailItem}>
+                            <View style={[styles.iconBox, { backgroundColor: '#EFF6FF' }]}>
+                                <Ionicons name="call" size={14} color={colors.primary} />
+                            </View>
+                            <Text style={[styles.detailText, { color: colors.primary, fontWeight: '600' }]}>
+                                {phone}
+                            </Text>
+                        </TouchableOpacity>
+                    )}
+                </View>
 
-        {/* Footer/Action */}
-        <View style={styles.footerRow}>
-          <Text style={styles.priceTag}>from ₦5k</Text>
-          <View style={styles.viewProfileBtn}>
-            <Text style={styles.viewProfileText}>View</Text>
-            <Ionicons name="chevron-forward" size={12} color={colors.primary} />
-          </View>
-        </View>
-      </View>
-    </TouchableOpacity>
-  );
+                {/* --- FOOTER ACTIONS --- */}
+                <View style={styles.footer}>
+                    <TouchableOpacity style={styles.profileBtn} onPress={onPress}>
+                        <Text style={styles.profileBtnText}>View Profile</Text>
+                    </TouchableOpacity>
+
+                    <TouchableOpacity style={styles.bookBtn} onPress={onPress}>
+                        <Text style={styles.bookBtnText}>Book Now</Text>
+                        <Ionicons name="arrow-forward" size={14} color="#FFF" />
+                    </TouchableOpacity>
+                </View>
+
+            </Pressable>
+        </Animated.View>
+    );
 };
 
 const styles = StyleSheet.create({
-  card: {
-    flexDirection: 'row',
-    backgroundColor: '#FFF',
-    borderRadius: 20,
-    padding: 12,
-    marginBottom: 16,
-    ...shadows.medium,
-    shadowOpacity: 0.08, // Slightly softer shadow
-    borderWidth: 1,
-    borderColor: '#F3F4F6',
-  },
-  imageContainer: {
-    marginRight: 16,
-    position: 'relative',
-  },
-  image: {
-    width: 88,
-    height: 88,
-    borderRadius: 16,
-    backgroundColor: '#F3F4F6',
-  },
-  placeholder: {
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: colors.primary,
-  },
-  initials: {
-    color: '#FFF',
-    fontSize: 26,
-    fontWeight: '700',
-  },
-  verifiedBadge: {
-    position: 'absolute',
-    bottom: -4,
-    right: -4,
-    backgroundColor: '#10B981', // Green
-    width: 20,
-    height: 20,
-    borderRadius: 10,
-    justifyContent: 'center',
-    alignItems: 'center',
-    borderWidth: 2,
-    borderColor: '#FFF',
-  },
-  infoContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    paddingVertical: 2
-  },
-  headerRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 6,
-  },
-  categoryBadge: {
-    backgroundColor: '#F0F9FF',
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 8
-  },
-  category: {
-    fontSize: 10,
-    color: '#0369A1',
-    fontWeight: '700',
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
-  },
-  ratingContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#FFFBEB',
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    borderRadius: 6,
-  },
-  ratingText: {
-    fontSize: 11,
-    fontWeight: '700',
-    marginLeft: 3,
-    color: '#B45309',
-  },
-  name: {
-    fontSize: 17,
-    fontWeight: '800',
-    color: '#111',
-    marginBottom: 4,
-    letterSpacing: -0.5
-  },
-  row: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 8,
-  },
-  location: {
-    fontSize: 13,
-    color: '#6B7280',
-    marginLeft: 4,
-    fontWeight: '500'
-  },
-  footerRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginTop: 2
-  },
-  priceTag: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: '#6B7280',
-    fontStyle: 'italic'
-  },
-  viewProfileBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#EFF6FF',
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 12,
-    gap: 2
-  },
-  viewProfileText: {
-    fontSize: 11,
-    fontWeight: '700',
-    color: colors.primary,
-  }
+    container: {
+        backgroundColor: '#FFF',
+        borderRadius: 20,
+        marginBottom: 20,
+        padding: 16,
+        ...shadows.medium, // Utilizing the pre-defined shadow
+        borderWidth: 1,
+        borderColor: '#F3F4F6', // Subtle border
+    },
+    header: {
+        flexDirection: 'row',
+        alignItems: 'center',
+    },
+    avatarContainer: {
+        position: 'relative',
+        marginRight: 16,
+    },
+    avatar: {
+        width: 64,
+        height: 64,
+        borderRadius: 24, // Squircle shape for modern look
+        backgroundColor: '#F3F4F6',
+    },
+    avatarPlaceholder: {
+        justifyContent: 'center',
+        alignItems: 'center',
+        backgroundColor: colors.primary,
+    },
+    avatarText: {
+        color: '#FFF',
+        fontSize: 24,
+        fontWeight: '700',
+    },
+    onlineStatus: {
+        position: 'absolute',
+        bottom: -2,
+        right: -2,
+        width: 16,
+        height: 16,
+        borderRadius: 8,
+        backgroundColor: colors.success || '#28A745',
+        borderWidth: 2,
+        borderColor: '#FFF',
+    },
+    infoColumn: {
+        flex: 1,
+        justifyContent: 'center',
+    },
+    nameRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        marginBottom: 4,
+    },
+    name: {
+        fontSize: 18,
+        fontWeight: '800',
+        color: '#1F2937',
+        fontFamily: 'System', // Use system font
+        letterSpacing: 0.3,
+    },
+    badge: {
+        backgroundColor: '#F3F4F6',
+        paddingHorizontal: 8,
+        paddingVertical: 4,
+        borderRadius: 8,
+        alignSelf: 'flex-start',
+        marginBottom: 6,
+    },
+    badgeText: {
+        fontSize: 12,
+        color: '#4B5563',
+        fontWeight: '600',
+        textTransform: 'uppercase',
+    },
+    ratingRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+    },
+    ratingVaule: {
+        fontSize: 13,
+        fontWeight: '700',
+        color: '#1F2937',
+        marginLeft: 4,
+    },
+    reviewCount: {
+        fontSize: 13,
+        color: '#9CA3AF',
+        marginLeft: 4,
+    },
+    divider: {
+        height: 1,
+        backgroundColor: '#F3F4F6',
+        marginVertical: 16,
+    },
+    detailsContainer: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        marginBottom: 16,
+        gap: 12,
+    },
+    detailItem: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        flex: 1,
+        backgroundColor: '#FAFAFA',
+        padding: 8,
+        borderRadius: 12,
+    },
+    iconBox: {
+        width: 28,
+        height: 28,
+        borderRadius: 8,
+        backgroundColor: '#FEF2F2', // Light red for location
+        justifyContent: 'center',
+        alignItems: 'center',
+        marginRight: 8,
+    },
+    detailText: {
+        fontSize: 13,
+        color: '#4B5563',
+        fontWeight: '500',
+        flexShrink: 1,
+    },
+    footer: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        gap: 12,
+    },
+    profileBtn: {
+        flex: 1,
+        paddingVertical: 12,
+        justifyContent: 'center',
+        alignItems: 'center',
+        borderRadius: 14,
+        borderWidth: 1,
+        borderColor: '#E5E7EB',
+        backgroundColor: '#FFF',
+    },
+    profileBtnText: {
+        color: '#374151',
+        fontWeight: '600',
+        fontSize: 14,
+    },
+    bookBtn: {
+        flex: 1,
+        paddingVertical: 12,
+        flexDirection: 'row',
+        justifyContent: 'center',
+        alignItems: 'center',
+        borderRadius: 14,
+        backgroundColor: '#111827', // Dark aesthetics
+        gap: 8,
+        ...shadows.small,
+    },
+    bookBtnText: {
+        color: '#FFF',
+        fontWeight: '700',
+        fontSize: 14,
+    },
 });

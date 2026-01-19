@@ -13,6 +13,8 @@ export const colors = {
   error: '#DC3545',
   success: '#28A745',
   border: '#DEE2E6',
+  inputBackground: '#FFFFFF',
+  placeholder: '#A1A1AA',
 };
 
 export const shadows = {

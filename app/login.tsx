@@ -15,25 +15,27 @@ import {
   Image
 } from 'react-native';
 import { useRouter } from 'expo-router';
-import { authAPI } from '@/src/api/client';
-import { useTheme } from '@react-navigation/native';
+import { useAuth } from '@/src/contexts/AuthContext';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Animated, { FadeInDown, FadeInUp } from 'react-native-reanimated';
 import { StatusBar } from 'expo-status-bar';
 import { LinearGradient } from 'expo-linear-gradient';
+import { Ionicons } from '@expo/vector-icons';
+import { BlurView } from 'expo-blur';
 
 // Components
 import { ModernInput } from '@/src/components/ModernInput';
 import { colors } from '@/styles/commonStyles';
 
-const { width } = Dimensions.get('window');
+const { width, height } = Dimensions.get('window');
 
 export default function LoginScreen() {
   const router = useRouter();
-  const theme = useTheme();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
+
+  const { login } = useAuth();
 
   const handleLogin = async () => {
     if (!email || !password) {
@@ -43,46 +45,37 @@ export default function LoginScreen() {
 
     setLoading(true);
     try {
-      // 1. API Call
-      const { user } = await authAPI.login(email.toLowerCase().trim(), password);
+      const user = await login({ email: email.toLowerCase().trim(), password });
 
-      // 2. SECURITY CHECK: Locked Account?
       if (user.account_status === 'locked') {
         Alert.alert(
           'Activation Required',
           'Your dashboard is locked. Please enter your Serial Number to activate.',
-          [{ text: 'Activate Now', onPress: () => router.replace('/auth/activate') }]
+          [{ text: 'Activate Now', onPress: () => router.replace('/activate') }]
         );
         return;
       }
 
-      // 3. SECURITY CHECK: Suspended?
       if (user.account_status === 'suspended') {
         Alert.alert('Access Denied', 'Your account has been suspended. Please contact Admin.');
         return;
       }
 
-      // 4. Normal Routing
       const routes = {
         client: '/(tabs)/(home)',
         artisan: '/artisan/dashboard',
         agent: '/agent/dashboard',
-        lga_admin: '/agent/dashboard',        // Temporarily route admins to agent dashboard
-        state_coordinator: '/agent/dashboard',// until dedicated screens are built
+        lga_admin: '/agent/dashboard',
+        state_coordinator: '/agent/dashboard',
         admin: '/admin/dashboard'
       } as const;
 
-      // Note: Cast user.role to ensure TS is happy with the string
       const targetRoute = routes[user.role as keyof typeof routes] || '/(tabs)/(home)';
       router.replace(targetRoute);
 
     } catch (error: any) {
       const msg = error.message || 'Invalid credentials';
-      if (msg.includes('suspended')) {
-        Alert.alert('Access Denied', 'Your account is suspended.');
-      } else {
-        Alert.alert('Login Failed', msg);
-      }
+      Alert.alert('Login Failed', msg);
     } finally {
       setLoading(false);
     }
@@ -102,11 +95,11 @@ export default function LoginScreen() {
       <LinearGradient
         colors={['rgba(255,255,255,0.7)', 'rgba(255,255,255,0.95)', '#FFFFFF']}
         locations={[0, 0.6, 1]}
-        style={{ flex: 1 }}
+        style={styles.overlay}
       >
         <StatusBar style="dark" translucent={true} backgroundColor="transparent" />
 
-        <SafeAreaView style={styles.safeArea}>
+        <SafeAreaView style={{ flex: 1 }}>
           <KeyboardAvoidingView
             behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
             style={styles.container}
@@ -118,54 +111,57 @@ export default function LoginScreen() {
             >
 
               {/* Header Section */}
-              <Animated.View entering={FadeInUp.delay(200).duration(1000).springify()} style={styles.header}>
-                <View style={styles.logoContainer}>
+              <Animated.View entering={FadeInUp.delay(200).springify()} style={styles.header}>
+                <View style={[styles.logoBlur, { backgroundColor: 'rgba(255,255,255,0.5)', borderColor: '#FFF' }]}>
                   <Image
-                    source={require('@/assets/images/smahi.png')} // Adjusted path to standard alias
+                    source={require('@/assets/images/smahi.png')}
                     style={styles.logoImage}
                     resizeMode="contain"
                   />
                 </View>
-
-                <Text style={styles.title}>Welcome Back</Text>
-                <Text style={styles.subtitle}>
-                  Sign in to manage your artisan needs
-                </Text>
+                <Text style={[styles.title, { color: '#111827', textShadowColor: undefined }]}>Welcome Back</Text>
+                <Text style={[styles.subtitle, { color: '#6B7280' }]}>Sign in to continue your journey</Text>
               </Animated.View>
 
-              {/* Form Section */}
-              <Animated.View entering={FadeInDown.delay(400).springify()} style={styles.formContainer}>
+              {/* Glass Form */}
+              <Animated.View entering={FadeInDown.delay(400).springify()} style={[styles.glassCard, { backgroundColor: 'rgba(255,255,255,0.8)', borderColor: '#FFF' }]}>
+                <View style={styles.cardContent}>
 
-                {/* Glass Card Effect */}
-                <View style={styles.glassCard}>
-                  <ModernInput
-                    label="Email Address"
-                    placeholder="name@example.com"
-                    value={email}
-                    onChangeText={setEmail}
-                    keyboardType="email-address"
-                    autoCapitalize="none"
-                    icon="envelope.fill"
-                  />
+                  <View style={styles.inputContainer}>
+                    <ModernInput
+                      label="Email Address"
+                      placeholder="name@example.com"
+                      value={email}
+                      onChangeText={setEmail}
+                      keyboardType="email-address"
+                      autoCapitalize="none"
+                      icon="envelope.fill"
+                      style={{ backgroundColor: '#FFF' }}
+                    />
+                  </View>
 
-                  <ModernInput
-                    label="Password"
-                    placeholder="••••••••"
-                    value={password}
-                    onChangeText={setPassword}
-                    isPassword
-                    icon="lock.fill"
-                  />
-
-                  <View style={styles.forgotContainer}>
-                    <Pressable onPress={() => Alert.alert("Reset", "Password reset flow")}>
-                      <Text style={styles.forgotText}>Forgot Password?</Text>
-                    </Pressable>
+                  <View style={styles.inputContainer}>
+                    <ModernInput
+                      label="Password"
+                      placeholder="••••••••"
+                      value={password}
+                      onChangeText={setPassword}
+                      isPassword
+                      icon="lock.fill"
+                      style={{ backgroundColor: '#FFF' }}
+                    />
                   </View>
 
                   <TouchableOpacity
-                    activeOpacity={0.9}
-                    style={styles.loginBtnShadow}
+                    onPress={() => Alert.alert("Reset", "Password reset flow")}
+                    style={styles.forgotBtn}
+                  >
+                    <Text style={styles.forgotText}>Forgot Password?</Text>
+                  </TouchableOpacity>
+
+                  <TouchableOpacity
+                    activeOpacity={0.8}
+                    style={styles.loginBtn}
                     onPress={handleLogin}
                     disabled={loading}
                   >
@@ -173,45 +169,48 @@ export default function LoginScreen() {
                       colors={[colors.primary, '#0056b3']}
                       start={{ x: 0, y: 0 }}
                       end={{ x: 1, y: 0 }}
-                      style={styles.loginBtnGradient}
+                      style={styles.btnGradient}
                     >
                       {loading ? (
                         <ActivityIndicator color="#fff" />
                       ) : (
-                        <Text style={styles.loginBtnText}>Sign In</Text>
+                        <View style={styles.btnContent}>
+                          <Text style={styles.loginBtnText}>Sign In</Text>
+                          <Ionicons name="arrow-forward" size={20} color="#FFF" />
+                        </View>
                       )}
                     </LinearGradient>
                   </TouchableOpacity>
-                </View>
 
-                <View style={styles.footer}>
-                  <Text style={{ color: colors.textSecondary, fontSize: 15 }}>
-                    Don't have an account?{' '}
-                  </Text>
-                  <Pressable onPress={() => router.push('/register')}>
-                    <Text style={[styles.linkText, { color: colors.primary }]}>
-                      Create Account
-                    </Text>
-                  </Pressable>
-                </View>
+                  <View style={styles.dividerContainer}>
+                    <View style={styles.dividerLine} />
+                    <Text style={[styles.dividerText, { color: '#9CA3AF' }]}>or continue with</Text>
+                    <View style={styles.dividerLine} />
+                  </View>
 
+                  {/* Social / Demo Login */}
+                  <View style={styles.socialRow}>
+                    {['Client', 'Artisan', 'Agent'].map((role, index) => (
+                      <TouchableOpacity
+                        key={role}
+                        activeOpacity={0.7}
+                        onPress={() => fillDemo(role.toLowerCase())}
+                        style={styles.socialBtn}
+                      >
+                        <Text style={styles.socialBtnText}>{role}</Text>
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+
+                </View>
               </Animated.View>
 
-              {/* Quick Demo Login */}
-              <Animated.View entering={FadeInDown.delay(600)} style={styles.demoSection}>
-                <Text style={styles.demoLabel}>Quick Demo Login</Text>
-                <View style={styles.demoRow}>
-                  {['Client', 'Artisan', 'Agent'].map((role) => (
-                    <TouchableOpacity
-                      key={role}
-                      activeOpacity={0.7}
-                      onPress={() => fillDemo(role.toLowerCase())}
-                      style={styles.demoChip}
-                    >
-                      <Text style={styles.demoChipText}>{role}</Text>
-                    </TouchableOpacity>
-                  ))}
-                </View>
+              {/* Footer */}
+              <Animated.View entering={FadeInDown.delay(600)} style={styles.footer}>
+                <Text style={[styles.footerText, { color: '#6B7280' }]}>Don't have an account?</Text>
+                <TouchableOpacity onPress={() => router.push('/register')}>
+                  <Text style={[styles.signupText, { color: colors.primary }]}>Create Account</Text>
+                </TouchableOpacity>
               </Animated.View>
 
             </ScrollView>
@@ -223,82 +222,190 @@ export default function LoginScreen() {
 }
 
 const styles = StyleSheet.create({
-  safeArea: { flex: 1 },
-  container: { flex: 1 },
+  overlay: {
+    flex: 1, // Changed from absoluteFillObject to flex 1 to wrap content
+  },
+  container: {
+    flex: 1,
+  },
   scrollContent: {
     flexGrow: 1,
-    padding: 24,
+    paddingHorizontal: 24,
     justifyContent: 'center',
-    paddingBottom: 50,
+    paddingBottom: 40,
   },
 
   // Header
-  header: { alignItems: 'center', marginBottom: 32 },
-  logoContainer: {
-    width: 100, height: 100,
-    marginBottom: 16,
-    justifyContent: 'center', alignItems: 'center',
+  header: {
+    alignItems: 'center',
+    marginBottom: 32,
   },
-  logoImage: {
-    width: '100%', height: '100%',
-  },
-  title: {
-    fontSize: 28, fontWeight: '800',
-    color: '#111827', marginBottom: 8,
-    textAlign: 'center', letterSpacing: -0.5,
-  },
-  subtitle: {
-    fontSize: 16, color: '#6B7280',
-    textAlign: 'center', maxWidth: '85%', lineHeight: 22,
-  },
-
-  // Form
-  formContainer: { width: '100%' },
-  glassCard: {
-    backgroundColor: 'rgba(255,255,255,0.9)',
-    borderRadius: 24,
-    padding: 24,
+  logoBlur: {
+    width: 90,
+    height: 90,
+    borderRadius: 28,
+    backgroundColor: 'rgba(255,255,255,0.6)', // More blur
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 20,
     borderWidth: 1,
     borderColor: '#FFF',
-    shadowColor: "#000", shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.08, shadowRadius: 16, elevation: 4,
-    marginBottom: 24,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.15, // stronger shadow
+    shadowRadius: 16,
+    elevation: 10,
+  },
+  logoImage: {
+    width: 60,
+    height: 60,
+  },
+  title: {
+    fontSize: 28,
+    fontWeight: '800',
+    color: '#111827',
+    marginBottom: 8,
+    textAlign: 'center',
+    letterSpacing: -0.5,
+  },
+  subtitle: {
+    fontSize: 16,
+    color: '#6B7280',
+    textAlign: 'center',
+    fontWeight: '500',
+    lineHeight: 24,
   },
 
-  // Forgot Password
-  forgotContainer: { alignItems: 'flex-end', marginBottom: 24, marginTop: -4 },
-  forgotText: { fontWeight: '600', fontSize: 13, color: colors.primary },
-
-  // Button
-  loginBtnShadow: {
-    shadowColor: colors.primary, shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.25, shadowRadius: 12, elevation: 6,
+  // Glass Card - More Premium
+  glassCard: {
+    backgroundColor: 'rgba(255, 255, 255, 0.75)',
+    borderRadius: 36, // softer radius
+    overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.6)',
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 12 },
+    shadowOpacity: 0.08, // softer spread
+    shadowRadius: 30,
+    elevation: 8,
+  },
+  cardContent: {
+    padding: 28, // more spacing
+  },
+  inputContainer: {
+    marginBottom: 8,
+    backgroundColor: '#FFF',
     borderRadius: 16,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.03,
+    shadowRadius: 4,
+    elevation: 1,
+    borderWidth: 1,
+    borderColor: 'rgba(0,0,0,0.02)',
   },
-  loginBtnGradient: {
-    height: 52, borderRadius: 16,
-    justifyContent: 'center', alignItems: 'center',
+  forgotBtn: {
+    alignSelf: 'flex-end',
+    marginBottom: 28,
+    marginTop: 8,
   },
-  loginBtnText: { color: 'white', fontWeight: 'bold', fontSize: 16 },
+  forgotText: {
+    color: colors.primary,
+    fontSize: 14,
+    fontWeight: '700',
+  },
 
-  // Footer Link
-  footer: { flexDirection: 'row', justifyContent: 'center', alignItems: 'center' },
-  linkText: { fontWeight: '700', fontSize: 15 },
+  // Login Button - Premium Gradient
+  loginBtn: {
+    borderRadius: 20,
+    overflow: 'hidden',
+    shadowColor: colors.primary,
+    shadowOffset: { width: 0, height: 12 },
+    shadowOpacity: 0.35,
+    shadowRadius: 20,
+    elevation: 8,
+    transform: [{ scale: 1 }], // placeholder specifically for animation hook if needed
+  },
+  btnGradient: {
+    height: 60, // taller
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  btnContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  loginBtnText: {
+    color: '#FFF',
+    fontSize: 18,
+    fontWeight: '800',
+    letterSpacing: 0.5,
+  },
 
-  // Demo Section
-  demoSection: { marginTop: 40, alignItems: 'center' },
-  demoLabel: {
-    fontSize: 11, marginBottom: 16,
-    textTransform: 'uppercase', letterSpacing: 1.2,
-    color: '#9CA3AF', fontWeight: '600',
+  // Divider
+  dividerContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginVertical: 28,
+    gap: 16,
   },
-  demoRow: { flexDirection: 'row', gap: 10 },
-  demoChip: {
-    paddingHorizontal: 16, paddingVertical: 8,
-    borderRadius: 20, backgroundColor: '#FFF',
-    borderWidth: 1, borderColor: '#E5E7EB',
-    shadowColor: "#000", shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05, shadowRadius: 2, elevation: 1
+  dividerLine: {
+    flex: 1,
+    height: 1,
+    backgroundColor: '#E5E7EB',
   },
-  demoChipText: { fontSize: 12, fontWeight: '600', color: '#4B5563' },
+  dividerText: {
+    color: '#9CA3AF',
+    fontSize: 13,
+    fontWeight: '600',
+    textTransform: 'uppercase',
+    letterSpacing: 1,
+  },
+
+  // Social Buttons
+  socialRow: {
+    flexDirection: 'row',
+    gap: 12,
+  },
+  socialBtn: {
+    flex: 1,
+    height: 52,
+    backgroundColor: '#FFF',
+    borderWidth: 1,
+    borderColor: '#F3F4F6',
+    borderRadius: 16,
+    justifyContent: 'center',
+    alignItems: 'center',
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 8,
+    elevation: 2,
+  },
+  socialBtnText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#374151',
+    letterSpacing: 0.3,
+  },
+
+  // Footer
+  footer: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginTop: 40,
+    gap: 6,
+  },
+  footerText: {
+    color: '#6B7280',
+    fontSize: 15,
+    fontWeight: '500',
+  },
+  signupText: {
+    color: colors.primary,
+    fontSize: 15,
+    fontWeight: '800',
+  },
 });

@@ -45,8 +45,14 @@ export interface User {
   state?: number;
   lga?: number;
 
+  // Expanded details for UI
+  lga_details?: { id: number; name: string };
+  state_details?: { id: number; name: string };
+
   is_verified: boolean;
+  account_status?: 'active' | 'suspended' | 'locked';
   created_at?: string;
+  serial_number?: string;
 }
 
 // The data collected from the Register Form

@@ -37,7 +37,7 @@ export const authAPI = {
       first_name: firstName,
       last_name: lastName,
       role: data.role,
-      service_category: data.service_category, // <--- Sent to backend
+      service_category: data.service_category,
       phone_number: data.phone,
       country: data.country,
       state: data.state,
@@ -52,11 +52,8 @@ export const authAPI = {
     return response.data;
   },
 
-  // --- NEW FUNCTION: Fetch Services from Backend ---
   getServices: async () => {
-    console.log("Fetching services from backend...");
     const response = await apiClient.get('/auth/services/');
-    console.log("Services fetched:", response.data.length);
     return response.data;
   },
 
@@ -110,61 +107,64 @@ export const bookingAPI = {
     const response = await apiClient.post('/bookings/', data);
     return response.data;
   },
-  // ✅ ADD THIS MISSING FUNCTION
+
   getBookingsByArtisan: async (artisanId: number) => {
     try {
       const response = await apiClient.get(`/bookings/`, { params: { artisan: artisanId } });
       return response.data;
     } catch (error) {
       console.log("Error fetching bookings:", error);
-      return []; // Return empty array on error so app doesn't crash
+      return [];
     }
   },
 };
 
+// --- ARTISANS ---
 export const artisanAPI = {
-  // ✅ List Fetch: Added '/auth' prefix
-  getArtisans: async (filters?: { service?: string; search?: string }, page: number = 1) => {
-    console.log(`[API] Fetching artisans (Page ${page})...`);
-
+  getArtisans: async (filters?: { service?: string; search?: string; lga?: string | number; state?: string | number }, page: number = 1) => {
     try {
       const params: any = { page: page };
       if (filters?.search) params.search = filters.search;
       if (filters?.service && filters.service !== 'All') params.service_category = filters.service;
+      if (filters?.lga) params.lga = filters.lga;
+      if (filters?.state) params.state = filters.state;
 
-      // FIX: Added /auth/ before artisans-list/
-      const response = await apiClient.get('/auth/artisans-list/', { params });
+      // ✅ FIXED: Removed '/auth' prefix to match backend urls.py
+      const response = await apiClient.get('/artisans-list/', { params });
       return response.data;
 
     } catch (error: any) {
       if (error.response && error.response.status === 404) {
         return { results: [], next: null };
       }
-      console.error("[API] Error fetching artisans:", error.message);
       throw error;
     }
   },
 
   getArtisanById: async (id: number) => {
     try {
-      // FIX: Added /auth/ prefix
-      const response = await apiClient.get(`/auth/users/${id}/`);
+      // ✅ FIXED: Removed '/auth' prefix to match backend urls.py
+      const response = await apiClient.get(`/users/${id}/`);
       return response.data;
     } catch (error) {
       console.error("Error fetching artisan details", error);
-      return null;
+      throw error;
     }
   },
 
-  // ✅ Detail Fetch: Added '/auth' prefix
-  getArtisanByUserId: async (userId: number) => {
-    // FIX: Added /auth/ before artisans-list/
-    const response = await apiClient.get(`/auth/artisans-list/${userId}/`);
-    return response.data;
+  // Agent Verification
+  verifyArtisan: async (userId: number) => {
+    try {
+      const response = await apiClient.post(`/core/agent/verify-artisan/${userId}/`);
+      return response.data;
+    } catch (error) {
+      console.error("Verification Error:", error);
+      throw error;
+    }
   },
 };
 
-
+// --- CHAT ---
 export const chatAPI = {
   getConversations: async () => {
     const response = await apiClient.get('/chat/conversations/');
@@ -181,9 +181,104 @@ export const chatAPI = {
     return response.data;
   },
 
-  // ✅ NEW FUNCTION
   findConversation: async (recipientId: number) => {
     const response = await apiClient.get(`/chat/find/${recipientId}/`);
+    return response.data;
+  }
+};
+
+// --- DASHBOARD ---
+export const dashboardAPI = {
+  getStats: async () => {
+    try {
+      const response = await apiClient.get('/core/dashboard/stats/');
+      return response.data;
+    } catch (error) {
+      console.error('Dashboard Stats Error:', error);
+      throw error;
+    }
+  },
+};
+
+// --- ADMIN ---
+export const adminAPI = {
+  getStats: async () => {
+    try {
+      const response = await apiClient.get('/core/dashboard/stats/');
+      return response.data;
+    } catch (error) {
+      console.error('Admin Stats Error:', error);
+      throw error;
+    }
+  },
+  getAllUsers: async () => {
+    try {
+      const response = await apiClient.get('/auth/users/');
+      return getData(response);
+    } catch (error) {
+      console.error('Admin All Users Error:', error);
+      throw error;
+    }
+  }
+};
+
+// --- TICKETS ---
+export const ticketAPI = {
+  getTickets: async () => {
+    try {
+      const response = await apiClient.get('/core/tickets/');
+      return response.data;
+    } catch (error) {
+      console.error('Fetch Tickets Error:', error);
+      throw error;
+    }
+  },
+
+  createTicket: async (data: any) => {
+    try {
+      if (data.attachment) {
+        const formData = new FormData();
+        formData.append('subject', data.subject);
+        formData.append('description', data.description);
+        formData.append('priority', data.priority);
+
+        const uri = data.attachment;
+        const filename = uri.split('/').pop();
+        const match = /\.(\w+)$/.exec(filename);
+        const type = match ? `image/${match[1]}` : `image`;
+
+        formData.append('attachment', { uri, name: filename, type } as any);
+
+        const response = await apiClient.post('/core/tickets/', formData, {
+          headers: { 'Content-Type': 'multipart/form-data' },
+        });
+        return response.data;
+      }
+
+      const response = await apiClient.post('/core/tickets/', data);
+      return response.data;
+    } catch (error) {
+      console.error('Create Ticket Error:', error);
+      throw error;
+    }
+  },
+
+  getTicketDetail: async (id: string | number) => {
+    try {
+      const response = await apiClient.get(`/core/tickets/${id}/`);
+      return response.data;
+    } catch (error) {
+      console.error(`Fetch Ticket ${id} Error:`, error);
+      throw error;
+    }
+  }
+};
+// src/api/client.ts
+
+export const agentAPI = {
+  registerArtisan: async (data: any) => {
+    // We reuse the RegisterData type but send it to a different endpoint
+    const response = await apiClient.post('/auth/agent/register-artisan/', data);
     return response.data;
   }
 };

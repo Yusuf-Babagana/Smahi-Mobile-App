@@ -13,9 +13,9 @@ import { useTranslation } from 'react-i18next';
 import axios from 'axios'; // Import Axios directly for the location fetch
 
 import { artisanAPI } from '@/src/api/client';
-import { ArtisanCard } from '@/components/ArtisanCard';
+import { ArtisanCard } from '@/src/components/ArtisanCard';
 import { colors, shadows } from '@/styles/commonStyles';
-import { LanguageToggle } from '@/components/LanguageToggle';
+import { LanguageToggle } from '@/src/components/LanguageToggle';
 
 const RAW_CATEGORIES = ["All", "Plumbing", "Electrical", "Carpentry", "Cleaning", "Mechanic"];
 const CACHE_KEY = 'cached_artisans_list';

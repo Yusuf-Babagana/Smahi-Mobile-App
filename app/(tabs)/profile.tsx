@@ -1,7 +1,7 @@
 import React from "react";
 import { View, Text, StyleSheet, ScrollView, Pressable, Switch, Alert } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { IconSymbol, IconSymbolName } from "@/components/IconSymbol";
+import { IconSymbol, IconSymbolName } from "@/src/components/IconSymbol";
 import { useTheme } from "@react-navigation/native";
 import { useRouter } from "expo-router";
 import Animated, { FadeInDown, FadeInUp } from "react-native-reanimated";

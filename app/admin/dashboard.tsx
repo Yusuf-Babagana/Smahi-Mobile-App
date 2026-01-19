@@ -12,7 +12,7 @@ import {
 import { useRouter } from 'expo-router';
 import { useTheme } from '@react-navigation/native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { IconSymbol } from '@/components/IconSymbol';
+import { IconSymbol } from '@/src/components/IconSymbol';
 import { storage } from '@/src/utils/storage';
 import { authAPI, adminAPI } from '@/src/api/client';
 import { User } from '@/src/types';
@@ -160,10 +160,10 @@ export default function AdminDashboard() {
                       u.role === 'super_admin'
                         ? '#FF3B30'
                         : u.role === 'agent'
-                        ? '#FF9500'
-                        : u.role === 'artisan'
-                        ? '#34C759'
-                        : '#007AFF',
+                          ? '#FF9500'
+                          : u.role === 'artisan'
+                            ? '#34C759'
+                            : '#007AFF',
                   },
                 ]}
               >

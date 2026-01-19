@@ -8,9 +8,9 @@ import { StatusBar } from 'expo-status-bar';
 import { authAPI, locationAPI } from '@/src/api/client';
 import { UserRole } from '@/src/types';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { IconSymbol } from '@/components/IconSymbol';
+import { IconSymbol } from '@/src/components/IconSymbol';
 import Animated, { FadeInRight, FadeOutLeft, LinearTransition } from 'react-native-reanimated';
-import CustomPicker from '@/components/CustomPicker';
+import CustomPicker from '@/src/components/CustomPicker';
 import { ModernInput } from '@/src/components/ModernInput';
 import { LinearGradient } from 'expo-linear-gradient';
 
@@ -258,10 +258,57 @@ export default function RegisterScreen() {
                 {/* STEP 2: ACCOUNT INFO */}
                 {currentStep === 2 && (
                   <View style={styles.formSection}>
-                    <ModernInput label="Full Name" placeholder="John Doe" value={name} onChangeText={setName} error={errors.name} icon="person" />
-                    <ModernInput label="Email Address" placeholder="john@example.com" value={email} onChangeText={setEmail} keyboardType="email-address" autoCapitalize="none" error={errors.email} icon="envelope" />
-                    <ModernInput label="Phone Number" placeholder="+234 800 000 0000" value={phone} onChangeText={setPhone} keyboardType="phone-pad" error={errors.phone} icon="phone" />
-                    <ModernInput label="Password" placeholder="••••••••" value={password} onChangeText={setPassword} isPassword error={errors.password} icon="lock" />
+                    <View style={styles.inputContainer}>
+                      <ModernInput
+                        label="Full Name"
+                        placeholder="John Doe"
+                        value={name}
+                        onChangeText={setName}
+                        error={errors.name}
+                        icon="person.fill"
+                        style={{ backgroundColor: '#FFF' }}
+                      />
+                    </View>
+
+                    <View style={styles.inputContainer}>
+                      <ModernInput
+                        label="Email Address"
+                        placeholder="yusuf@example.com"
+                        value={email}
+                        onChangeText={setEmail}
+                        keyboardType="email-address"
+                        autoCapitalize="none"
+                        error={errors.email}
+                        icon="envelope.fill"
+                        style={{ backgroundColor: '#FFF' }}
+                      />
+                    </View>
+
+                    <View style={styles.inputContainer}>
+                      <ModernInput
+                        label="Phone Number"
+                        placeholder="+234 800 000 0000"
+                        value={phone}
+                        onChangeText={setPhone}
+                        keyboardType="phone-pad"
+                        error={errors.phone}
+                        icon="phone.fill"
+                        style={{ backgroundColor: '#FFF' }}
+                      />
+                    </View>
+
+                    <View style={styles.inputContainer}>
+                      <ModernInput
+                        label="Password"
+                        placeholder="••••••••"
+                        value={password}
+                        onChangeText={setPassword}
+                        isPassword
+                        error={errors.password}
+                        icon="lock.fill"
+                        style={{ backgroundColor: '#FFF' }}
+                      />
+                    </View>
                   </View>
                 )}
 
@@ -289,17 +336,20 @@ export default function RegisterScreen() {
                       </View>
                     )}
 
-                    <CustomPicker label="Country" placeholder="Select Country" value={selectedCountry} onValueChange={setSelectedCountry} items={countries.map(c => ({ label: c.name, value: c.id.toString() }))} />
+                    <View style={styles.glassCardSimple}>
+                      <Text style={styles.cardTitle}>📍 Location Details</Text>
+                      <CustomPicker label="Country" placeholder="Select Country" value={selectedCountry} onValueChange={setSelectedCountry} items={countries.map(c => ({ label: c.name, value: c.id.toString() }))} />
 
-                    <View style={styles.row}>
-                      <View style={{ flex: 1, marginRight: 8 }}>
-                        <CustomPicker label="State" placeholder="State" value={selectedState} onValueChange={setSelectedState} items={states.map(s => ({ label: s.name, value: s.id.toString() }))} />
+                      <View style={styles.row}>
+                        <View style={{ flex: 1, marginRight: 8 }}>
+                          <CustomPicker label="State" placeholder="State" value={selectedState} onValueChange={setSelectedState} items={states.map(s => ({ label: s.name, value: s.id.toString() }))} />
+                        </View>
+                        <View style={{ flex: 1, marginLeft: 8 }}>
+                          <CustomPicker label="LGA" placeholder="City / LGA" value={selectedLga} onValueChange={setSelectedLga} items={lgas.map(l => ({ label: l.name, value: l.id.toString() }))} />
+                        </View>
                       </View>
-                      <View style={{ flex: 1, marginLeft: 8 }}>
-                        <CustomPicker label="LGA" placeholder="City / LGA" value={selectedLga} onValueChange={setSelectedLga} items={lgas.map(l => ({ label: l.name, value: l.id.toString() }))} />
-                      </View>
+                      {(errors.country || errors.state || errors.lga) && <Text style={commonStyles.errorText}>Please complete all location fields</Text>}
                     </View>
-                    {(errors.country || errors.state || errors.lga) && <Text style={commonStyles.errorText}>Please complete all location fields</Text>}
                   </View>
                 )}
 
@@ -374,76 +424,116 @@ const styles = StyleSheet.create({
   header: { paddingHorizontal: 24, paddingTop: 10, paddingBottom: 10 },
   backBtn: { marginBottom: 16, alignSelf: 'flex-start' },
   backBtnCircle: {
-    width: 40, height: 40, borderRadius: 20, backgroundColor: 'rgba(255,255,255,0.9)',
+    width: 44, height: 44, borderRadius: 14,
+    backgroundColor: 'rgba(255,255,255,0.8)',
     justifyContent: 'center', alignItems: 'center',
-    shadowColor: "#000", shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.1, shadowRadius: 4, elevation: 3
+    borderWidth: 1, borderColor: '#FFF',
+    shadowColor: "#000", shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.1, shadowRadius: 8, elevation: 4
   },
-  headerTitle: { fontSize: 28, fontWeight: '800', color: '#111827', marginBottom: 4, letterSpacing: -0.5 },
-  headerSubtitle: { fontSize: 16, color: '#6B7280', fontWeight: '500' },
+  headerTitle: {
+    fontSize: 28, fontWeight: '800',
+    color: '#111827', marginBottom: 6,
+    letterSpacing: -0.5
+  },
+  headerSubtitle: {
+    fontSize: 16, color: '#6B7280',
+    fontWeight: '500', lineHeight: 22
+  },
 
   // PROGRESS BAR
-  progressContainer: { paddingHorizontal: 24, marginBottom: 24, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  track: { flex: 1, height: 6, backgroundColor: '#E5E7EB', borderRadius: 3, marginRight: 12 },
-  indicator: { height: '100%', backgroundColor: colors.primary, borderRadius: 3 },
-  stepText: { fontSize: 12, fontWeight: '700', color: colors.primary },
+  progressContainer: {
+    paddingHorizontal: 24, marginBottom: 28,
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between'
+  },
+  track: {
+    flex: 1, height: 8,
+    backgroundColor: 'rgba(0,0,0,0.05)',
+    borderRadius: 4, marginRight: 16,
+    overflow: 'hidden'
+  },
+  indicator: { height: '100%', backgroundColor: colors.primary, borderRadius: 4 },
+  stepText: { fontSize: 13, fontWeight: '700', color: colors.primary },
 
   // FORM CONTENT
-  scrollContent: { paddingHorizontal: 24, paddingBottom: 120 },
-  formSection: { gap: 4 },
+  scrollContent: { paddingHorizontal: 24, paddingBottom: 140 },
+  formSection: { gap: 12 },
+
+  // INPUT CONTAINER (New)
+  inputContainer: {
+    backgroundColor: '#FFF',
+    borderRadius: 16,
+    marginBottom: 4,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.03,
+    shadowRadius: 4,
+    elevation: 1,
+    borderWidth: 1,
+    borderColor: 'rgba(0,0,0,0.02)',
+    overflow: 'hidden'
+  },
 
   // TERMS STYLES
   termsContainer: { marginTop: 10 },
-  logoImage: { width: 80, height: 80, marginBottom: 8 },
+  logoImage: { width: 80, height: 80, marginBottom: 12 },
   corporateTitle: { fontSize: 18, fontWeight: '900', color: colors.primary, textAlign: 'center', marginBottom: 4 },
-  corporateSubtitle: { fontSize: 12, fontWeight: '700', color: '#6B7280', textAlign: 'center', marginBottom: 16, letterSpacing: 1 },
+  corporateSubtitle: { fontSize: 12, fontWeight: '700', color: '#6B7280', textAlign: 'center', marginBottom: 20, letterSpacing: 1 },
   termsScroll: { height: height * 0.45, paddingRight: 8 },
-  termsText: { fontSize: 14, lineHeight: 22, color: '#4B5563', textAlign: 'justify' },
+  termsText: { fontSize: 14, lineHeight: 24, color: '#4B5563', textAlign: 'justify' },
   bold: { fontWeight: '800', color: '#111827' },
 
   switchRow: {
     flexDirection: 'row', alignItems: 'center', marginTop: 20,
-    padding: 16, backgroundColor: 'rgba(255,255,255,0.9)',
-    borderRadius: 16, borderWidth: 1, borderColor: '#E5E7EB'
+    padding: 20,
+    backgroundColor: 'rgba(255,255,255,0.85)',
+    borderRadius: 20,
+    borderWidth: 1, borderColor: '#FFF',
+    shadowColor: "#000", shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.05, shadowRadius: 10, elevation: 2
   },
-  switchText: { marginLeft: 12, fontSize: 15, fontWeight: '600', color: '#374151' },
+  switchText: { marginLeft: 16, fontSize: 15, fontWeight: '600', color: '#374151' },
 
   // FOOTER
   footer: {
     position: 'absolute', bottom: 0, left: 0, right: 0,
-    padding: 24, backgroundColor: 'rgba(255,255,255,0.95)',
-    borderTopWidth: 1, borderTopColor: '#F3F4F6'
+    padding: 24, paddingBottom: 34,
+    backgroundColor: 'rgba(255,255,255,0.9)',
+    borderTopWidth: 1, borderTopColor: 'rgba(0,0,0,0.05)',
+    paddingTop: 20
   },
   btn: {
-    height: 56, borderRadius: 28, overflow: 'hidden',
-    shadowColor: colors.primary, shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.3, shadowRadius: 12, elevation: 8
+    height: 60, borderRadius: 20, overflow: 'hidden',
+    shadowColor: colors.primary, shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.3, shadowRadius: 16, elevation: 8
   },
   btnGradient: { flex: 1, justifyContent: 'center', alignItems: 'center', flexDirection: 'row' },
-  btnText: { color: 'white', fontWeight: '700', fontSize: 18 },
+  btnText: { color: 'white', fontWeight: '800', fontSize: 18, letterSpacing: 0.5 },
 
   // CARDS
   roleCard: {
-    flexDirection: 'row', alignItems: 'center', padding: 16,
-    borderRadius: 20, marginBottom: 16,
-    shadowColor: "#000", shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.05, shadowRadius: 4, elevation: 2
+    flexDirection: 'row', alignItems: 'center', padding: 20,
+    borderRadius: 24, marginBottom: 16,
+    shadowColor: "#000", shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.05, shadowRadius: 8, elevation: 2
   },
   glassCard: {
-    backgroundColor: 'rgba(255,255,255,0.9)',
-    borderWidth: 1, borderColor: '#FFF',
-    padding: 24, borderRadius: 24,
-    shadowColor: "#000", shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.08, shadowRadius: 12, elevation: 4
+    backgroundColor: 'rgba(255, 255, 255, 0.75)',
+    borderWidth: 1, borderColor: 'rgba(255,255,255,0.6)',
+    padding: 24, borderRadius: 32,
+    shadowColor: "#000", shadowOffset: { width: 0, height: 12 }, shadowOpacity: 0.08, shadowRadius: 30, elevation: 8
   },
   glassCardSimple: {
-    backgroundColor: 'rgba(255,255,255,0.9)',
-    borderWidth: 1, borderColor: '#FFF',
-    padding: 20, borderRadius: 20, marginBottom: 24,
-    shadowColor: "#000", shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.08, shadowRadius: 12, elevation: 4
+    backgroundColor: 'rgba(255, 255, 255, 0.75)',
+    borderWidth: 1, borderColor: 'rgba(255,255,255,0.6)',
+    padding: 24, borderRadius: 24, marginBottom: 24,
+    shadowColor: "#000", shadowOffset: { width: 0, height: 8 }, shadowOpacity: 0.06, shadowRadius: 20, elevation: 4
   },
-  iconCircle: { width: 50, height: 50, borderRadius: 25, justifyContent: 'center', alignItems: 'center', marginRight: 16 },
-  roleTitle: { fontSize: 17, fontWeight: '700', marginBottom: 4 },
-  roleSubtitle: { fontSize: 13, color: '#6B7280' },
+  iconCircle: {
+    width: 56, height: 56, borderRadius: 20,
+    justifyContent: 'center', alignItems: 'center', marginRight: 16
+  },
+  roleTitle: { fontSize: 18, fontWeight: '700', marginBottom: 4 },
+  roleSubtitle: { fontSize: 13, color: '#6B7280', fontWeight: '500' },
   checkIcon: { marginLeft: 10 },
-  cardTitle: { fontWeight: '700', marginBottom: 12, fontSize: 15, color: '#374151' },
+  cardTitle: { fontWeight: '700', marginBottom: 16, fontSize: 16, color: '#374151' },
 
   row: { flexDirection: 'row' },
 });

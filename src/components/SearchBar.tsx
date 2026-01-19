@@ -4,8 +4,8 @@ import { View, TextInput, StyleSheet, Platform } from 'react-native';
 import { Picker } from '@react-native-picker/picker';
 import { colors, commonStyles } from '../../styles/commonStyles';
 import { CATEGORIES } from '../constants/config';
-import { ArtisanCategory } from '../types';
-import { IconSymbol } from '@/components/IconSymbol';
+import { ArtisanService } from '../types';
+import { IconSymbol } from '@/src/components/IconSymbol';
 
 interface SearchBarProps {
   searchQuery: string;
@@ -32,7 +32,7 @@ export default function SearchBar({
           onChangeText={onSearchChange}
         />
       </View>
-      
+
       <View style={styles.pickerContainer}>
         <Picker
           selectedValue={selectedCategory}

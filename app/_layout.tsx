@@ -16,10 +16,11 @@ import {
   ThemeProvider,
 } from "@react-navigation/native";
 import { StatusBar } from "expo-status-bar";
-import { WidgetProvider } from "@/contexts/WidgetContext";
+import { WidgetProvider } from "@/src/contexts/WidgetContext";
 
 // ✅ 1. Import the Notification Provider
-import { NotificationProvider } from '@/src/context/NotificationContext';
+import { NotificationProvider } from '@/src/contexts/NotificationContext';
+import { AuthProvider } from '@/src/contexts/AuthContext';
 import '@/src/i18n';
 
 
@@ -86,34 +87,36 @@ export default function RootLayout() {
   return (
     <ThemeProvider value={theme}>
       <WidgetProvider>
-        {/* ✅ 2. Wrap App in NotificationProvider */}
-        <NotificationProvider>
-          <GestureHandlerRootView style={{ flex: 1 }}>
-            <StatusBar style={colorScheme === "dark" ? "light" : "dark"} />
+        {/* ✅ 2. Wrap App in AuthProvider & NotificationProvider */}
+        <AuthProvider>
+          <NotificationProvider>
+            <GestureHandlerRootView style={{ flex: 1 }}>
+              <StatusBar style={colorScheme === "dark" ? "light" : "dark"} />
 
-            <Stack screenOptions={{ contentStyle: { backgroundColor: theme.colors.background } }}>
-              {/* Auth & Base Screens */}
-              <Stack.Screen name="index" options={{ headerShown: false }} />
-              <Stack.Screen name="login" options={{ headerShown: false }} />
-              <Stack.Screen name="register" options={{ headerShown: false }} />
-              <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+              <Stack screenOptions={{ contentStyle: { backgroundColor: theme.colors.background } }}>
+                {/* Auth & Base Screens */}
+                <Stack.Screen name="index" options={{ headerShown: false }} />
+                <Stack.Screen name="login" options={{ headerShown: false }} />
+                <Stack.Screen name="register" options={{ headerShown: false }} />
+                <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
 
-              {/* Dashboard Screens */}
-              <Stack.Screen name="artisan/dashboard" options={{ headerShown: false }} />
-              <Stack.Screen name="agent/dashboard" options={{ headerShown: false }} />
-              <Stack.Screen name="admin/dashboard" options={{ headerShown: false }} />
+                {/* Dashboard Screens */}
+                <Stack.Screen name="artisan/dashboard" options={{ headerShown: false }} />
+                <Stack.Screen name="agent/dashboard" options={{ headerShown: false }} />
+                <Stack.Screen name="admin/dashboard" options={{ headerShown: false }} />
 
-              {/* ✅ 3. Add Chat & Profile Screens */}
-              <Stack.Screen name="artisan-profile" options={{ headerShown: false }} />
-              <Stack.Screen name="chat/index" options={{ headerShown: false }} />
-              <Stack.Screen name="chat/[id]" options={{ headerShown: false }} />
+                {/* ✅ 3. Add Chat & Profile Screens */}
+                <Stack.Screen name="artisan-profile" options={{ headerShown: false }} />
+                <Stack.Screen name="chat/index" options={{ headerShown: false }} />
+                <Stack.Screen name="chat/[id]" options={{ headerShown: false }} />
 
-              <Stack.Screen name="+not-found" />
-            </Stack>
+                <Stack.Screen name="+not-found" />
+              </Stack>
 
-            <SystemBars style="auto" />
-          </GestureHandlerRootView>
-        </NotificationProvider>
+              <SystemBars style="auto" />
+            </GestureHandlerRootView>
+          </NotificationProvider>
+        </AuthProvider>
       </WidgetProvider>
     </ThemeProvider>
   );

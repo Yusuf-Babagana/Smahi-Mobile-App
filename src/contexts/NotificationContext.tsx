@@ -2,7 +2,7 @@ import React, { createContext, useContext, useEffect, useState } from 'react';
 import { Audio } from 'expo-av';
 import { chatAPI } from '@/src/api/client';
 import { storage } from '@/src/utils/storage';
-import { InAppNotification } from '@/components/InAppNotification';
+import { InAppNotification } from '@/src/components/InAppNotification';
 
 const NotificationContext = createContext({});
 
