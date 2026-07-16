@@ -1,10 +1,10 @@
 import axios from 'axios';
 import * as SecureStore from 'expo-secure-store';
+import { API_URL } from '../constants/env';
 
-// --------------------------------------------------------
-// LIVE PRODUCTION SERVER
-const BASE_URL = 'https://smahi1.pythonanywhere.com/api';
-// --------------------------------------------------------
+// Server host comes from src/constants/env.ts (EXPO_PUBLIC_BACKEND_URL).
+// The trailing slash matters: axios resolves relative paths like 'auth/login/' against it.
+const BASE_URL = `${API_URL}/`;
 
 console.log("🔗 Connecting to Backend at:", BASE_URL);
 

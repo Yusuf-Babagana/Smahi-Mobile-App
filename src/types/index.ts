@@ -1,4 +1,4 @@
-export type UserRole = 'client' | 'artisan' | 'agent' | 'admin';
+export type UserRole = 'client' | 'artisan' | 'agent' | 'lga_admin' | 'state_coordinator' | 'admin';
 
 export type VerificationStatus = 'pending' | 'approved' | 'rejected' | 'none';
 
@@ -28,6 +28,34 @@ export type ArtisanService =
   | 'interior'
   | 'other';
 
+// NOTE: ArtisanService type removed — categories now come from the API
+
+export interface Subcategory {
+  id: number;
+  name: string;
+  name_ha?: string;
+  description: string;
+  icon: string;
+}
+
+export interface CategoryGroup {
+  id: number;
+  name: string;
+  name_ha?: string;
+  description: string;
+  icon: string;
+  subcategories: Subcategory[];
+  created_at: string;
+}
+
+export interface FlatCategory {
+  id: number;
+  name: string;
+  description: string;
+  icon: string;
+  parent_id: number | null;
+}
+
 // The User object returned from Django
 export interface User {
   id: number;
@@ -35,7 +63,7 @@ export interface User {
   first_name: string;
   last_name: string;
   role: UserRole;
-  service_category?: ArtisanService; // Only for artisans
+  service_category?: string; // Category ID as string from API
   phone_number?: string;
   address?: string;
   profile_picture?: string;
@@ -50,6 +78,8 @@ export interface User {
   state_details?: { id: number; name: string };
 
   is_verified: boolean;
+  // Email OTP confirmation — distinct from is_verified (the artisan ID-verification badge)
+  email_verified?: boolean;
   account_status?: 'active' | 'suspended' | 'locked';
   created_at?: string;
   serial_number?: string;
@@ -78,7 +108,7 @@ export interface LoginCredentials {
 export interface Artisan {
   id: string;
   userId: string;
-  category: ArtisanService;
+  category: string;
   description: string;
   experience: string;
   hourlyRate: number;

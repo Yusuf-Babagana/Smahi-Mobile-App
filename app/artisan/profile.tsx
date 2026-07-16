@@ -3,28 +3,28 @@ import { View, Text, StyleSheet, ScrollView, Pressable, Image, TextInput, Alert,
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
-import * as ImagePicker from 'expo-image-picker'; // ✅ Import ImagePicker
+import * as ImagePicker from 'expo-image-picker';
 import Animated, { FadeInDown, FadeInUp } from "react-native-reanimated";
 import axios from 'axios';
 import * as SecureStore from 'expo-secure-store';
 
 import { artisanAPI, authAPI } from "@/src/api/client";
 import { storage } from "@/src/utils/storage";
-import { colors, shadows } from '@/styles/commonStyles'; // Adjusted to match standard path
+import { color, font, radius, shadow, space, type } from '@/constants/theme';
+import { useTranslation } from 'react-i18next';
 
-const BASE_URL = 'https://smahi1.pythonanywhere.com/api';
-const CLOUD_NAME = 'dvj6cw5dq';
+import { API_URL as BASE_URL, CLOUDINARY_CLOUD_NAME as CLOUD_NAME } from '@/src/constants/env';
 
 export default function ArtisanProfileScreen() {
     const router = useRouter();
+    const { i18n } = useTranslation();
     const [loading, setLoading] = useState(true);
-    const [uploadingProfile, setUploadingProfile] = useState(false); // ✅ Loading state for avatar
+    const [uploadingProfile, setUploadingProfile] = useState(false);
     const [user, setUser] = useState<any>(null);
     const [artisan, setArtisan] = useState<any>(null);
     const [isEditing, setIsEditing] = useState(false);
     const [portfolioImages, setPortfolioImages] = useState<any[]>([]);
 
-    // Form State
     const [bio, setBio] = useState("");
 
     useEffect(() => {
@@ -50,7 +50,6 @@ export default function ArtisanProfileScreen() {
                 headers: { Authorization: `Bearer ${token}` }
             });
 
-            // Update User with latest profile data (including new picture)
             setUser(response.data);
             setPortfolioImages(response.data.portfolio_images || []);
 
@@ -61,7 +60,6 @@ export default function ArtisanProfileScreen() {
         }
     };
 
-    // --- 1. PICK PROFILE PICTURE ---
     const pickProfileImage = async () => {
         const { granted } = await ImagePicker.requestMediaLibraryPermissionsAsync();
         if (!granted) {
@@ -72,7 +70,7 @@ export default function ArtisanProfileScreen() {
         const result = await ImagePicker.launchImageLibraryAsync({
             mediaTypes: ['images'],
             allowsEditing: true,
-            aspect: [1, 1], // Square for profile pics
+            aspect: [1, 1],
             quality: 0.5,
         });
 
@@ -81,7 +79,6 @@ export default function ArtisanProfileScreen() {
         }
     };
 
-    // --- 2. UPLOAD PROFILE PICTURE ---
     const uploadProfileImage = async (asset: ImagePicker.ImagePickerAsset) => {
         setUploadingProfile(true);
         try {
@@ -103,7 +100,6 @@ export default function ArtisanProfileScreen() {
             });
 
             Alert.alert("Success", "Profile picture updated!");
-            // Update local user state with new image
             setUser((prev: any) => ({ ...prev, profile_picture: response.data.profile_picture }));
 
         } catch (error) {
@@ -114,8 +110,13 @@ export default function ArtisanProfileScreen() {
     };
 
     const handleSave = async () => {
-        setIsEditing(false);
-        Alert.alert("Success", "Profile updated successfully!");
+        try {
+            await authAPI.updateProfile({ bio });
+            setIsEditing(false);
+            Alert.alert("Success", "Profile updated successfully!");
+        } catch (error) {
+            Alert.alert("Error", "Failed to update profile.");
+        }
     };
 
     const getDisplayName = () => {
@@ -125,7 +126,6 @@ export default function ArtisanProfileScreen() {
         return 'Artisan';
     };
 
-    // Robust Image URL Resolver
     const getImageUrl = (imgData: any) => {
         if (!imgData) return null;
         let url = typeof imgData === 'string' ? imgData : imgData.url;
@@ -142,7 +142,7 @@ export default function ArtisanProfileScreen() {
 
     if (loading) return (
         <View style={styles.center}>
-            <ActivityIndicator size="large" color={colors.primary} />
+            <ActivityIndicator size="large" color={color.brand600} />
         </View>
     );
 
@@ -157,24 +157,23 @@ export default function ArtisanProfileScreen() {
                 {/* Navbar */}
                 <Animated.View entering={FadeInUp.duration(600)} style={styles.navBar}>
                     <Pressable onPress={() => router.back()} style={styles.iconBtn}>
-                        <Ionicons name="arrow-back" size={24} color="#333" />
+                        <Ionicons name="arrow-back" size={22} color={color.ink900} />
                     </Pressable>
                     <Text style={styles.navTitle}>My Profile</Text>
                     <Pressable
                         onPress={() => isEditing ? handleSave() : setIsEditing(true)}
-                        style={[styles.editBtn, { backgroundColor: isEditing ? colors.primary : '#FFF' }]}
+                        style={[styles.editBtn, { backgroundColor: isEditing ? color.brand600 : color.surface }]}
                     >
-                        {isEditing ? <Text style={styles.saveText}>Save</Text> : <Ionicons name="pencil" size={20} color="#333" />}
+                        {isEditing ? <Text style={styles.saveText}>Save</Text> : <Ionicons name="pencil" size={18} color={color.ink900} />}
                     </Pressable>
                 </Animated.View>
 
                 {/* Profile Header */}
                 <Animated.View entering={FadeInDown.delay(100)} style={styles.header}>
-                    {/* ✅ CLICKABLE AVATAR */}
                     <Pressable onPress={pickProfileImage} disabled={uploadingProfile} style={styles.avatarContainer}>
                         {uploadingProfile ? (
-                            <View style={[styles.avatarPlaceholder, { backgroundColor: '#EEE' }]}>
-                                <ActivityIndicator color={colors.primary} />
+                            <View style={[styles.avatarPlaceholder, { backgroundColor: color.surfaceChip }]}>
+                                <ActivityIndicator color={color.brand600} />
                             </View>
                         ) : profilePicUrl ? (
                             <Image source={{ uri: profilePicUrl }} style={styles.avatarImage} />
@@ -184,17 +183,16 @@ export default function ArtisanProfileScreen() {
                             </View>
                         )}
 
-                        {/* Camera Icon Overlay */}
                         <View style={styles.cameraBadge}>
                             <Ionicons name="camera" size={14} color="#FFF" />
                         </View>
                     </Pressable>
 
                     <Text style={styles.name}>{displayName}</Text>
-                    <Text style={styles.profession}>{artisan?.service_category || "Service Provider"}</Text>
+                    <Text style={styles.profession}>{i18n.language === 'ha' && artisan?.category_name_ha ? artisan.category_name_ha : (artisan?.service_category || "Service Provider")}</Text>
 
                     <View style={styles.locationRow}>
-                        <Ionicons name="location" size={14} color="#999" />
+                        <Ionicons name="location" size={14} color={color.ink300} />
                         <Text style={styles.location}>{user?.lga || "LGA"}, {user?.state || "State"}</Text>
                     </View>
                 </Animated.View>
@@ -232,13 +230,13 @@ export default function ArtisanProfileScreen() {
                     <View style={styles.sectionHeader}>
                         <Text style={styles.sectionTitle}>Portfolio</Text>
                         <Pressable onPress={() => router.push('/artisan/portfolio')}>
-                            <Text style={{ color: colors.primary, fontWeight: '600' }}>Manage Photos</Text>
+                            <Text style={styles.manageLink}>Manage Photos</Text>
                         </Pressable>
                     </View>
 
                     <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.portfolioScroll}>
                         {portfolioImages.length === 0 ? (
-                            <Text style={{ color: '#999', fontStyle: 'italic' }}>No photos added yet.</Text>
+                            <Text style={styles.emptyText}>No photos added yet.</Text>
                         ) : (
                             portfolioImages.map((item, index) => {
                                 const url = getImageUrl(item);
@@ -260,47 +258,48 @@ export default function ArtisanProfileScreen() {
 }
 
 const styles = StyleSheet.create({
-    container: { flex: 1, backgroundColor: '#F8F9FA' },
+    container: { flex: 1, backgroundColor: color.surfaceSunken },
     center: { flex: 1, justifyContent: 'center', alignItems: 'center' },
-    content: { padding: 20 },
+    content: { padding: space.xl },
 
-    navBar: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 },
-    iconBtn: { width: 40, height: 40, borderRadius: 12, backgroundColor: '#FFF', justifyContent: 'center', alignItems: 'center', ...shadows.small },
-    editBtn: { paddingHorizontal: 16, height: 40, borderRadius: 12, justifyContent: 'center', alignItems: 'center', ...shadows.small },
-    saveText: { color: 'white', fontWeight: '700' },
-    navTitle: { fontSize: 18, fontWeight: '700', color: '#333' },
+    navBar: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: space.xxl },
+    iconBtn: { width: 40, height: 40, borderRadius: radius.lg, backgroundColor: color.surface, justifyContent: 'center', alignItems: 'center', ...shadow.e1 },
+    editBtn: { paddingHorizontal: 16, height: 40, borderRadius: radius.lg, justifyContent: 'center', alignItems: 'center', ...shadow.e1 },
+    saveText: { color: '#FFF', fontFamily: font.extrabold, fontSize: 13 },
+    navTitle: { fontFamily: font.extrabold, fontSize: 18, color: color.ink900 },
 
-    header: { alignItems: 'center', marginBottom: 24 },
-    avatarContainer: { marginBottom: 16, position: 'relative' },
-    avatarPlaceholder: { width: 100, height: 100, borderRadius: 50, backgroundColor: colors.primary, justifyContent: 'center', alignItems: 'center', borderWidth: 4, borderColor: 'white', ...shadows.medium },
-    avatarImage: { width: 100, height: 100, borderRadius: 50, borderWidth: 4, borderColor: 'white' },
-    avatarInitials: { fontSize: 40, color: 'white', fontWeight: '700' },
+    header: { alignItems: 'center', marginBottom: space.xxl },
+    avatarContainer: { marginBottom: space.lg, position: 'relative' },
+    avatarPlaceholder: { width: 100, height: 100, borderRadius: 50, backgroundColor: color.brand600, justifyContent: 'center', alignItems: 'center', borderWidth: 4, borderColor: color.surface, ...shadow.e2 },
+    avatarImage: { width: 100, height: 100, borderRadius: 50, borderWidth: 4, borderColor: color.surface },
+    avatarInitials: { fontSize: 40, color: '#FFF', fontFamily: font.extrabold },
 
-    // New Camera Badge Style
     cameraBadge: {
         position: 'absolute', bottom: 0, right: 0,
-        backgroundColor: '#333', borderRadius: 15, width: 30, height: 30,
-        justifyContent: 'center', alignItems: 'center', borderWidth: 2, borderColor: '#FFF'
+        backgroundColor: color.ink900, borderRadius: 15, width: 30, height: 30,
+        justifyContent: 'center', alignItems: 'center', borderWidth: 2, borderColor: color.surface
     },
 
-    name: { fontSize: 24, fontWeight: '700', marginBottom: 4, color: '#333' },
-    profession: { fontSize: 16, color: colors.primary, fontWeight: '600', marginBottom: 8 },
+    name: { fontFamily: font.extrabold, fontSize: 24, marginBottom: 4, color: color.ink900 },
+    profession: { fontFamily: font.semibold, fontSize: 16, color: color.brand600, marginBottom: space.sm },
     locationRow: { flexDirection: 'row', alignItems: 'center', gap: 4 },
-    location: { color: '#999', fontSize: 14 },
+    location: { color: color.ink400, fontFamily: font.medium, fontSize: 14 },
 
-    statsRow: { flexDirection: 'row', justifyContent: 'space-around', alignItems: 'center', padding: 20, borderRadius: 20, marginBottom: 24, backgroundColor: '#FFF', ...shadows.small },
+    statsRow: { flexDirection: 'row', justifyContent: 'space-around', alignItems: 'center', padding: space.xl, borderRadius: radius.xxl, marginBottom: space.xxl, backgroundColor: color.surface, ...shadow.e1 },
     statItem: { alignItems: 'center' },
-    statValue: { fontSize: 20, fontWeight: '700', marginBottom: 4, color: '#333' },
-    statLabel: { fontSize: 12, color: '#999' },
-    divider: { width: 1, height: 24, backgroundColor: '#EEE' },
+    statValue: { fontFamily: font.extrabold, fontSize: 20, marginBottom: 4, color: color.ink900 },
+    statLabel: { fontFamily: font.bold, fontSize: 12, color: color.ink400 },
+    divider: { width: 1, height: 24, backgroundColor: color.surfaceChip },
 
-    section: { marginBottom: 24 },
-    sectionHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 },
-    sectionTitle: { fontSize: 18, fontWeight: '700', marginBottom: 8, color: '#333' },
-    bioText: { fontSize: 16, lineHeight: 24, color: '#666' },
-    bioInput: { borderRadius: 12, padding: 16, fontSize: 16, minHeight: 100, textAlignVertical: 'top', backgroundColor: '#FFF', color: '#333', borderWidth: 1, borderColor: '#DDD' },
+    section: { marginBottom: space.xxl },
+    sectionHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: space.md },
+    sectionTitle: { fontFamily: font.extrabold, fontSize: 18, marginBottom: space.sm, color: color.ink900 },
+    bioText: { fontFamily: font.medium, fontSize: 15, lineHeight: 23, color: color.ink600 },
+    bioInput: { borderRadius: radius.lg, padding: space.lg, fontFamily: font.semibold, fontSize: 15, minHeight: 100, textAlignVertical: 'top', backgroundColor: color.surface, color: color.ink900, borderWidth: 1.5, borderColor: color.border },
+    manageLink: { fontFamily: font.semibold, fontSize: 13.5, color: color.brand600 },
+    emptyText: { color: color.ink300, fontFamily: font.medium, fontSize: 14, fontStyle: 'italic' },
 
-    portfolioScroll: { gap: 12 },
-    portfolioItem: { width: 120, height: 120, borderRadius: 16, overflow: 'hidden', backgroundColor: '#EEE', ...shadows.small },
+    portfolioScroll: { gap: space.md },
+    portfolioItem: { width: 120, height: 120, borderRadius: radius.lg, overflow: 'hidden', backgroundColor: color.surfaceChip, ...shadow.e1 },
     portfolioImage: { width: '100%', height: '100%' },
 });

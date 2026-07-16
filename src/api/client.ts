@@ -13,7 +13,7 @@ const getData = (response: any) => {
 // --- AUTHENTICATION ---
 export const authAPI = {
   login: async (email: string, password: string) => {
-    const response = await apiClient.post('/auth/login/', { email, password });
+    const response = await apiClient.post('auth/login/', { email, password });
     if (response.data.tokens) {
       await SecureStore.setItemAsync('accessToken', response.data.tokens.access);
       await SecureStore.setItemAsync('refreshToken', response.data.tokens.refresh);
@@ -24,27 +24,42 @@ export const authAPI = {
     return response.data;
   },
 
-  register: async (data: RegisterData) => {
-    const safeName = data.name || 'User';
-    const nameParts = safeName.trim().split(' ');
-    const firstName = nameParts[0];
-    const lastName = nameParts.slice(1).join(' ') || 'User';
+  getProfile: async () => {
+    const response = await apiClient.get('auth/profile/');
+    return response.data;
+  },
+
+  updateProfile: async (data: Record<string, any>) => {
+    const response = await apiClient.patch('auth/profile/', data);
+    return response.data;
+  },
+
+  register: async (data: any) => {
+    // Collect names: either from direct fields or by splitting 'name'
+    let firstName = data.first_name;
+    let lastName = data.last_name;
+
+    if (!firstName && data.name) {
+      const nameParts = data.name.trim().split(' ');
+      firstName = nameParts[0];
+      lastName = nameParts.slice(1).join(' ') || '';
+    }
 
     const payload = {
       email: data.email,
       password: data.password,
-      password_confirm: data.password,
-      first_name: firstName,
-      last_name: lastName,
+      password_confirm: data.password_confirm || data.password,
+      first_name: firstName || '',
+      last_name: lastName || '',
       role: data.role,
       service_category: data.service_category,
-      phone_number: data.phone,
+      phone_number: data.phone_number || data.phone,
       country: data.country,
       state: data.state,
       lga: data.lga
     };
 
-    const response = await apiClient.post('/auth/register/', payload);
+    const response = await apiClient.post('auth/register/', payload);
     if (response.data.tokens) {
       await SecureStore.setItemAsync('accessToken', response.data.tokens.access);
       await SecureStore.setItemAsync('refreshToken', response.data.tokens.refresh);
@@ -53,7 +68,39 @@ export const authAPI = {
   },
 
   getServices: async () => {
-    const response = await apiClient.get('/auth/services/');
+    const cats = await categoryAPI.getCategoriesFlat();
+    return cats.map((cat: any) => ({
+      label: cat.name,
+      value: cat.id.toString()
+    }));
+  },
+
+  // --- EMAIL VERIFICATION (OTP) ---
+  // Sends (or resends) the 6-digit code. 429 = 60s resend cooldown active.
+  requestEmailVerification: async () => {
+    const response = await apiClient.post('auth/email/verify/request/');
+    return response.data;
+  },
+
+  // Confirms the code. On 200 returns { message, user } — caller must refresh the cached user.
+  confirmEmailVerification: async (code: string) => {
+    const response = await apiClient.post('auth/email/verify/confirm/', { code });
+    return response.data;
+  },
+
+  // --- PASSWORD RESET (OTP via email; user is logged OUT, so these take the email,
+  // not the JWT). Note the hyphen: 'password-reset', unlike 'email/verify'.
+  requestPasswordReset: async (email: string) => {
+    const response = await apiClient.post('auth/password-reset/request/', { email });
+    return response.data;
+  },
+
+  confirmPasswordReset: async (email: string, code: string, newPassword: string) => {
+    const response = await apiClient.post('auth/password-reset/confirm/', {
+      email,
+      code,
+      new_password: newPassword,
+    });
     return response.data;
   },
 
@@ -76,22 +123,22 @@ export const authAPI = {
 // --- LOCATIONS ---
 export const locationAPI = {
   getCountries: async () => {
-    const response = await apiClient.get('/locations/countries/');
-    return getData(response);
+    const response = await apiClient.get('locations/countries/');
+    return response.data; 
   },
 
   getStates: async (countryId: number) => {
-    const response = await apiClient.get(`/locations/states/?country_id=${countryId}`);
-    return getData(response);
+    const response = await apiClient.get(`locations/states/${countryId}/`);
+    return response.data;
   },
 
   getLGAs: async (stateId: number) => {
-    const response = await apiClient.get(`/locations/lgas/?state_id=${stateId}`);
-    return getData(response);
+    const response = await apiClient.get(`locations/lgas/${stateId}/`);
+    return response.data;
   },
 
   searchLocations: async (query: string) => {
-    const response = await apiClient.get(`/locations/search/?q=${query}`);
+    const response = await apiClient.get(`locations/search/?q=${query}`);
     return response.data;
   }
 };
@@ -99,38 +146,97 @@ export const locationAPI = {
 // --- BOOKINGS ---
 export const bookingAPI = {
   getBookings: async () => {
-    const response = await apiClient.get('/bookings/');
+    const response = await apiClient.get('bookings/');
     return getData(response);
   },
 
   createBooking: async (data: any) => {
-    const response = await apiClient.post('/bookings/', data);
+    const response = await apiClient.post('bookings/', data);
     return response.data;
   },
 
   getBookingsByArtisan: async (artisanId: number) => {
     try {
-      const response = await apiClient.get(`/bookings/`, { params: { artisan: artisanId } });
-      return response.data;
+      const response = await apiClient.get(`bookings/`, { params: { artisan: artisanId } });
+      return getData(response);
     } catch (error) {
       console.log("Error fetching bookings:", error);
       return [];
     }
   },
+
+  // Status transitions (state machine enforced by the backend):
+  // artisan: pending→confirmed→in_progress→completed, pending/confirmed→cancelled
+  // client:  pending/confirmed→cancelled
+  getBookingById: async (bookingId: string | number) => {
+    const response = await apiClient.get(`bookings/${bookingId}/`);
+    return response.data;
+  },
+
+  updateBooking: async (bookingId: number, data: { status: string; cancellation_reason?: string }) => {
+    const response = await apiClient.patch(`bookings/${bookingId}/`, data);
+    return response.data;
+  },
+};
+
+// --- CATEGORIES (Hierarchical) ---
+export const categoryAPI = {
+  getCategories: async () => {
+    try {
+      const response = await apiClient.get('categories/');
+      return response.data.results ? response.data.results : response.data;
+    } catch (error) {
+      console.error("Error fetching categories:", error);
+      throw error;
+    }
+  },
+  getCategoriesFlat: async () => {
+    try {
+      const response = await apiClient.get('categories/all/');
+      return response.data.results ? response.data.results : response.data;
+    } catch (error) {
+      console.error("Error fetching flat categories:", error);
+      throw error;
+    }
+  },
+  searchCategories: async (query: string) => {
+    try {
+      const response = await apiClient.get(`categories/?search=${encodeURIComponent(query)}`);
+      return response.data.results ? response.data.results : response.data;
+    } catch (error) {
+      console.error("Error searching categories:", error);
+      return [];
+    }
+  }
 };
 
 // --- ARTISANS ---
 export const artisanAPI = {
-  getArtisans: async (filters?: { service?: string; search?: string; lga?: string | number; state?: string | number }, page: number = 1) => {
+  getArtisans: async (filters?: { 
+    service?: string | number | null; 
+    search?: string; 
+    lga?: string | number; 
+    state?: string | number; 
+    latitude?: number; 
+    longitude?: number; 
+    max_distance?: number | null;
+    use_saved?: boolean;
+  }, page: number = 1) => {
     try {
       const params: any = { page: page };
       if (filters?.search) params.search = filters.search;
-      if (filters?.service && filters.service !== 'All') params.service_category = filters.service;
-      if (filters?.lga) params.lga = filters.lga;
-      if (filters?.state) params.state = filters.state;
+      if (filters?.service && filters.service !== 'All') params.category_id = filters.service;
+      if (filters?.lga) params.lga_id = filters.lga;
+      if (filters?.state) params.state_id = filters.state;
+      if (filters?.latitude && !filters.use_saved) params.latitude = filters.latitude;
+      if (filters?.longitude && !filters.use_saved) params.longitude = filters.longitude;
+      if (filters?.use_saved) params.use_saved = 'true';
+      if (filters?.max_distance !== undefined && filters?.max_distance !== null) {
+        params.max_distance = filters.max_distance;
+      }
 
-      // ✅ FIXED: Removed '/auth' prefix to match backend urls.py
-      const response = await apiClient.get('/artisans-list/', { params });
+      console.log("📡 FETCHING ARTISANS WITH PARAMS:", JSON.stringify(params));
+      const response = await apiClient.get('artisans/', { params });
       return response.data;
 
     } catch (error: any) {
@@ -141,15 +247,37 @@ export const artisanAPI = {
     }
   },
 
-  getArtisanById: async (id: number) => {
+  // Fetch artisan profile by user ID
+  getArtisanByUserId: async (userId: number) => {
     try {
-      // ✅ FIXED: Removed '/auth' prefix to match backend urls.py
-      const response = await apiClient.get(`/users/${id}/`);
-      return response.data;
+      // ✅ FIXED: Changed from '/artisans-list/' to '/artisans/'
+      const response = await apiClient.get(`artisans/`, { params: { user: userId } });
+      // If paginated, return the first result; otherwise return data directly
+      const data = response.data;
+      if (data.results && Array.isArray(data.results)) {
+        return data.results[0] || null;
+      }
+      return data;
     } catch (error) {
-      console.error("Error fetching artisan details", error);
+      console.error("Error fetching artisan by user ID:", error);
       throw error;
     }
+  },
+
+  getArtisanById: async (id: string | number) => {
+    try {
+      // ✅ FIXED: Using the artisans/ profile endpoint
+      const response = await apiClient.get(`artisans/${id}/`);
+      return response.data;
+    } catch (error) {
+      console.error(`Error fetching artisan ${id}:`, error);
+      throw error;
+    }
+  },
+
+  updateArtisan: async (artisanId: number, data: Record<string, any>) => {
+    const response = await apiClient.patch(`artisans/${artisanId}/`, data);
+    return response.data;
   },
 
   // Agent Verification
@@ -172,17 +300,22 @@ export const chatAPI = {
   },
 
   getMessages: async (conversationId: number) => {
-    const response = await apiClient.get(`/chat/conversations/${conversationId}/messages/`);
+    const response = await apiClient.get(`/chat/messages/`, { params: { conversation_id: conversationId } });
     return response.data;
   },
 
-  sendMessage: async (data: { recipient_id?: number; conversation_id?: number; text: string }) => {
-    const response = await apiClient.post('/chat/send/', data);
+  sendMessage: async (data: { conversation_id: number; text: string }) => {
+    const response = await apiClient.post('/chat/messages/', data);
     return response.data;
   },
 
-  findConversation: async (recipientId: number) => {
-    const response = await apiClient.get(`/chat/find/${recipientId}/`);
+  getOrCreateConversation: async (recipientId: number) => {
+    const response = await apiClient.post('/chat/conversations/get_or_create/', { recipient_id: recipientId });
+    return response.data;
+  },
+
+  markAsRead: async (conversationId: number) => {
+    const response = await apiClient.post('/chat/messages/mark_as_read/', { conversation_id: conversationId });
     return response.data;
   }
 };

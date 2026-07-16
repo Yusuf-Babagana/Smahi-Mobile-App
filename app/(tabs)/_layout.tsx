@@ -2,7 +2,7 @@ import React from 'react';
 import { Tabs } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { Platform, View, StyleSheet } from 'react-native';
-import { colors, shadows } from '@/styles/commonStyles'; // Adjusted to match standard path
+import { color } from '@/constants/theme';
 
 export default function TabLayout() {
   return (
@@ -10,8 +10,8 @@ export default function TabLayout() {
       screenOptions={{
         headerShown: false,
         tabBarHideOnKeyboard: true, // Hides bar when typing (Clean!)
-        tabBarActiveTintColor: colors.primary,
-        tabBarInactiveTintColor: '#9CA3AF', // Cool Gray
+        tabBarActiveTintColor: color.brand600,
+        tabBarInactiveTintColor: color.ink300,
         tabBarShowLabel: true, // We keep labels but make them tiny
 
         // --- 1. PREMIUM FLOATING BAR STYLE ---
@@ -50,11 +50,11 @@ export default function TabLayout() {
       <Tabs.Screen
         name="(home)"
         options={{
-          title: 'Explore',
+          title: 'Home',
           tabBarIcon: ({ color, focused }) => (
             <View style={focused ? styles.activeIconContainer : null}>
               <Ionicons
-                name={focused ? "grid" : "grid-outline"}
+                name={focused ? "home" : "home-outline"}
                 size={20}
                 color={color}
               />
@@ -63,17 +63,43 @@ export default function TabLayout() {
         }}
       />
 
-      {/* CHAT TAB (Hidden from bar, accessed via Header) */}
+      {/* BOOKINGS TAB */}
       <Tabs.Screen
-        name="chat"
+        name="bookings"
         options={{
-          href: null,
+          title: 'Bookings',
+          tabBarIcon: ({ color, focused }) => (
+            <View style={focused ? styles.activeIconContainer : null}>
+              <Ionicons
+                name={focused ? "calendar" : "calendar-outline"}
+                size={20}
+                color={color}
+              />
+            </View>
+          ),
+        }}
+      />
+
+      {/* CHAT TAB */}
+      <Tabs.Screen
+        name="chats"
+        options={{
+          title: 'Chat',
+          tabBarIcon: ({ color, focused }) => (
+            <View style={focused ? styles.activeIconContainer : null}>
+              <Ionicons
+                name={focused ? "chatbubbles" : "chatbubbles-outline"}
+                size={20}
+                color={color}
+              />
+            </View>
+          ),
         }}
       />
 
       {/* PROFILE TAB */}
       <Tabs.Screen
-        name="(profile)"
+        name="profile"
         options={{
           title: 'Profile',
           tabBarIcon: ({ color, focused }) => (

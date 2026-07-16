@@ -37,3 +37,6 @@ netlify.toml
 
 pnpm-lock.yaml
 package-lock.json
+
+# local env files (EXPO_PUBLIC_* values) — never commit
+.env

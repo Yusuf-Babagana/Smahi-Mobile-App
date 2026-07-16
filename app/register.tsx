@@ -1,28 +1,46 @@
 import React, { useState, useEffect } from 'react';
 import {
-  View, Text, StyleSheet, Alert, ScrollView, TouchableOpacity,
-  ActivityIndicator, KeyboardAvoidingView, Platform, ImageBackground, Switch, Dimensions, Image
+  Alert,
+  KeyboardAvoidingView,
+  Platform,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  View,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
-import { authAPI, locationAPI } from '@/src/api/client';
-import { UserRole } from '@/src/types';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { IconSymbol } from '@/src/components/IconSymbol';
-import Animated, { FadeInRight, FadeOutLeft, LinearTransition } from 'react-native-reanimated';
+import Animated, { FadeInUp } from 'react-native-reanimated';
+import { MaterialIcons } from '@expo/vector-icons';
+import { useTranslation } from 'react-i18next';
+
+import { authAPI, locationAPI, categoryAPI } from '@/src/api/client';
+import { UserRole } from '@/src/types';
 import CustomPicker from '@/src/components/CustomPicker';
-import { ModernInput } from '@/src/components/ModernInput';
-import { LinearGradient } from 'expo-linear-gradient';
-
-// IMPORT COMMON STYLES
-import { colors, commonStyles } from '@/styles/commonStyles';
-
-const { height } = Dimensions.get('window');
+import { color, font, radius, space, type } from '@/constants/theme';
+import { Button, Input, StepHeader } from '@/src/components/ui';
+import '@/src/i18n'; // Ensure i18n is initialized
 
 // Define expanded roles locally for this screen
 type ExpandedRole = UserRole | 'lga_admin' | 'state_coordinator';
 
+const STEP_META = [
+  { title: 'Before we start', subtitle: 'A quick look at how S-MAHII works.' },
+  { title: 'Tell us about you', subtitle: "Let's get to know you." },
+  { title: 'How will you use S-MAHII?', subtitle: 'Pick the role that fits you.' },
+  { title: 'Where are you based?', subtitle: 'We use this to match you locally.' },
+];
+
+const TERMS_POINTS: { icon: keyof typeof MaterialIcons.glyphMap; text: string }[] = [
+  { icon: 'verified-user', text: 'Artisans are identity-verified; bookings and payments follow S. MAHI Global Service Ltd policy.' },
+  { icon: 'lock-outline', text: 'Your personal data is used only to run the marketplace and is never sold.' },
+  { icon: 'gavel', text: 'Misuse, fraud or abusive behaviour can lead to suspension of your account.' },
+];
+
 export default function RegisterScreen() {
+  const { t } = useTranslation();
   const router = useRouter();
 
   // --- STEPS STATE ---
@@ -31,9 +49,11 @@ export default function RegisterScreen() {
 
   // --- FORM STATE ---
   const [acceptedTerms, setAcceptedTerms] = useState(false);
+  const [showFullTerms, setShowFullTerms] = useState(false);
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
   const [phone, setPhone] = useState('');
   const [role, setRole] = useState<ExpandedRole>('client');
   const [loading, setLoading] = useState(false);
@@ -52,8 +72,18 @@ export default function RegisterScreen() {
 
   // --- DATA LOADING ---
   useEffect(() => {
-    locationAPI.getCountries().then(setCountries).catch(console.error);
-    authAPI.getServices().then(setServices).catch(console.error);
+    locationAPI.getCountries().then(data => {
+      setCountries(data);
+    }).catch(err => console.error("❌ COUNTRIES ERROR:", err));
+
+    // Fetch flat category list for the registration picker
+    categoryAPI.getCategoriesFlat().then(data => {
+      const mapped = data.map((cat: any) => ({
+        label: cat.name,
+        value: cat.id.toString()
+      }));
+      setServices(mapped);
+    }).catch(err => console.error("❌ CATEGORIES ERROR:", err));
   }, []);
 
   useEffect(() => {
@@ -61,7 +91,7 @@ export default function RegisterScreen() {
     locationAPI.getStates(Number(selectedCountry)).then(data => {
       setStates(data || []);
       setSelectedState(''); setLgas([]); setSelectedLga('');
-    }).catch(console.error);
+    }).catch(err => console.error("❌ STATES ERROR:", err));
   }, [selectedCountry]);
 
   useEffect(() => {
@@ -69,7 +99,7 @@ export default function RegisterScreen() {
     locationAPI.getLGAs(Number(selectedState)).then(data => {
       setLgas(data || []);
       setSelectedLga('');
-    }).catch(console.error);
+    }).catch(err => console.error("❌ LGAs ERROR:", err));
   }, [selectedState]);
 
   // --- VALIDATION ---
@@ -102,6 +132,14 @@ export default function RegisterScreen() {
 
   const nextStep = () => { if (validateStep(currentStep)) setCurrentStep(c => c + 1); };
   const prevStep = () => setCurrentStep(c => c - 1);
+  const handleBack = () => {
+    if (currentStep === 1) {
+      if (router.canGoBack()) router.back();
+      else router.replace('/welcome');
+    } else {
+      prevStep();
+    }
+  };
 
   const handleRegister = async () => {
     if (!validateStep(4)) return;
@@ -110,7 +148,7 @@ export default function RegisterScreen() {
       // Split name for backend compatibility
       const nameParts = name.trim().split(' ');
       const firstName = nameParts[0];
-      const lastName = nameParts.slice(1).join(' ') || '.';
+      const lastName = nameParts.slice(1).join(' ') || firstName; // Fallback to firstName if single name entered
 
       await authAPI.register({
         first_name: firstName,
@@ -118,7 +156,7 @@ export default function RegisterScreen() {
         email,
         password,
         role,
-        phone_number: phone, // Mapped to backend expectation
+        phone_number: phone,
         service_category: role === 'artisan' ? selectedService : undefined,
         country: selectedCountry,
         state: selectedState,
@@ -148,392 +186,421 @@ export default function RegisterScreen() {
     }
   };
 
-  const renderProgressBar = () => (
-    <View style={styles.progressContainer}>
-      <View style={styles.track}>
-        <Animated.View
-          style={[
-            styles.indicator,
-            { width: `${(currentStep / totalSteps) * 100}%` }
-          ]}
-          layout={LinearTransition.springify()}
-        />
-      </View>
-      <Text style={styles.stepText}>Step {currentStep} of {totalSteps}</Text>
-    </View>
-  );
+  const meta = STEP_META[currentStep - 1];
+  const continueDisabled = loading || (currentStep === 1 && !acceptedTerms);
 
   return (
-    <ImageBackground
-      source={{ uri: 'https://images.unsplash.com/photo-1557804506-669a67965ba0?q=80&w=2574&auto=format&fit=crop' }}
-      style={{ flex: 1 }}
-      resizeMode="cover"
-    >
-      <LinearGradient
-        colors={['rgba(255,255,255,0.7)', 'rgba(255,255,255,0.95)', '#FFFFFF']}
-        locations={[0, 0.6, 1]}
-        style={{ flex: 1 }}
-      >
-        <StatusBar style="dark" translucent={true} />
+    <SafeAreaView style={styles.container}>
+      <StatusBar style="dark" />
+      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={{ flex: 1 }}>
 
-        <SafeAreaView style={{ flex: 1 }}>
-          <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={{ flex: 1 }}>
+        <StepHeader
+          step={currentStep}
+          totalSteps={totalSteps}
+          onBack={handleBack}
+          stepLabel={t('Step {{n}} of {{m}}', { n: currentStep, m: totalSteps, defaultValue: `Step ${currentStep} of ${totalSteps}` })}
+          style={styles.stepHeader}
+        />
 
-            {/* Header */}
-            <View style={styles.header}>
-              <TouchableOpacity onPress={() => currentStep === 1 ? router.back() : prevStep()} style={styles.backBtn}>
-                <View style={styles.backBtnCircle}>
-                  <IconSymbol name="chevron.left" size={24} color={colors.text} />
-                </View>
-              </TouchableOpacity>
+        <ScrollView
+          contentContainerStyle={styles.scrollContent}
+          showsVerticalScrollIndicator={false}
+          keyboardShouldPersistTaps="handled"
+        >
+          <Animated.View key={currentStep} entering={FadeInUp.duration(300)}>
+            <Text style={styles.stepTitle}>{t(meta.title)}</Text>
+            <Text style={styles.stepSubtitle}>{t(meta.subtitle)}</Text>
 
+            {/* STEP 1: TERMS AND CONDITIONS */}
+            {currentStep === 1 && (
               <View>
-                <Text style={styles.headerTitle}>
-                  {currentStep === 1 ? "Terms & Conditions" : currentStep === 2 ? "Create Account" : currentStep === 3 ? "Select Role" : "Finalize Profile"}
-                </Text>
-                <Text style={styles.headerSubtitle}>
-                  {currentStep === 1 ? "Review corporate policy" : currentStep === 2 ? "Let's get to know you" : currentStep === 3 ? "How will you use the app?" : "Where are you based?"}
-                </Text>
-              </View>
-            </View>
-
-            {renderProgressBar()}
-
-            <ScrollView
-              contentContainerStyle={styles.scrollContent}
-              showsVerticalScrollIndicator={false}
-              keyboardShouldPersistTaps="handled"
-            >
-              <Animated.View
-                key={currentStep}
-                entering={FadeInRight.duration(400).springify()}
-                exiting={FadeOutLeft.duration(400)}
-                layout={LinearTransition}
-              >
-
-                {/* STEP 1: TERMS AND CONDITIONS */}
-                {currentStep === 1 && (
-                  <View style={styles.termsContainer}>
-                    <View style={styles.glassCard}>
-
-                      {/* LOGO */}
-                      <View style={{ alignItems: 'center', marginBottom: 16 }}>
-                        <Image
-                          source={require('@/assets/images/smahi.png')} // Fixed path alias
-                          style={styles.logoImage}
-                          resizeMode="contain"
-                        />
+                <View style={styles.pointsCard}>
+                  {TERMS_POINTS.map((point, i) => (
+                    <View key={point.icon} style={[styles.pointRow, i > 0 && styles.pointRowDivider]}>
+                      <View style={styles.pointIcon}>
+                        <MaterialIcons name={point.icon} size={18} color={color.accent600} />
                       </View>
-
-                      <Text style={styles.corporateTitle}>S. MAHI GLOBAL SERVICE LTD</Text>
-                      <Text style={styles.corporateSubtitle}>TERMS, CONDITIONS & CORPORATE OVERVIEW</Text>
-
-                      <ScrollView style={styles.termsScroll} nestedScrollEnabled>
-                        <Text style={styles.termsText}>
-                          <Text style={styles.bold}>1. Mission and Vision</Text>{'\n'}
-                          S MAHI Global Services specializes in bridging the gap between skilled professionals and global opportunities...{'\n\n'}
-                          {/* Truncated for brevity, rest of your text remains here */}
-                          <Text style={styles.bold}>11. Contact & Support</Text>{'\n'}
-                          Hotline: +2349066062541 / +2349052373245
-                        </Text>
-                      </ScrollView>
+                      <Text style={styles.pointText}>{t(point.text)}</Text>
                     </View>
+                  ))}
+                </View>
 
-                    <TouchableOpacity
-                      activeOpacity={0.8}
-                      onPress={() => setAcceptedTerms(!acceptedTerms)}
-                      style={styles.switchRow}
-                    >
-                      <Switch
-                        value={acceptedTerms}
-                        onValueChange={setAcceptedTerms}
-                        trackColor={{ false: "#767577", true: colors.primary }}
-                        thumbColor={acceptedTerms ? "#f4f3f4" : "#f4f3f4"}
-                      />
-                      <Text style={styles.switchText}>I have read and agree to the Terms</Text>
-                    </TouchableOpacity>
-                  </View>
-                )}
-
-                {/* STEP 2: ACCOUNT INFO */}
-                {currentStep === 2 && (
-                  <View style={styles.formSection}>
-                    <View style={styles.inputContainer}>
-                      <ModernInput
-                        label="Full Name"
-                        placeholder="John Doe"
-                        value={name}
-                        onChangeText={setName}
-                        error={errors.name}
-                        icon="person.fill"
-                        style={{ backgroundColor: '#FFF' }}
-                      />
-                    </View>
-
-                    <View style={styles.inputContainer}>
-                      <ModernInput
-                        label="Email Address"
-                        placeholder="yusuf@example.com"
-                        value={email}
-                        onChangeText={setEmail}
-                        keyboardType="email-address"
-                        autoCapitalize="none"
-                        error={errors.email}
-                        icon="envelope.fill"
-                        style={{ backgroundColor: '#FFF' }}
-                      />
-                    </View>
-
-                    <View style={styles.inputContainer}>
-                      <ModernInput
-                        label="Phone Number"
-                        placeholder="+234 800 000 0000"
-                        value={phone}
-                        onChangeText={setPhone}
-                        keyboardType="phone-pad"
-                        error={errors.phone}
-                        icon="phone.fill"
-                        style={{ backgroundColor: '#FFF' }}
-                      />
-                    </View>
-
-                    <View style={styles.inputContainer}>
-                      <ModernInput
-                        label="Password"
-                        placeholder="••••••••"
-                        value={password}
-                        onChangeText={setPassword}
-                        isPassword
-                        error={errors.password}
-                        icon="lock.fill"
-                        style={{ backgroundColor: '#FFF' }}
-                      />
-                    </View>
-                  </View>
-                )}
-
-                {/* STEP 3: ROLE SELECTION (UPDATED) */}
-                {currentStep === 3 && (
-                  <View style={styles.formSection}>
-                    <RoleCard title="Hire Artisans" subtitle="Find verified professionals" icon="person.2" selected={role === 'client'} onPress={() => setRole('client')} />
-                    <RoleCard title="Work as an Artisan" subtitle="Offer services & earn tokens" icon="hammer" selected={role === 'artisan'} onPress={() => setRole('artisan')} />
-
-                    {/* NEW ROLES */}
-                    <RoleCard title="Field Agent" subtitle="Register artisans (Approval Required)" icon="briefcase" selected={role === 'agent'} onPress={() => setRole('agent')} />
-                    <RoleCard title="LGA Admin" subtitle="Manage Local Govt Area (Approval Required)" icon="building.columns" selected={role === 'lga_admin'} onPress={() => setRole('lga_admin')} />
-                    <RoleCard title="State Coordinator" subtitle="Manage State Operations (Approval Required)" icon="map" selected={role === 'state_coordinator'} onPress={() => setRole('state_coordinator')} />
-                  </View>
-                )}
-
-                {/* STEP 4: LOCATION & SERVICE */}
-                {currentStep === 4 && (
-                  <View style={styles.formSection}>
-                    {role === 'artisan' && (
-                      <View style={styles.glassCardSimple}>
-                        <Text style={styles.cardTitle}>🛠️ Your Expertise</Text>
-                        <CustomPicker label="Service Provided" placeholder="Select Service" value={selectedService} onValueChange={setSelectedService} items={services} />
-                        {errors.service && <Text style={commonStyles.errorText}>{errors.service}</Text>}
-                      </View>
-                    )}
-
-                    <View style={styles.glassCardSimple}>
-                      <Text style={styles.cardTitle}>📍 Location Details</Text>
-                      <CustomPicker label="Country" placeholder="Select Country" value={selectedCountry} onValueChange={setSelectedCountry} items={countries.map(c => ({ label: c.name, value: c.id.toString() }))} />
-
-                      <View style={styles.row}>
-                        <View style={{ flex: 1, marginRight: 8 }}>
-                          <CustomPicker label="State" placeholder="State" value={selectedState} onValueChange={setSelectedState} items={states.map(s => ({ label: s.name, value: s.id.toString() }))} />
-                        </View>
-                        <View style={{ flex: 1, marginLeft: 8 }}>
-                          <CustomPicker label="LGA" placeholder="City / LGA" value={selectedLga} onValueChange={setSelectedLga} items={lgas.map(l => ({ label: l.name, value: l.id.toString() }))} />
-                        </View>
-                      </View>
-                      {(errors.country || errors.state || errors.lga) && <Text style={commonStyles.errorText}>Please complete all location fields</Text>}
-                    </View>
-                  </View>
-                )}
-
-              </Animated.View>
-            </ScrollView>
-
-            {/* FLOATING ACTION BUTTON */}
-            <View style={styles.footer}>
-              <TouchableOpacity
-                activeOpacity={0.9}
-                style={[styles.btn, { backgroundColor: currentStep === 1 && !acceptedTerms ? '#ccc' : colors.primary }]}
-                onPress={currentStep === totalSteps ? handleRegister : nextStep}
-                disabled={loading || (currentStep === 1 && !acceptedTerms)}
-              >
-                <LinearGradient
-                  colors={currentStep === 1 && !acceptedTerms ? ['#ccc', '#bbb'] : [colors.primary, '#0056b3']}
-                  style={styles.btnGradient}
-                  start={{ x: 0, y: 0 }}
-                  end={{ x: 1, y: 0 }}
+                <Pressable
+                  onPress={() => setShowFullTerms(s => !s)}
+                  accessibilityRole="button"
+                  style={styles.fullTermsToggle}
                 >
-                  {loading ? <ActivityIndicator color="#fff" /> : (
-                    <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                      <Text style={styles.btnText}>
-                        {currentStep === 1 ? "I Agree & Continue" : currentStep === totalSteps ? "Create Account" : "Continue"}
-                      </Text>
-                      <IconSymbol name="chevron.right" size={20} color="white" style={{ marginLeft: 8 }} />
-                    </View>
-                  )}
-                </LinearGradient>
-              </TouchableOpacity>
-            </View>
+                  <Text style={styles.fullTermsToggleText}>
+                    {showFullTerms ? t('Hide full terms') : t('Read the full terms')}
+                  </Text>
+                  <MaterialIcons
+                    name={showFullTerms ? 'expand-less' : 'expand-more'}
+                    size={18}
+                    color={color.brand600}
+                  />
+                </Pressable>
 
-          </KeyboardAvoidingView>
-        </SafeAreaView>
-      </LinearGradient>
-    </ImageBackground>
+                {showFullTerms && (
+                  <View style={styles.termsCard}>
+                    <Text style={styles.corporateTitle}>S. MAHI GLOBAL SERVICE LTD</Text>
+                    <Text style={styles.corporateSubtitle}>{t('registration.termsSubtitle')}</Text>
+                    <ScrollView style={styles.termsScroll} nestedScrollEnabled>
+                    <Text style={styles.termsText}>
+                      {t('registration.intro')}{'\n\n'}
+                      {[1, 2, 3, 4, 5, 6, 7, 8].map(num => (
+                        <React.Fragment key={num}>
+                          <Text style={styles.bold}>{t(`registration.p${num}_title`)}</Text>{'\n'}
+                          {t(`registration.p${num}_text`)}{'\n\n'}
+                        </React.Fragment>
+                      ))}
+                      <Text style={styles.bold}>{t('registration.supportTitle')}</Text>{'\n'}
+                      {t('registration.supportText')}
+                    </Text>
+                    </ScrollView>
+                  </View>
+                )}
+
+                <Pressable
+                  onPress={() => setAcceptedTerms(a => !a)}
+                  accessibilityRole="checkbox"
+                  accessibilityState={{ checked: acceptedTerms }}
+                  style={[styles.acceptRow, acceptedTerms && styles.acceptRowSelected]}
+                >
+                  <View style={[styles.checkbox, acceptedTerms && styles.checkboxChecked]}>
+                    {acceptedTerms && <MaterialIcons name="check" size={16} color="#FFF" />}
+                  </View>
+                  <Text style={styles.acceptText}>{t('registration.agree')}</Text>
+                </Pressable>
+              </View>
+            )}
+
+            {/* STEP 2: ACCOUNT INFO */}
+            {currentStep === 2 && (
+              <View style={styles.formSection}>
+                <Input
+                  label={t('Full name')}
+                  placeholder="Saidu Abdulmalik"
+                  value={name}
+                  onChangeText={setName}
+                  error={errors.name}
+                  icon="person-outline"
+                />
+                <Input
+                  label={t('Email address')}
+                  placeholder="yusuf@example.com"
+                  value={email}
+                  onChangeText={setEmail}
+                  keyboardType="email-address"
+                  autoCapitalize="none"
+                  error={errors.email}
+                  icon="mail-outline"
+                />
+                <Input
+                  label={t('Phone number')}
+                  placeholder="+234 800 000 0000"
+                  value={phone}
+                  onChangeText={setPhone}
+                  keyboardType="phone-pad"
+                  error={errors.phone}
+                  icon="phone-iphone"
+                />
+                <Input
+                  label={t('Password')}
+                  placeholder="••••••••"
+                  value={password}
+                  onChangeText={setPassword}
+                  secureTextEntry={!showPassword}
+                  error={errors.password}
+                  icon="lock-outline"
+                  trailingIcon={showPassword ? 'visibility-off' : 'visibility'}
+                  onTrailingIconPress={() => setShowPassword(s => !s)}
+                />
+              </View>
+            )}
+
+            {/* STEP 3: ROLE SELECTION */}
+            {currentStep === 3 && (
+              <View style={styles.formSection}>
+                <RoleCard title={t('Hire artisans')} subtitle={t('Find verified professionals near you')} icon="search" selected={role === 'client'} onPress={() => setRole('client')} />
+                <RoleCard title={t('Work as an artisan')} subtitle={t('Offer services & earn')} icon="handyman" selected={role === 'artisan'} onPress={() => setRole('artisan')} />
+                <RoleCard title={t('Field agent')} subtitle={t('Register artisans (approval required)')} icon="badge" selected={role === 'agent'} onPress={() => setRole('agent')} />
+                <RoleCard title={t('LGA admin')} subtitle={t('Manage a Local Govt Area (approval required)')} icon="account-balance" selected={role === 'lga_admin'} onPress={() => setRole('lga_admin')} />
+                <RoleCard title={t('State coordinator')} subtitle={t('Manage state operations (approval required)')} icon="map" selected={role === 'state_coordinator'} onPress={() => setRole('state_coordinator')} />
+
+                {['agent', 'lga_admin', 'state_coordinator'].includes(role) && (
+                  <View style={styles.activationNote}>
+                    <MaterialIcons name="info-outline" size={16} color={color.warn600} />
+                    <Text style={styles.activationNoteText}>
+                      {t('This role needs a serial number to activate. You can log in after registering to enter it.')}
+                    </Text>
+                  </View>
+                )}
+              </View>
+            )}
+
+            {/* STEP 4: LOCATION & SERVICE */}
+            {currentStep === 4 && (
+              <View style={styles.formSection}>
+                {role === 'artisan' && (
+                  <View style={styles.sectionCard}>
+                    <Text style={styles.cardTitle}>{t('Your expertise')}</Text>
+                    <CustomPicker label={t('Service provided')} placeholder={t('Select Service')} value={selectedService} onValueChange={setSelectedService} items={services} />
+                    {errors.service && <Text style={styles.errorText}>{errors.service}</Text>}
+                  </View>
+                )}
+
+                <View style={styles.sectionCard}>
+                  <Text style={styles.cardTitle}>{t('Location details')}</Text>
+                  <CustomPicker label={t('Country')} placeholder={t('Select Country')} value={selectedCountry} onValueChange={setSelectedCountry} items={countries.map(c => ({ label: c.name, value: c.id.toString() }))} />
+                  <View style={styles.row}>
+                    <View style={{ flex: 1, marginRight: 8 }}>
+                      <CustomPicker label={t('State')} placeholder={t('State')} value={selectedState} onValueChange={setSelectedState} items={states.map(s => ({ label: s.name, value: s.id.toString() }))} />
+                    </View>
+                    <View style={{ flex: 1, marginLeft: 8 }}>
+                      <CustomPicker label={t('LGA')} placeholder={t('City / LGA')} value={selectedLga} onValueChange={setSelectedLga} items={lgas.map(l => ({ label: l.name, value: l.id.toString() }))} />
+                    </View>
+                  </View>
+                  {(errors.country || errors.state || errors.lga) && (
+                    <Text style={styles.errorText}>{t('Please complete all location fields')}</Text>
+                  )}
+                </View>
+              </View>
+            )}
+          </Animated.View>
+        </ScrollView>
+
+        {/* FOOTER ACTION */}
+        <View style={styles.footer}>
+          <Button
+            title={
+              currentStep === 1
+                ? t('I agree & continue')
+                : currentStep === totalSteps
+                  ? t('Create account')
+                  : t('Continue')
+            }
+            onPress={currentStep === totalSteps ? handleRegister : nextStep}
+            disabled={continueDisabled}
+            loading={loading}
+          />
+        </View>
+
+      </KeyboardAvoidingView>
+    </SafeAreaView>
   );
 }
 
 // --- SUB COMPONENTS ---
 
-const RoleCard = ({ title, subtitle, icon, selected, onPress }: any) => (
-  <TouchableOpacity
+const RoleCard = ({ title, subtitle, icon, selected, onPress }: {
+  title: string;
+  subtitle: string;
+  icon: keyof typeof MaterialIcons.glyphMap;
+  selected: boolean;
+  onPress: () => void;
+}) => (
+  <Pressable
     onPress={onPress}
-    activeOpacity={0.9}
-    style={[
-      styles.roleCard,
-      {
-        borderColor: selected ? colors.primary : '#E5E7EB',
-        borderWidth: selected ? 2 : 1,
-        backgroundColor: selected ? '#F0F9FF' : 'rgba(255,255,255,0.9)',
-      }
-    ]}
+    accessibilityRole="radio"
+    accessibilityState={{ selected }}
+    style={[styles.roleCard, selected && styles.roleCardSelected]}
   >
-    <View style={[styles.iconCircle, { backgroundColor: selected ? colors.primary : '#F3F4F6' }]}>
-      <IconSymbol name={icon} size={24} color={selected ? '#FFF' : '#6B7280'} />
+    <View style={[styles.roleIcon, selected && styles.roleIconSelected]}>
+      <MaterialIcons name={icon} size={22} color={selected ? '#FFF' : color.ink400} />
     </View>
     <View style={{ flex: 1 }}>
-      <Text style={[styles.roleTitle, { color: selected ? colors.primary : colors.text }]}>{title}</Text>
+      <Text style={[styles.roleTitle, selected && { color: color.brand600 }]}>{title}</Text>
       <Text style={styles.roleSubtitle}>{subtitle}</Text>
     </View>
-    {selected && (
-      <View style={styles.checkIcon}>
-        <IconSymbol name="checkmark.circle.fill" size={24} color={colors.primary} />
-      </View>
-    )}
-  </TouchableOpacity>
+    <View style={[styles.radio, selected && styles.radioSelected]}>
+      {selected && <View style={styles.radioDot} />}
+    </View>
+  </Pressable>
 );
 
 const styles = StyleSheet.create({
-  // HEADER STYLES
-  header: { paddingHorizontal: 24, paddingTop: 10, paddingBottom: 10 },
-  backBtn: { marginBottom: 16, alignSelf: 'flex-start' },
-  backBtnCircle: {
-    width: 44, height: 44, borderRadius: 14,
-    backgroundColor: 'rgba(255,255,255,0.8)',
-    justifyContent: 'center', alignItems: 'center',
-    borderWidth: 1, borderColor: '#FFF',
-    shadowColor: "#000", shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.1, shadowRadius: 8, elevation: 4
-  },
-  headerTitle: {
-    fontSize: 28, fontWeight: '800',
-    color: '#111827', marginBottom: 6,
-    letterSpacing: -0.5
-  },
-  headerSubtitle: {
-    fontSize: 16, color: '#6B7280',
-    fontWeight: '500', lineHeight: 22
+  container: { flex: 1, backgroundColor: color.canvas },
+  stepHeader: { paddingHorizontal: space.xxl, paddingTop: space.md },
+  scrollContent: { paddingHorizontal: space.xxl, paddingTop: space.xl, paddingBottom: 40 },
+
+  stepTitle: { ...type.titleLg, marginBottom: 6 },
+  stepSubtitle: {
+    fontFamily: font.medium,
+    fontSize: 14,
+    lineHeight: 21,
+    color: color.ink400,
+    marginBottom: space.xxl,
   },
 
-  // PROGRESS BAR
-  progressContainer: {
-    paddingHorizontal: 24, marginBottom: 28,
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between'
-  },
-  track: {
-    flex: 1, height: 8,
-    backgroundColor: 'rgba(0,0,0,0.05)',
-    borderRadius: 4, marginRight: 16,
-    overflow: 'hidden'
-  },
-  indicator: { height: '100%', backgroundColor: colors.primary, borderRadius: 4 },
-  stepText: { fontSize: 13, fontWeight: '700', color: colors.primary },
-
-  // FORM CONTENT
-  scrollContent: { paddingHorizontal: 24, paddingBottom: 140 },
-  formSection: { gap: 12 },
-
-  // INPUT CONTAINER (New)
-  inputContainer: {
-    backgroundColor: '#FFF',
-    borderRadius: 16,
-    marginBottom: 4,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.03,
-    shadowRadius: 4,
-    elevation: 1,
+  // STEP 1
+  pointsCard: {
+    backgroundColor: color.surface,
+    borderRadius: radius.lg,
     borderWidth: 1,
-    borderColor: 'rgba(0,0,0,0.02)',
-    overflow: 'hidden'
+    borderColor: '#EEF2F8',
+    paddingHorizontal: space.lg,
+  },
+  pointRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: space.lg,
+  },
+  pointRowDivider: { borderTopWidth: 1, borderTopColor: '#F1F5F9' },
+  pointIcon: {
+    width: 36,
+    height: 36,
+    borderRadius: radius.md,
+    backgroundColor: color.accent100,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: space.md,
+  },
+  pointText: {
+    flex: 1,
+    fontFamily: font.medium,
+    fontSize: 13.5,
+    lineHeight: 20,
+    color: color.ink600,
+  },
+  fullTermsToggle: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    alignSelf: 'flex-start',
+    gap: 4,
+    marginTop: space.lg,
+  },
+  fullTermsToggleText: { fontFamily: font.extrabold, fontSize: 13, color: color.brand600 },
+  termsCard: {
+    backgroundColor: color.surface,
+    borderRadius: radius.lg,
+    borderWidth: 1,
+    borderColor: '#EEF2F8',
+    padding: space.lg,
+    marginTop: space.md,
+  },
+  termsScroll: { maxHeight: 300 },
+  corporateTitle: {
+    fontFamily: font.extrabold,
+    fontSize: 15,
+    color: color.brand600,
+    textAlign: 'center',
+    marginBottom: 2,
+  },
+  corporateSubtitle: {
+    fontFamily: font.bold,
+    fontSize: 11,
+    letterSpacing: 0.8,
+    color: color.ink400,
+    textAlign: 'center',
+    marginBottom: space.lg,
+    textTransform: 'uppercase',
+  },
+  termsText: { fontFamily: font.medium, fontSize: 13, lineHeight: 21, color: color.ink600 },
+  bold: { fontFamily: font.extrabold, color: color.ink900 },
+  acceptRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: space.xl,
+    padding: space.lg,
+    backgroundColor: color.surface,
+    borderRadius: radius.lg,
+    borderWidth: 1.5,
+    borderColor: color.border,
+  },
+  acceptRowSelected: { borderColor: color.brand600, backgroundColor: color.brand100 },
+  checkbox: {
+    width: 24,
+    height: 24,
+    borderRadius: 8,
+    borderWidth: 2,
+    borderColor: color.ink300,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: space.md,
+    backgroundColor: color.surface,
+  },
+  checkboxChecked: { backgroundColor: color.brand600, borderColor: color.brand600 },
+  acceptText: {
+    flex: 1,
+    fontFamily: font.bold,
+    fontSize: 13.5,
+    lineHeight: 20,
+    color: color.ink900,
   },
 
-  // TERMS STYLES
-  termsContainer: { marginTop: 10 },
-  logoImage: { width: 80, height: 80, marginBottom: 12 },
-  corporateTitle: { fontSize: 18, fontWeight: '900', color: colors.primary, textAlign: 'center', marginBottom: 4 },
-  corporateSubtitle: { fontSize: 12, fontWeight: '700', color: '#6B7280', textAlign: 'center', marginBottom: 20, letterSpacing: 1 },
-  termsScroll: { height: height * 0.45, paddingRight: 8 },
-  termsText: { fontSize: 14, lineHeight: 24, color: '#4B5563', textAlign: 'justify' },
-  bold: { fontWeight: '800', color: '#111827' },
+  // FORM
+  formSection: { gap: space.lg },
+  errorText: { fontFamily: font.bold, fontSize: 12, color: color.danger600, marginTop: 6 },
 
-  switchRow: {
-    flexDirection: 'row', alignItems: 'center', marginTop: 20,
-    padding: 20,
-    backgroundColor: 'rgba(255,255,255,0.85)',
-    borderRadius: 20,
-    borderWidth: 1, borderColor: '#FFF',
-    shadowColor: "#000", shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.05, shadowRadius: 10, elevation: 2
+  // STEP 3 — role cards
+  roleCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: space.lg,
+    borderRadius: radius.lg,
+    backgroundColor: color.surface,
+    borderWidth: 1.5,
+    borderColor: color.border,
   },
-  switchText: { marginLeft: 16, fontSize: 15, fontWeight: '600', color: '#374151' },
+  roleCardSelected: { borderColor: color.brand600, backgroundColor: color.brand100 },
+  roleIcon: {
+    width: 48,
+    height: 48,
+    borderRadius: radius.md,
+    backgroundColor: color.surfaceChip,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: space.md,
+  },
+  roleIconSelected: { backgroundColor: color.brand600 },
+  roleTitle: { fontFamily: font.extrabold, fontSize: 14.5, color: color.ink900 },
+  roleSubtitle: { fontFamily: font.medium, fontSize: 12.5, color: color.ink400, marginTop: 2 },
+  radio: {
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    borderWidth: 2,
+    borderColor: color.ink300,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginLeft: space.md,
+  },
+  radioSelected: { borderColor: color.brand600 },
+  radioDot: { width: 10, height: 10, borderRadius: 5, backgroundColor: color.brand600 },
+  activationNote: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 8,
+    backgroundColor: color.warn100,
+    borderRadius: radius.md,
+    padding: space.md,
+  },
+  activationNoteText: {
+    flex: 1,
+    fontFamily: font.bold,
+    fontSize: 12.5,
+    lineHeight: 18,
+    color: color.warn600,
+  },
+
+  // STEP 4
+  sectionCard: {
+    backgroundColor: color.surface,
+    borderRadius: radius.lg,
+    borderWidth: 1,
+    borderColor: '#EEF2F8',
+    padding: space.lg,
+  },
+  cardTitle: { fontFamily: font.extrabold, fontSize: 15, color: color.ink900, marginBottom: space.md },
+  row: { flexDirection: 'row' },
 
   // FOOTER
   footer: {
-    position: 'absolute', bottom: 0, left: 0, right: 0,
-    padding: 24, paddingBottom: 34,
-    backgroundColor: 'rgba(255,255,255,0.9)',
-    borderTopWidth: 1, borderTopColor: 'rgba(0,0,0,0.05)',
-    paddingTop: 20
+    paddingHorizontal: space.xxl,
+    paddingTop: space.md,
+    paddingBottom: space.lg,
+    backgroundColor: color.canvas,
+    borderTopWidth: 1,
+    borderTopColor: '#F1F5F9',
   },
-  btn: {
-    height: 60, borderRadius: 20, overflow: 'hidden',
-    shadowColor: colors.primary, shadowOffset: { width: 0, height: 10 },
-    shadowOpacity: 0.3, shadowRadius: 16, elevation: 8
-  },
-  btnGradient: { flex: 1, justifyContent: 'center', alignItems: 'center', flexDirection: 'row' },
-  btnText: { color: 'white', fontWeight: '800', fontSize: 18, letterSpacing: 0.5 },
-
-  // CARDS
-  roleCard: {
-    flexDirection: 'row', alignItems: 'center', padding: 20,
-    borderRadius: 24, marginBottom: 16,
-    shadowColor: "#000", shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.05, shadowRadius: 8, elevation: 2
-  },
-  glassCard: {
-    backgroundColor: 'rgba(255, 255, 255, 0.75)',
-    borderWidth: 1, borderColor: 'rgba(255,255,255,0.6)',
-    padding: 24, borderRadius: 32,
-    shadowColor: "#000", shadowOffset: { width: 0, height: 12 }, shadowOpacity: 0.08, shadowRadius: 30, elevation: 8
-  },
-  glassCardSimple: {
-    backgroundColor: 'rgba(255, 255, 255, 0.75)',
-    borderWidth: 1, borderColor: 'rgba(255,255,255,0.6)',
-    padding: 24, borderRadius: 24, marginBottom: 24,
-    shadowColor: "#000", shadowOffset: { width: 0, height: 8 }, shadowOpacity: 0.06, shadowRadius: 20, elevation: 4
-  },
-  iconCircle: {
-    width: 56, height: 56, borderRadius: 20,
-    justifyContent: 'center', alignItems: 'center', marginRight: 16
-  },
-  roleTitle: { fontSize: 18, fontWeight: '700', marginBottom: 4 },
-  roleSubtitle: { fontSize: 13, color: '#6B7280', fontWeight: '500' },
-  checkIcon: { marginLeft: 10 },
-  cardTitle: { fontWeight: '700', marginBottom: 16, fontSize: 16, color: '#374151' },
-
-  row: { flexDirection: 'row' },
 });

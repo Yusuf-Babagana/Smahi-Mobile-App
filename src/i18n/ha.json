@@ -7,6 +7,7 @@
     "profile": "Tarihi",
     "loadMore": "Karin Masu Aiki",
     "noResults": "Ba a sami kwararru ba.",
+    "noMatchingServices": "Ba a sami sabis da ya dace ba",
     "categories": {
         "All": "Duka",
         "Plumbing": "Aikin Ruwa",
@@ -18,5 +19,29 @@
     "settings": {
         "language": "Harshe",
         "select": "Zabi Harshe"
+    },
+    "registration": {
+        "termsTitle": "Ka'idoji da Sharuɗɗa",
+        "termsSubtitle": "BAYANIN KAMFANIN DA KA'IDOJI",
+        "intro": "S MAHI Global Services tana taimakawa wajen hada kwararrun ma'aikata da damarmaki na duniya ta hanyar amfani da fasaha mai inganci. Ma'aikatanmu suna da kwarewa sosai.",
+        "p1_title": "1. Manufa da Muradi",
+        "p1_text": "Manufarmu ita ce samar da ayyuka masu inganci ga abokan cinikinmu ta hanyar hada su da kwararrun ma'aikata da aka tantance.",
+        "p2_title": "2. Hakkin Masu Amfani",
+        "p2_text": "Dole ne masu amfani su bayar da sahihan bayanai. Duk wani bayani na karya zai iya kaiwa ga toshe asusu.",
+        "p3_title": "3. Tantance Ma'aikata",
+        "p3_text": "Duk ma'aikacin da ya yi rajista dole ne ya mika takardun shaidar kwarewa kafin a amince da shi.",
+        "p4_title": "4. Albarkacin Aiki",
+        "p4_text": "Smahi ba zata dauki alhakin duk wani rashin jituwa tsakanin ma'aikaci da abokin ciniki ba, amma zamu taimaka wajen sanya ido.",
+        "p5_title": "5. Tsaro da Sirri",
+        "p5_text": "Muna kiyaye bayanan ku kuma ba zamu taba sayar da su ga wasu kamfanoni ba.",
+        "p6_title": "6. Hakkokin Kamfani",
+        "p6_text": "Kamfanin S. MAHI yana da hakkin canza wadannan ka'idoji a kowane lokaci.",
+        "p7_title": "7. Dokokin Gudanarwa",
+        "p7_text": "Duk wani aiki da ya saba wa dokar kasa zai sa a dauki matakin shari'a.",
+        "p8_title": "8. Hanyoyin Biyan Kuɗi",
+        "p8_text": "Ana bada shawarar yin amfani da manhajar mu wajen biyan kuɗi don tabbatar da tsaro.",
+        "supportTitle": "Tuntuɓa da Tallafi",
+        "supportText": "Lambar Wayar Tuntuɓa: +2349066062541 / +2349052373245",
+        "agree": "Na karanta kuma na yarda da waɗannan ka'idoji"
     }
 }

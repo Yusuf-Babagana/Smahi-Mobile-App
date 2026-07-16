@@ -7,6 +7,7 @@
     "profile": "Profile",
     "loadMore": "Load More Artisans",
     "noResults": "No artisans found.",
+    "noMatchingServices": "No matching services found",
     "categories": {
         "All": "All",
         "Plumbing": "Plumbing",
@@ -18,5 +19,29 @@
     "settings": {
         "language": "Language",
         "select": "Select Language"
+    },
+    "registration": {
+        "termsTitle": "Terms & Conditions",
+        "termsSubtitle": "CORPORATE OVERVIEW & POLICIES",
+        "intro": "S MAHI Global Services specializes in bridging the gap between skilled professionals and global opportunities through technology.",
+        "p1_title": "1. Mission and Vision",
+        "p1_text": "Our mission is to provide high-quality services to our clients by connecting them with vetted, world-class artisans.",
+        "p2_title": "2. User Obligations",
+        "p2_text": "Users must provide accurate personal and professional information. False information may lead to account suspension.",
+        "p3_title": "3. Artisan Vetting",
+        "p3_text": "All registered artisans must provide proof of skill and undergo verification before their profiles become public.",
+        "p4_title": "4. Service Liability",
+        "p4_text": "Smahi acts as a facilitator and is not directly liable for disputes between clients and artisans, though mediation is provided.",
+        "p5_title": "5. Data Privacy",
+        "p5_text": "Your data is encrypted and secure. We do not sell user data to third-party marketing firms.",
+        "p6_title": "6. Amendments",
+        "p6_text": "S. MAHI Global Service reserves the right to modify these terms and conditions at any time without prior notice.",
+        "p7_title": "7. Governing Law",
+        "p7_text": "Any engagement that violates local laws will be reported to the appropriate authorities.",
+        "p8_title": "8. Payments",
+        "p8_text": "We recommend using the platform for payments to ensure transaction security and valid records.",
+        "supportTitle": "Contact & Support",
+        "supportText": "Hotline: +2349066062541 / +2349052373245",
+        "agree": "I have read and agree to the Terms"
     }
 }

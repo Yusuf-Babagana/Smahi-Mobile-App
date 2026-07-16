@@ -1,14 +1,19 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, StyleSheet, FlatList, TouchableOpacity, ActivityIndicator, Image } from 'react-native';
+import { View, Text, StyleSheet, FlatList, TouchableOpacity, ActivityIndicator, Pressable } from 'react-native';
 import { useRouter, Stack } from 'expo-router';
-import { Ionicons } from '@expo/vector-icons';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import { MaterialIcons } from '@expo/vector-icons';
+import { useTranslation } from 'react-i18next';
+
 import { artisanAPI } from '@/src/api/client';
 import { useAuth } from '@/src/contexts/AuthContext';
-import { colors } from '@/styles/commonStyles';
+import { color, font, radius, space, type } from '@/constants/theme';
+import { Avatar, Badge, EmptyState, SkeletonCard } from '@/src/components/ui';
 
 export default function AgentArtisanList() {
     const router = useRouter();
     const { user } = useAuth();
+    const { t, i18n } = useTranslation();
 
     const [artisans, setArtisans] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);      // Initial Load
@@ -64,48 +69,44 @@ export default function AgentArtisanList() {
         }
     };
 
-    const renderItem = ({ item }: any) => (
-        <TouchableOpacity
-            style={styles.card}
-            onPress={() => router.push({ pathname: '/agent/artisans/[id]', params: { id: item.id } })}
-        >
-            <View style={styles.row}>
-                {/* Avatar */}
-                {item.profile_picture ? (
-                    <Image source={{ uri: item.profile_picture }} style={styles.avatar} />
-                ) : (
-                    <View style={[styles.avatar, styles.placeholder]}>
-                        <Text style={styles.placeholderText}>{item.first_name?.[0]}</Text>
-                    </View>
-                )}
+    const renderItem = ({ item }: any) => {
+        const name = `${item.first_name || ''} ${item.last_name || ''}`.trim();
+        const trade = i18n.language === 'ha' && item.category_name_ha
+            ? item.category_name_ha
+            : (item.service_category || t('General Artisan'));
+        return (
+            <Pressable
+                style={({ pressed }) => [styles.card, pressed && { opacity: 0.85 }]}
+                onPress={() => router.push({ pathname: '/agent/artisans/[id]', params: { id: item.id } })}
+                accessibilityRole="button"
+                accessibilityLabel={name}
+            >
+                <Avatar name={name} uri={item.profile_picture} size={48} verified={!!item.is_verified} />
 
-                {/* Info */}
                 <View style={styles.info}>
-                    <Text style={styles.name}>{item.first_name} {item.last_name}</Text>
-                    <Text style={styles.service}>{item.service_category || 'General Artisan'}</Text>
+                    <Text style={styles.name} numberOfLines={1}>{name}</Text>
+                    <Text style={styles.service} numberOfLines={1}>{trade}</Text>
                     <View style={styles.locRow}>
-                        <Ionicons name="location-sharp" size={12} color="#9CA3AF" />
-                        <Text style={styles.location}>{item.lga_details?.name || 'Local'}, {item.state_details?.name}</Text>
+                        <MaterialIcons name="place" size={12} color={color.ink300} />
+                        <Text style={styles.location} numberOfLines={1}>
+                            {item.lga_details?.name || t('Local')}, {item.state_details?.name}
+                        </Text>
                     </View>
                 </View>
 
-                {/* Status */}
-                <View style={styles.statusCol}>
-                    {item.is_verified ? (
-                        <Ionicons name="checkmark-circle" size={24} color="#10B981" />
-                    ) : (
-                        <Ionicons name="time" size={24} color="#F59E0B" />
-                    )}
-                </View>
-            </View>
-        </TouchableOpacity>
-    );
+                <Badge
+                    label={item.is_verified ? t('Verified') : t('Pending')}
+                    status={item.is_verified ? 'verified' : 'pending'}
+                />
+            </Pressable>
+        );
+    };
 
     const renderFooter = () => {
         if (!loadingMore) return null;
         return (
-            <View style={{ paddingVertical: 20 }}>
-                <ActivityIndicator size="small" color={colors.primary} />
+            <View style={{ paddingVertical: space.xl }}>
+                <ActivityIndicator size="small" color={color.brand600} />
             </View>
         );
     };
@@ -113,22 +114,32 @@ export default function AgentArtisanList() {
     return (
         <View style={styles.container}>
             <Stack.Screen options={{ headerShown: false }} />
-            <View style={styles.header}>
-                <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
-                    <Ionicons name="arrow-back" size={24} color="#1F2937" />
-                </TouchableOpacity>
-                <Text style={styles.headerTitle}>My LGA Artisans</Text>
-                <View style={{ width: 40 }} />
-            </View>
+
+            {/* Header */}
+            <SafeAreaView edges={['top']} style={styles.headerSafe}>
+                <View style={styles.header}>
+                    <Pressable onPress={() => router.back()} style={styles.backButton} accessibilityRole="button" accessibilityLabel={t('Back')}>
+                        <MaterialIcons name="arrow-back" size={20} color={color.ink900} />
+                    </Pressable>
+                    <Text style={styles.headerTitle}>{t('My LGA artisans')}</Text>
+                    <View style={{ width: 40 }} />
+                </View>
+            </SafeAreaView>
 
             <View style={styles.subHeader}>
+                <MaterialIcons name="place" size={14} color={color.brand600} />
                 <Text style={styles.subHeaderText}>
-                    Listing artisans in <Text style={{ fontWeight: 'bold' }}>{user?.lga_details?.name || 'your area'}</Text>
+                    {t('Listing artisans in')}{' '}
+                    <Text style={styles.subHeaderStrong}>{user?.lga_details?.name || t('your area')}</Text>
                 </Text>
             </View>
 
             {loading ? (
-                <ActivityIndicator size="large" color={colors.primary} style={{ marginTop: 50 }} />
+                <View style={styles.skeletonWrap}>
+                    <SkeletonCard />
+                    <SkeletonCard />
+                    <SkeletonCard />
+                </View>
             ) : (
                 <FlatList
                     data={artisans}
@@ -142,9 +153,11 @@ export default function AgentArtisanList() {
                     ListFooterComponent={renderFooter}
 
                     ListEmptyComponent={
-                        <View style={styles.emptyState}>
-                            <Text style={styles.emptyText}>No artisans found in this LGA.</Text>
-                        </View>
+                        <EmptyState
+                            icon="person-search"
+                            title={t('No artisans found in this LGA.')}
+                            message={t('Artisans you register will appear here.')}
+                        />
                     }
                 />
             )}
@@ -153,25 +166,57 @@ export default function AgentArtisanList() {
 }
 
 const styles = StyleSheet.create({
-    container: { flex: 1, backgroundColor: '#F9FAFB' },
-    header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 20, paddingTop: 60, paddingBottom: 20, backgroundColor: '#FFF', borderBottomWidth: 1, borderBottomColor: '#E5E7EB' },
-    headerTitle: { fontSize: 18, fontWeight: '700', color: '#111827' },
-    backButton: { padding: 8 },
-    subHeader: { padding: 16, backgroundColor: '#EFF6FF' },
-    subHeaderText: { color: '#1E40AF', fontSize: 14 },
-    listContent: { padding: 20, paddingBottom: 50 },
+    container: { flex: 1, backgroundColor: color.surfaceSunken },
 
-    card: { backgroundColor: '#FFF', padding: 16, borderRadius: 16, marginBottom: 12, shadowColor: '#000', shadowOpacity: 0.05, shadowRadius: 5, elevation: 2 },
-    row: { flexDirection: 'row', alignItems: 'center' },
-    avatar: { width: 50, height: 50, borderRadius: 25, marginRight: 12 },
-    placeholder: { backgroundColor: '#E0E7FF', justifyContent: 'center', alignItems: 'center' },
-    placeholderText: { fontSize: 20, fontWeight: '700', color: '#4F46E5' },
-    info: { flex: 1 },
-    name: { fontSize: 16, fontWeight: '700', color: '#1F2937' },
-    service: { fontSize: 13, color: '#6B7280', marginBottom: 4 },
-    locRow: { flexDirection: 'row', alignItems: 'center', gap: 2 },
-    location: { fontSize: 12, color: '#9CA3AF' },
-    statusCol: { alignItems: 'flex-end', justifyContent: 'center' },
-    emptyState: { alignItems: 'center', marginTop: 50 },
-    emptyText: { color: '#6B7280' }
+    headerSafe: { backgroundColor: color.surface },
+    header: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        paddingHorizontal: space.xl,
+        paddingVertical: space.md,
+        backgroundColor: color.surface,
+        borderBottomWidth: 1,
+        borderBottomColor: '#F1F5F9',
+    },
+    headerTitle: { fontFamily: font.extrabold, fontSize: 16, color: color.ink900 },
+    backButton: {
+        width: 40,
+        height: 40,
+        borderRadius: radius.md,
+        borderWidth: 1.5,
+        borderColor: color.border,
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+
+    subHeader: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 6,
+        paddingHorizontal: space.xl,
+        paddingVertical: space.md,
+        backgroundColor: color.brand100,
+    },
+    subHeaderText: { fontFamily: font.medium, color: color.brand600, fontSize: 13 },
+    subHeaderStrong: { fontFamily: font.extrabold },
+
+    skeletonWrap: { padding: space.xl },
+    listContent: { padding: space.xl, paddingBottom: 50 },
+
+    card: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        backgroundColor: color.surface,
+        padding: space.lg,
+        borderRadius: radius.lg,
+        marginBottom: space.md,
+        borderWidth: 1,
+        borderColor: '#EEF2F8',
+    },
+    info: { flex: 1, marginHorizontal: space.md },
+    name: { fontFamily: font.extrabold, fontSize: 14.5, color: color.ink900 },
+    service: { fontFamily: font.bold, fontSize: 12.5, color: color.ink400, marginTop: 2 },
+    locRow: { flexDirection: 'row', alignItems: 'center', gap: 2, marginTop: 4 },
+    location: { fontFamily: font.bold, fontSize: 11.5, color: color.ink300, flexShrink: 1 },
 });

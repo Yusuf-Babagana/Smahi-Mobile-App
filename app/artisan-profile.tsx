@@ -7,11 +7,13 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 
 import { artisanAPI } from '@/src/api/client';
-import { colors, shadows } from '@/styles/commonStyles'; // Adjusted to match standard path
+import { color, font, radius, shadow, space, type } from '@/constants/theme';
+import { useTranslation } from 'react-i18next';
 
-const CLOUD_NAME = 'dvj6cw5dq';
+import { CLOUDINARY_CLOUD_NAME as CLOUD_NAME } from '@/src/constants/env';
 
 export default function PublicArtisanProfile() {
+    const { i18n } = useTranslation();
     const { id } = useLocalSearchParams();
     const router = useRouter();
 
@@ -26,7 +28,7 @@ export default function PublicArtisanProfile() {
 
     const fetchDetails = async () => {
         try {
-            const data = await artisanAPI.getArtisanByUserId(Number(id));
+            const data = await artisanAPI.getArtisanById(id as string);
             setArtisan(data);
         } catch (error) {
             console.log("Error loading artisan", error);
@@ -36,7 +38,6 @@ export default function PublicArtisanProfile() {
         }
     };
 
-    // --- HELPER: Fix Image URL ---
     const getImageUrl = (url: string | any) => {
         if (!url) return null;
         let finalUrl = typeof url === 'string' ? url : url.url;
@@ -51,32 +52,33 @@ export default function PublicArtisanProfile() {
         return finalUrl;
     };
 
-    // --- ACTION: Start Chat ---
     const handleMessage = () => {
         if (!artisan) return;
 
-        // Navigate to Chat Room
+        const fName = artisan.user_details?.first_name || artisan.user?.first_name || artisan.first_name || "Unknown";
+        const lName = artisan.user_details?.last_name || artisan.user?.last_name || artisan.last_name || "";
+
         router.push({
-            pathname: '/chat/new', // This maps to app/chat/[id].tsx
+            pathname: '/chat/new',
             params: {
-                recipientId: artisan.id,
-                name: `${artisan.first_name} ${artisan.last_name}`
+                recipientId: artisan.user || artisan.id,
+                name: `${fName} ${lName}`
             }
         });
     };
 
     if (loading) return (
         <View style={styles.center}>
-            <ActivityIndicator size="large" color={colors.primary} />
+            <ActivityIndicator size="large" color={color.brand600} />
         </View>
     );
 
     if (!artisan) return (
         <View style={styles.center}>
-            <Ionicons name="alert-circle-outline" size={48} color="#CCC" />
-            <Text style={{ color: '#666', marginTop: 10 }}>Artisan not found</Text>
-            <TouchableOpacity onPress={() => router.back()} style={{ marginTop: 20 }}>
-                <Text style={{ color: colors.primary, fontWeight: '700' }}>Go Back</Text>
+            <Ionicons name="alert-circle-outline" size={48} color={color.ink300} />
+            <Text style={styles.notFoundText}>Artisan not found</Text>
+            <TouchableOpacity onPress={() => router.back()} style={{ marginTop: space.lg }}>
+                <Text style={styles.backLink}>Go Back</Text>
             </TouchableOpacity>
         </View>
     );
@@ -88,14 +90,12 @@ export default function PublicArtisanProfile() {
         <View style={styles.container}>
             <ScrollView contentContainerStyle={styles.scroll}>
 
-                {/* Header Image / Pattern */}
                 <View style={styles.headerPattern}>
                     <TouchableOpacity style={styles.backBtn} onPress={() => router.back()}>
-                        <Ionicons name="arrow-back" size={24} color="#FFF" />
+                        <Ionicons name="arrow-back" size={22} color="#FFF" />
                     </TouchableOpacity>
                 </View>
 
-                {/* Profile Info */}
                 <View style={styles.profileHeader}>
                     <View style={styles.avatarContainer}>
                         {profilePic ? (
@@ -106,22 +106,31 @@ export default function PublicArtisanProfile() {
                             </View>
                         )}
                     </View>
-                    <Text style={styles.name}>{artisan.first_name} {artisan.last_name}</Text>
-                    <Text style={styles.category}>{artisan.service_category || 'Service Provider'}</Text>
+                    <Text style={styles.name}>
+                        {artisan.user_details?.first_name || artisan.user?.first_name || artisan.first_name || "Unknown"} {artisan.user_details?.last_name || artisan.user?.last_name || artisan.last_name || ""}
+                    </Text>
+                    <Text style={styles.category}>
+                      {i18n.language === 'ha' && artisan.category_name_ha
+                        ? artisan.category_name_ha
+                        : (artisan.category_name || artisan.service_category || 'Service Provider')}
+                    </Text>
 
                     <View style={styles.metaRow}>
                         <View style={styles.metaItem}>
-                            <Ionicons name="star" size={16} color="#EAB308" />
+                            <Ionicons name="star" size={16} color={color.star} />
                             <Text style={styles.metaText}>{artisan.rating || '5.0'} (12)</Text>
                         </View>
                         <View style={styles.metaItem}>
-                            <Ionicons name="location" size={16} color="#666" />
-                            <Text style={styles.metaText}>{artisan.lga}, {artisan.state}</Text>
+                            <Ionicons name="call" size={16} color={color.ink400} />
+                            <Text style={styles.metaText}>{artisan?.user_details?.phone_number || artisan?.user?.phone_number || "No phone number"}</Text>
+                        </View>
+                        <View style={styles.metaItem}>
+                            <Ionicons name="location" size={16} color={color.ink400} />
+                            <Text style={styles.metaText}>{artisan?.user_details?.state_details?.name || artisan.state || "Unknown"}</Text>
                         </View>
                     </View>
                 </View>
 
-                {/* Portfolio Section */}
                 <View style={styles.section}>
                     <Text style={styles.sectionTitle}>Portfolio Work</Text>
                     {portfolio.length === 0 ? (
@@ -139,7 +148,6 @@ export default function PublicArtisanProfile() {
                     )}
                 </View>
 
-                {/* Bio Section */}
                 <View style={styles.section}>
                     <Text style={styles.sectionTitle}>About</Text>
                     <Text style={styles.bioText}>
@@ -149,74 +157,56 @@ export default function PublicArtisanProfile() {
 
             </ScrollView>
 
-            {/* Footer Actions (Message & Book) */}
             <SafeAreaView edges={['bottom']} style={styles.footer}>
-                <View style={styles.footerRow}>
-                    {/* Message Button */}
-                    <TouchableOpacity
-                        style={[styles.actionBtn, styles.messageBtn]}
-                        onPress={handleMessage}
-                    >
-                        <Ionicons name="chatbubble-ellipses-outline" size={20} color={colors.primary} />
-                        <Text style={styles.messageText}>Message</Text>
-                    </TouchableOpacity>
-
-                    {/* Book Button */}
-                    <TouchableOpacity
-                        style={[styles.actionBtn, styles.bookBtn]}
-                        onPress={() => Alert.alert("Booking", "Booking flow starts here!")}
-                    >
-                        <Text style={styles.bookText}>Book Now</Text>
-                    </TouchableOpacity>
-                </View>
+                <TouchableOpacity
+                    style={styles.messageBtn}
+                    onPress={handleMessage}
+                >
+                    <Ionicons name="chatbubble-ellipses-outline" size={20} color={color.brand600} />
+                    <Text style={styles.messageText}>Start Conversation</Text>
+                </TouchableOpacity>
             </SafeAreaView>
         </View>
     );
 }
 
 const styles = StyleSheet.create({
-    container: { flex: 1, backgroundColor: '#FFF' },
+    container: { flex: 1, backgroundColor: color.surfaceSunken },
     center: { flex: 1, justifyContent: 'center', alignItems: 'center' },
     scroll: { paddingBottom: 100 },
 
-    headerPattern: { height: 120, backgroundColor: colors.primary, justifyContent: 'center', paddingHorizontal: 20 },
+    headerPattern: { height: 120, backgroundColor: color.brand600, justifyContent: 'center', paddingHorizontal: space.xl },
     backBtn: { width: 40, height: 40, borderRadius: 20, backgroundColor: 'rgba(0,0,0,0.2)', justifyContent: 'center', alignItems: 'center' },
 
     profileHeader: { alignItems: 'center', marginTop: -50 },
-    avatarContainer: { padding: 4, backgroundColor: '#FFF', borderRadius: 60 },
-    avatar: { width: 100, height: 100, borderRadius: 50, backgroundColor: '#EEE' },
-    placeholder: { justifyContent: 'center', alignItems: 'center', backgroundColor: colors.primary },
-    initial: { fontSize: 40, fontWeight: '700', color: '#FFF' },
+    avatarContainer: { padding: 4, backgroundColor: color.surface, borderRadius: 60 },
+    avatar: { width: 100, height: 100, borderRadius: 50, backgroundColor: color.surfaceChip },
+    placeholder: { justifyContent: 'center', alignItems: 'center', backgroundColor: color.brand600 },
+    initial: { fontFamily: font.extrabold, fontSize: 40, color: '#FFF' },
 
-    name: { fontSize: 24, fontWeight: '800', color: '#333', marginTop: 10 },
-    category: { fontSize: 16, color: colors.primary, fontWeight: '600', marginTop: 2 },
+    name: { fontFamily: font.extrabold, fontSize: 26, color: color.ink900, marginTop: space.sm },
+    category: { fontFamily: font.semibold, fontSize: 15, color: '#0F766E', marginTop: 4, backgroundColor: color.accent100, paddingHorizontal: 12, paddingVertical: 4, borderRadius: radius.full },
 
-    metaRow: { flexDirection: 'row', gap: 20, marginTop: 12 },
+    metaRow: { flexDirection: 'row', gap: space.xl, marginTop: space.md },
     metaItem: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-    metaText: { color: '#666', fontWeight: '500' },
+    metaText: { color: color.ink600, fontFamily: font.medium, fontSize: 13 },
 
-    section: { padding: 20, borderBottomWidth: 1, borderBottomColor: '#F3F4F6' },
-    sectionTitle: { fontSize: 18, fontWeight: '700', marginBottom: 12, color: '#333' },
-    emptyText: { color: '#999', fontStyle: 'italic' },
-    bioText: { lineHeight: 24, color: '#444' },
+    section: { padding: space.xl, borderBottomWidth: 1, borderBottomColor: '#F1F5F9' },
+    sectionTitle: { fontFamily: font.extrabold, fontSize: 18, marginBottom: space.md, color: color.ink900 },
+    emptyText: { color: color.ink300, fontFamily: font.medium, fontStyle: 'italic' },
+    bioText: { fontFamily: font.medium, fontSize: 14, lineHeight: 22, color: color.ink600 },
 
-    grid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
-    portfolioImg: { width: '31%', aspectRatio: 1, borderRadius: 8, backgroundColor: '#EEE' },
+    grid: { flexDirection: 'row', flexWrap: 'wrap', gap: space.sm },
+    portfolioImg: { width: '31%', aspectRatio: 1, borderRadius: radius.md, backgroundColor: color.surfaceChip },
 
-    footer: { padding: 20, borderTopWidth: 1, borderTopColor: '#EEE', backgroundColor: '#FFF' },
-    footerRow: { flexDirection: 'row', gap: 12 },
+    notFoundText: { fontFamily: font.bold, fontSize: 15, color: color.ink400, marginTop: space.sm },
+    backLink: { fontFamily: font.extrabold, color: color.brand600 },
 
-    actionBtn: {
-        borderRadius: 16, paddingVertical: 16, alignItems: 'center', justifyContent: 'center', flexDirection: 'row', gap: 8
-    },
+    footer: { padding: space.xl, borderTopWidth: 1, borderTopColor: color.border, backgroundColor: color.surface },
 
     messageBtn: {
-        flex: 1, backgroundColor: '#E0F2FE', borderWidth: 1, borderColor: '#BAE6FD'
+        flex: 1, backgroundColor: color.brand100, borderWidth: 1, borderColor: color.brand100,
+        borderRadius: radius.lg, paddingVertical: space.lg, alignItems: 'center', justifyContent: 'center', flexDirection: 'row', gap: 8
     },
-    messageText: { color: colors.primary, fontSize: 16, fontWeight: '700' },
-
-    bookBtn: {
-        flex: 2, backgroundColor: colors.primary
-    },
-    bookText: { color: '#FFF', fontSize: 16, fontWeight: '700' }
+    messageText: { color: color.brand600, fontFamily: font.extrabold, fontSize: 16 },
 });

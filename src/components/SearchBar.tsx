@@ -3,8 +3,6 @@ import React from 'react';
 import { View, TextInput, StyleSheet, Platform } from 'react-native';
 import { Picker } from '@react-native-picker/picker';
 import { colors, commonStyles } from '../../styles/commonStyles';
-import { CATEGORIES } from '../constants/config';
-import { ArtisanService } from '../types';
 import { IconSymbol } from '@/src/components/IconSymbol';
 
 interface SearchBarProps {
@@ -12,14 +10,20 @@ interface SearchBarProps {
   onSearchChange: (query: string) => void;
   selectedCategory: string;
   onCategoryChange: (category: string) => void;
+  categories?: { label: string; value: string }[];
 }
+
+const FALLBACK_CATEGORIES = [{ label: 'All', value: 'All' }];
 
 export default function SearchBar({
   searchQuery,
   onSearchChange,
   selectedCategory,
   onCategoryChange,
+  categories,
 }: SearchBarProps) {
+  const items = categories && categories.length > 0 ? categories : FALLBACK_CATEGORIES;
+
   return (
     <View style={styles.container}>
       <View style={styles.searchContainer}>
@@ -39,8 +43,8 @@ export default function SearchBar({
           onValueChange={onCategoryChange}
           style={styles.picker}
         >
-          {CATEGORIES.map((category) => (
-            <Picker.Item key={category} label={category} value={category} />
+          {items.map((item) => (
+            <Picker.Item key={item.value} label={item.label} value={item.value} />
           ))}
         </Picker>
       </View>

@@ -1,19 +1,23 @@
 import React, { useState, useEffect, useRef } from 'react';
 import {
-    View, Text, FlatList, TextInput, TouchableOpacity, KeyboardAvoidingView, Platform, StyleSheet, ActivityIndicator, Alert
+    View, Text, FlatList, TextInput, TouchableOpacity, KeyboardAvoidingView,
+    Platform, StyleSheet, ActivityIndicator, Alert, Pressable,
 } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Ionicons } from '@expo/vector-icons';
+import { MaterialIcons } from '@expo/vector-icons';
 import { Audio } from 'expo-av';
+import { useTranslation } from 'react-i18next';
 
 import { chatAPI } from '@/src/api/client';
-import { colors } from '@/styles/commonStyles';
 import { storage } from '@/src/utils/storage';
+import { color, font, radius, shadow, space } from '@/constants/theme';
+import { Avatar, MessageBubble } from '@/src/components/ui';
 
 export default function ChatRoomScreen() {
     const { id: initialId, name, recipientId } = useLocalSearchParams();
     const router = useRouter();
+    const { t } = useTranslation();
 
     // --- STATE ---
     const [conversationId, setConversationId] = useState<number | null>(
@@ -25,6 +29,13 @@ export default function ChatRoomScreen() {
     const [currentUserId, setCurrentUserId] = useState<number | null>(null);
     const [checkingHistory, setCheckingHistory] = useState(false);
 
+    // 🔥 Anti-Infinite-Loop Refs
+    const conversationIdRef = useRef(conversationId);
+    const currentUserIdRef = useRef(currentUserId);
+
+    useEffect(() => { conversationIdRef.current = conversationId; }, [conversationId]);
+    useEffect(() => { currentUserIdRef.current = currentUserId; }, [currentUserId]);
+
     const flatListRef = useRef<FlatList>(null);
 
     // --- SOUND LOGIC ---
@@ -32,8 +43,8 @@ export default function ChatRoomScreen() {
         try {
             const { sound } = await Audio.Sound.createAsync(
                 type === 'send'
-                    ? require('@/assets/sounds/sent.mp3')
-                    : require('@/assets/sounds/received.mp3')
+                    ? require('@/assets/sounds/sent.wav')
+                    : require('@/assets/sounds/received.wav')
             );
             await sound.playAsync();
             sound.setOnPlaybackStatusUpdate(async (status) => {
@@ -50,41 +61,45 @@ export default function ChatRoomScreen() {
     }, []);
 
     useEffect(() => {
-        const checkExistingChat = async () => {
-            if (!conversationId && recipientId) {
+        const initChat = async () => {
+            if (initialId === 'new' && recipientId && !conversationId) {
                 setCheckingHistory(true);
                 try {
-                    const data = await chatAPI.findConversation(Number(recipientId));
-                    if (data.exists && data.id) setConversationId(data.id);
-                } catch (error) { console.log("New chat"); }
+                    const data = await chatAPI.getOrCreateConversation(Number(recipientId));
+                    if (data.id) setConversationId(data.id);
+                } catch (error) { console.log("Init chat failed", error); }
                 finally { setCheckingHistory(false); }
             }
         };
-        checkExistingChat();
-    }, [recipientId]);
+        initChat();
+    }, [recipientId, initialId]);
 
     useEffect(() => {
-        let interval: NodeJS.Timeout;
         const fetchMessages = async () => {
-            if (!conversationId) return;
+            const convId = conversationIdRef.current;
+            if (!convId) return;
+
             try {
-                const data = await chatAPI.getMessages(conversationId);
+                const response = await chatAPI.getMessages(convId);
+                const data = Array.isArray(response) ? response : (response.results || []);
+
                 setMessages(prev => {
                     if (data.length > 0) {
                         const isNew = prev.length === 0 || data[0].id !== prev[0].id;
-                        if (isNew && currentUserId && data[0].sender_id !== currentUserId) {
+                        if (isNew && currentUserIdRef.current && Number(data[0].sender) !== currentUserIdRef.current) {
                             playSound('receive');
                         }
                         if (isNew || data.length !== prev.length) return data;
                     }
                     return prev;
                 });
-            } catch (error) { }
+            } catch (error) { console.log("Fetch messages err:", error); }
         };
+
         fetchMessages();
-        interval = setInterval(fetchMessages, 3000);
+        const interval = setInterval(fetchMessages, 4000); // Polling every 4s
         return () => clearInterval(interval);
-    }, [conversationId, currentUserId]);
+    }, []); // ⚡ EMPTY ARRAY to prevent 500 req/min loops!
 
     // --- HANDLERS ---
     const handleProfileClick = () => {
@@ -113,21 +128,25 @@ export default function ChatRoomScreen() {
         playSound('send');
 
         try {
-            const payload: any = { text: textToSend };
-            if (conversationId) payload.conversation_id = conversationId;
-            else if (recipientId) payload.recipient_id = Number(recipientId);
+            if (!conversationId) {
+                Alert.alert("Please wait", "Initializing conversation...");
+                return;
+            }
+
+            const payload: any = {
+                conversation_id: conversationId,
+                text: textToSend
+            };
 
             const tempId = Math.random();
             const tempMsg = {
-                id: tempId, text: textToSend, sender_id: currentUserId,
+                id: tempId, text: textToSend, sender: currentUserId,
                 created_at: new Date().toISOString(), is_temp: true
             };
             setMessages(prev => [tempMsg, ...prev]);
 
             const newMsg = await chatAPI.sendMessage(payload);
             setMessages(prev => [newMsg, ...prev.filter(m => m.id !== tempId)]);
-
-            if (!conversationId && newMsg.conversation) setConversationId(newMsg.conversation);
 
         } catch (error: any) {
             Alert.alert("Failed", "Message not sent.");
@@ -137,62 +156,71 @@ export default function ChatRoomScreen() {
         }
     };
 
-    const renderItem = ({ item }: { item: any }) => {
-        const isMe = Number(item.sender_id) === Number(currentUserId);
+    const dayLabel = (iso: string) => {
+        const date = new Date(iso);
+        const today = new Date();
+        const yesterday = new Date();
+        yesterday.setDate(today.getDate() - 1);
+        if (date.toDateString() === today.toDateString()) return t('Today');
+        if (date.toDateString() === yesterday.toDateString()) return t('Yesterday');
+        return date.toLocaleDateString([], { day: 'numeric', month: 'short', year: 'numeric' });
+    };
+
+    const renderItem = ({ item, index }: { item: any; index: number }) => {
+        const isMe = Number(item.sender) === Number(currentUserId);
+        // Inverted list: the next index holds the OLDER message. Show a date pill
+        // above the first message of each calendar day.
+        const older = messages[index + 1];
+        const showDate = !older ||
+            new Date(older.created_at).toDateString() !== new Date(item.created_at).toDateString();
+
         return (
-            <View style={[styles.row, isMe ? styles.rowRight : styles.rowLeft]}>
-                <View style={[styles.bubble, isMe ? styles.bubbleRight : styles.bubbleLeft]}>
-                    <Text style={[styles.msgText, isMe ? styles.textLight : styles.textDark]}>
-                        {item.text}
-                    </Text>
-                    <View style={styles.timeContainer}>
-                        <Text style={[styles.timeText, isMe ? styles.timeLight : styles.timeDark]}>
-                            {new Date(item.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                            {item.is_temp && <Ionicons name="time-outline" size={10} style={{ marginLeft: 4 }} />}
-                        </Text>
-                        {isMe && !item.is_temp && (
-                            <Ionicons name="checkmark-done" size={14} color="rgba(255,255,255,0.8)" style={{ marginLeft: 4 }} />
-                        )}
+            <View>
+                {showDate && (
+                    <View style={styles.dateChipWrap}>
+                        <View style={styles.dateChip}>
+                            <Text style={styles.dateChipText}>{dayLabel(item.created_at)}</Text>
+                        </View>
                     </View>
-                </View>
+                )}
+                <MessageBubble
+                    text={item.text}
+                    mine={isMe}
+                    timestamp={new Date(item.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                    delivered={isMe && !item.is_temp}
+                    seen={!!(item.seen || item.is_seen || item.read)}
+                />
             </View>
         );
     };
 
-    const displayInitial = typeof name === 'string' ? name.charAt(0) : '?';
+    const displayName = typeof name === 'string' && name ? name : t('Chat');
 
     return (
-        // ✅ 1. Remove 'bottom' from edges so KeyboardView controls the bottom padding
         <SafeAreaView style={styles.container} edges={['top']}>
 
             {/* HEADER */}
             <View style={styles.header}>
-                <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
-                    <Ionicons name="chevron-back" size={28} color={colors.primary} />
-                </TouchableOpacity>
+                <Pressable onPress={() => router.back()} style={styles.backBtn} accessibilityRole="button" accessibilityLabel={t('Back')}>
+                    <MaterialIcons name="arrow-back" size={22} color={color.ink900} />
+                </Pressable>
 
-                <TouchableOpacity style={styles.headerProfile} onPress={handleProfileClick}>
-                    <View style={styles.avatar}>
-                        <Text style={styles.avatarText}>{displayInitial}</Text>
-                    </View>
-                    <View>
-                        <Text style={styles.headerTitle} numberOfLines={1}>{name || "Chat"}</Text>
-                        <Text style={styles.statusText}>Tap to view profile</Text>
+                <TouchableOpacity style={styles.headerProfile} onPress={handleProfileClick} accessibilityRole="button">
+                    <Avatar name={displayName} size={40} />
+                    <View style={styles.headerText}>
+                        <Text style={styles.headerTitle} numberOfLines={1}>{displayName}</Text>
+                        <Text style={styles.statusText}>{t('Tap to view profile')}</Text>
                     </View>
                 </TouchableOpacity>
 
-                <View style={styles.headerActions}>
-                    <Ionicons name="call-outline" size={24} color={colors.primary} style={{ marginRight: 15 }} />
-                    <Ionicons name="videocam-outline" size={24} color={colors.primary} />
-                </View>
+                <Pressable style={styles.callBtn} accessibilityRole="button" accessibilityLabel={t('Call')}>
+                    <MaterialIcons name="call" size={20} color={color.brand600} />
+                </Pressable>
             </View>
 
-            {/* ✅ 2. FIXED KEYBOARD AVOIDING VIEW */}
             <KeyboardAvoidingView
                 style={{ flex: 1 }}
-                // On iOS 'padding' works best. On Android 'height' often works better than undefined.
                 behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-                // Offset accounts for Header (~60px) + Status Bar (~40px)
                 keyboardVerticalOffset={Platform.OS === 'ios' ? 100 : 0}
             >
                 <FlatList
@@ -206,33 +234,35 @@ export default function ChatRoomScreen() {
                     ListEmptyComponent={
                         <View style={styles.empty}>
                             {checkingHistory ? (
-                                <ActivityIndicator color={colors.primary} />
+                                <ActivityIndicator color={color.brand600} />
                             ) : (
                                 <>
                                     <View style={styles.emptyIconCircle}>
-                                        <Ionicons name="chatbubble-ellipses" size={40} color="#CCC" />
+                                        <MaterialIcons name="chat-bubble-outline" size={32} color={color.ink300} />
                                     </View>
-                                    <Text style={styles.emptyText}>Start a conversation with {name}</Text>
+                                    <Text style={styles.emptyText}>
+                                        {t('Start a conversation with')} {displayName}
+                                    </Text>
                                 </>
                             )}
                         </View>
                     }
                 />
 
-                {/* INPUT BAR */}
+                {/* COMPOSER */}
                 <View style={styles.inputWrapper}>
-                    <TouchableOpacity style={styles.attachBtn}>
-                        <Ionicons name="add" size={24} color={colors.primary} />
+                    <TouchableOpacity style={styles.attachBtn} accessibilityRole="button" accessibilityLabel={t('Attach')}>
+                        <MaterialIcons name="add" size={22} color={color.brand600} />
                     </TouchableOpacity>
 
                     <View style={styles.inputContainer}>
                         <TextInput
                             style={styles.input}
-                            placeholder="Message..."
+                            placeholder={t('Message…')}
                             value={inputText}
                             onChangeText={setInputText}
                             multiline
-                            placeholderTextColor="#999"
+                            placeholderTextColor={color.ink300}
                         />
                     </View>
 
@@ -240,11 +270,13 @@ export default function ChatRoomScreen() {
                         onPress={handleSend}
                         disabled={sending || !inputText.trim()}
                         style={[styles.sendBtn, (!inputText.trim() && !sending) && styles.disabledBtn]}
+                        accessibilityRole="button"
+                        accessibilityLabel={t('Send')}
                     >
                         {sending ? (
                             <ActivityIndicator color="#FFF" size="small" />
                         ) : (
-                            <Ionicons name="send" size={18} color="#FFF" style={{ marginLeft: 2 }} />
+                            <MaterialIcons name="send" size={18} color="#FFF" />
                         )}
                     </TouchableOpacity>
                 </View>
@@ -255,68 +287,113 @@ export default function ChatRoomScreen() {
 
 // --- STYLES ---
 const styles = StyleSheet.create({
-    container: { flex: 1, backgroundColor: '#F4F4F7' },
+    container: { flex: 1, backgroundColor: color.surfaceSunken },
 
     header: {
-        flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-        paddingHorizontal: 16, paddingVertical: 12, backgroundColor: '#FFF',
-        borderBottomWidth: 1, borderBottomColor: '#EFEFEF',
-        shadowColor: "#000", shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.05, shadowRadius: 2, elevation: 2,
-        zIndex: 10, // Ensure header stays on top
+        flexDirection: 'row',
+        alignItems: 'center',
+        paddingHorizontal: space.lg,
+        paddingVertical: space.md,
+        backgroundColor: color.surface,
+        borderBottomWidth: 1,
+        borderBottomColor: '#F1F5F9',
+        zIndex: 10,
     },
-    backBtn: { marginRight: 8 },
+    backBtn: {
+        width: 40,
+        height: 40,
+        borderRadius: radius.md,
+        borderWidth: 1.5,
+        borderColor: color.border,
+        alignItems: 'center',
+        justifyContent: 'center',
+        marginRight: space.md,
+    },
     headerProfile: { flex: 1, flexDirection: 'row', alignItems: 'center' },
-    avatar: {
-        width: 40, height: 40, borderRadius: 20, backgroundColor: '#E0E7FF',
-        justifyContent: 'center', alignItems: 'center', marginRight: 10
+    headerText: { flex: 1, marginLeft: space.md },
+    headerTitle: { fontFamily: font.extrabold, fontSize: 15.5, color: color.ink900 },
+    statusText: { fontFamily: font.bold, fontSize: 11.5, color: color.brand600, marginTop: 1 },
+    callBtn: {
+        width: 40,
+        height: 40,
+        borderRadius: radius.md,
+        backgroundColor: color.brand100,
+        alignItems: 'center',
+        justifyContent: 'center',
+        marginLeft: space.md,
     },
-    avatarText: { fontSize: 18, fontWeight: '700', color: colors.primary },
-    headerTitle: { fontSize: 16, fontWeight: '700', color: '#1F2937' },
-    statusText: { fontSize: 12, color: colors.primary, fontWeight: '500' },
-    headerActions: { flexDirection: 'row', alignItems: 'center' },
 
-    list: { paddingHorizontal: 16, paddingVertical: 20 },
+    list: { paddingHorizontal: space.lg, paddingVertical: space.xl },
 
-    row: { marginBottom: 16, width: '100%' },
-    rowLeft: { alignItems: 'flex-start' },
-    rowRight: { alignItems: 'flex-end' },
-
-    bubble: {
-        padding: 12, borderRadius: 18, maxWidth: '75%',
-        shadowColor: "#000", shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.05, shadowRadius: 1, elevation: 1
+    dateChipWrap: { alignItems: 'center', marginVertical: space.md },
+    dateChip: {
+        backgroundColor: color.surfaceChip,
+        borderRadius: radius.full,
+        paddingHorizontal: 12,
+        paddingVertical: 4,
     },
-    bubbleLeft: { backgroundColor: '#FFF', borderBottomLeftRadius: 4 },
-    bubbleRight: { backgroundColor: colors.primary, borderBottomRightRadius: 4 },
-
-    msgText: { fontSize: 16, lineHeight: 22 },
-    textDark: { color: '#1F2937' },
-    textLight: { color: '#FFF' },
-
-    timeContainer: { flexDirection: 'row', alignItems: 'center', alignSelf: 'flex-end', marginTop: 4 },
-    timeText: { fontSize: 10, fontWeight: '500' },
-    timeDark: { color: '#9CA3AF' },
-    timeLight: { color: 'rgba(255,255,255,0.7)' },
+    dateChipText: {
+        fontFamily: font.extrabold,
+        fontSize: 11,
+        color: color.ink400,
+    },
 
     inputWrapper: {
-        flexDirection: 'row', alignItems: 'flex-end', padding: 10, backgroundColor: '#FFF',
-        borderTopWidth: 1, borderTopColor: '#F3F4F6',
-        paddingBottom: Platform.OS === 'ios' ? 10 : 10 // Extra padding for safety
+        flexDirection: 'row',
+        alignItems: 'flex-end',
+        padding: space.md,
+        backgroundColor: color.surface,
+        borderTopWidth: 1,
+        borderTopColor: '#F1F5F9',
     },
-    attachBtn: { padding: 10, marginRight: 5 },
+    attachBtn: {
+        width: 44,
+        height: 44,
+        borderRadius: 22,
+        backgroundColor: color.brand100,
+        alignItems: 'center',
+        justifyContent: 'center',
+        marginRight: space.sm,
+    },
     inputContainer: {
-        flex: 1, backgroundColor: '#F3F4F6', borderRadius: 24,
-        paddingHorizontal: 16, paddingVertical: 8, minHeight: 44, justifyContent: 'center'
+        flex: 1,
+        backgroundColor: color.surfaceSunken,
+        borderRadius: radius.full,
+        paddingHorizontal: space.lg,
+        paddingVertical: 8,
+        minHeight: 44,
+        justifyContent: 'center',
+        borderWidth: 1,
+        borderColor: '#EEF2F8',
     },
-    input: { fontSize: 16, maxHeight: 100, color: '#1F2937' },
-
+    input: {
+        fontFamily: font.semibold,
+        fontSize: 14.5,
+        maxHeight: 100,
+        color: color.ink900,
+        paddingVertical: 0,
+    },
     sendBtn: {
-        width: 44, height: 44, borderRadius: 22, backgroundColor: colors.primary,
-        justifyContent: 'center', alignItems: 'center', marginLeft: 10,
-        shadowColor: colors.primary, shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.3, shadowRadius: 3, elevation: 3
+        width: 44,
+        height: 44,
+        borderRadius: 22,
+        backgroundColor: color.brand600,
+        justifyContent: 'center',
+        alignItems: 'center',
+        marginLeft: space.sm,
+        ...shadow.cta,
     },
-    disabledBtn: { backgroundColor: '#E5E7EB', shadowOpacity: 0, elevation: 0 },
+    disabledBtn: { backgroundColor: color.border, shadowOpacity: 0, elevation: 0 },
 
     empty: { alignItems: 'center', marginTop: 100, transform: [{ scaleY: -1 }] },
-    emptyIconCircle: { width: 80, height: 80, borderRadius: 40, backgroundColor: '#F3F4F6', justifyContent: 'center', alignItems: 'center', marginBottom: 16 },
-    emptyText: { color: '#9CA3AF', fontSize: 16 }
+    emptyIconCircle: {
+        width: 64,
+        height: 64,
+        borderRadius: 32,
+        backgroundColor: '#E9EEF6',
+        justifyContent: 'center',
+        alignItems: 'center',
+        marginBottom: space.lg,
+    },
+    emptyText: { fontFamily: font.bold, color: color.ink400, fontSize: 14 },
 });

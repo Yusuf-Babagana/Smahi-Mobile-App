@@ -1,44 +1,30 @@
 
-import { StyleSheet, ViewStyle, TextStyle } from 'react-native';
+// DEPRECATED — migration shim. New code should import tokens from '@/constants/theme'.
+// The legacy names below are mapped onto the redesign palette so unmigrated
+// screens pick up the new look without a big-bang refactor.
+import { StyleSheet, ViewStyle } from 'react-native';
+import { color, shadow } from '@/constants/theme';
 
 export const colors = {
-  background: '#F5F5F5',
-  text: '#333333',
-  textSecondary: '#666666',
-  primary: '#007BFF',
-  secondary: '#6C757D',
-  accent: '#FFC107',
-  card: '#FFFFFF',
-  highlight: '#E9ECEF',
-  error: '#DC3545',
-  success: '#28A745',
-  border: '#DEE2E6',
-  inputBackground: '#FFFFFF',
-  placeholder: '#A1A1AA',
+  background: color.surfaceSunken,
+  text: color.ink900,
+  textSecondary: color.ink600,
+  primary: color.brand600,
+  secondary: color.ink400,
+  accent: color.accent600,
+  card: color.surface,
+  highlight: color.surfaceChip,
+  error: color.danger600,
+  success: color.accent600,
+  border: color.border,
+  inputBackground: color.surface,
+  placeholder: color.ink300,
 };
 
 export const shadows = {
-  small: {
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 2,
-  } as ViewStyle,
-  medium: {
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.15,
-    shadowRadius: 8,
-    elevation: 4,
-  } as ViewStyle,
-  large: {
-    shadowColor: colors.primary,
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.2,
-    shadowRadius: 12,
-    elevation: 8,
-  } as ViewStyle,
+  small: shadow.e1 as ViewStyle,
+  medium: shadow.e2 as ViewStyle,
+  large: shadow.cta as ViewStyle,
 };
 
 export const buttonStyles = StyleSheet.create({

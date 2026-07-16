@@ -2,24 +2,29 @@ import React, { useState } from 'react';
 import {
     View,
     Text,
-    TextInput,
     TouchableOpacity,
     StyleSheet,
-    ActivityIndicator,
     Alert,
     KeyboardAvoidingView,
-    Platform
+    Platform,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import axios from 'axios';
 import * as SecureStore from 'expo-secure-store';
-import { LinearGradient } from 'expo-linear-gradient';
-import { Ionicons } from '@expo/vector-icons';
+import { MaterialIcons } from '@expo/vector-icons';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import { StatusBar } from 'expo-status-bar';
+import { useTranslation } from 'react-i18next';
 
-const BASE_URL = 'https://smahi1.pythonanywhere.com/api';
+import { storage } from '@/src/utils/storage';
+import { getHomeRouteForRole } from '@/src/constants/roleRoutes';
+import { API_URL as BASE_URL } from '@/src/constants/env';
+import { color, font, space, type } from '@/constants/theme';
+import { Button, Input } from '@/src/components/ui';
 
 export default function ActivationScreen() {
     const router = useRouter();
+    const { t } = useTranslation();
     const [serial, setSerial] = useState('');
     const [loading, setLoading] = useState(false);
 
@@ -35,7 +40,7 @@ export default function ActivationScreen() {
             const token = await SecureStore.getItemAsync('accessToken');
             if (!token) {
                 Alert.alert("Session Expired", "Please login again.");
-                router.replace('/login'); // ✅ Updated path
+                router.replace('/login');
                 return;
             }
 
@@ -46,11 +51,15 @@ export default function ActivationScreen() {
                 { headers: { Authorization: `Bearer ${token}` } }
             );
 
-            // 3. Success!
+            // 3. Success! Sync the cached account_status (the boot router checks it)
+            // and land on the dashboard for THIS role, not client home.
+            const updatedUser = await storage.updateCurrentUser(
+                response.data?.user || { account_status: 'active' }
+            );
             Alert.alert("🎉 Success", "Account activated successfully!", [
                 {
                     text: "Go to Dashboard",
-                    onPress: () => router.replace('/(tabs)/(home)') // Or '/agent/dashboard' if you have one
+                    onPress: () => router.replace(getHomeRouteForRole(updatedUser?.role))
                 }
             ]);
 
@@ -67,209 +76,147 @@ export default function ActivationScreen() {
         await SecureStore.deleteItemAsync('accessToken');
         await SecureStore.deleteItemAsync('refreshToken');
         await SecureStore.deleteItemAsync('user');
-        router.replace('/login'); // ✅ Updated path
+        router.replace('/login');
     };
 
     return (
-        <LinearGradient
-            colors={['#1e1b4b', '#312e81', '#4338ca']}
-            style={styles.container}
-        >
+        <SafeAreaView style={styles.container}>
+            <StatusBar style="dark" />
             <KeyboardAvoidingView
                 behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
                 style={styles.content}
             >
 
-                {/* Lock Icon Animation Area */}
+                {/* Lock icon */}
                 <View style={styles.iconContainer}>
                     <View style={styles.iconCircle}>
-                        <Ionicons name="lock-closed" size={50} color="#FFF" />
+                        <MaterialIcons name="lock-outline" size={40} color={color.brand600} />
                     </View>
                     <View style={styles.statusBadge}>
-                        <Text style={styles.statusText}>ACCOUNT LOCKED</Text>
+                        <Text style={styles.statusText}>{t('Account locked')}</Text>
                     </View>
                 </View>
 
-                <Text style={styles.title}>Activation Required</Text>
+                <Text style={styles.title}>{t('Activation required')}</Text>
                 <Text style={styles.subtitle}>
-                    This dashboard is restricted. Please enter the unique
-                    <Text style={{ fontWeight: 'bold', color: '#FFF' }}> Serial Number </Text>
-                    issued by your State Coordinator or Administrator.
+                    {t('This dashboard is restricted. Enter the unique serial number issued by your State Coordinator or Administrator.')}
                 </Text>
 
-                {/* Input Field */}
-                <View style={styles.inputWrapper}>
-                    <View style={styles.inputIcon}>
-                        <Ionicons name="key" size={20} color="#6366F1" />
-                    </View>
-                    <TextInput
-                        style={styles.input}
-                        placeholder="Enter Serial Number"
-                        placeholderTextColor="#9CA3AF"
-                        value={serial}
-                        onChangeText={setSerial}
-                        autoCapitalize="characters"
-                        autoCorrect={false}
-                    />
-                </View>
+                <Input
+                    icon="vpn-key"
+                    placeholder={t('Enter Serial Number')}
+                    value={serial}
+                    onChangeText={setSerial}
+                    autoCapitalize="characters"
+                    autoCorrect={false}
+                    containerStyle={styles.inputContainer}
+                />
 
-                {/* Submit Button */}
-                <TouchableOpacity
-                    style={styles.button}
+                <Button
+                    title={t('Unlock dashboard')}
                     onPress={handleActivation}
-                    disabled={loading}
-                    activeOpacity={0.8}
-                >
-                    {loading ? (
-                        <ActivityIndicator color="#FFF" />
-                    ) : (
-                        <Text style={styles.buttonText}>Unlock Dashboard</Text>
-                    )}
-                </TouchableOpacity>
+                    loading={loading}
+                    style={styles.button}
+                />
 
                 {/* Footer Actions */}
                 <View style={styles.footer}>
-                    <TouchableOpacity onPress={handleLogout} style={styles.logoutBtn}>
-                        <Ionicons name="log-out-outline" size={20} color="#A5B4FC" />
-                        <Text style={styles.logoutText}>Log Out</Text>
+                    <TouchableOpacity onPress={handleLogout} style={styles.logoutBtn} accessibilityRole="button">
+                        <MaterialIcons name="logout" size={18} color={color.ink400} />
+                        <Text style={styles.logoutText}>{t('Log Out')}</Text>
                     </TouchableOpacity>
 
-                    <TouchableOpacity onPress={() => Alert.alert("Support", "Contact your Admin for your code.")}>
-                        <Text style={styles.helpText}>Need Help?</Text>
+                    <TouchableOpacity
+                        onPress={() => Alert.alert(t("Support"), t("Contact your Admin for your code."))}
+                        accessibilityRole="button"
+                    >
+                        <Text style={styles.helpText}>{t('Need help?')}</Text>
                     </TouchableOpacity>
                 </View>
 
             </KeyboardAvoidingView>
-        </LinearGradient>
+        </SafeAreaView>
     );
 }
 
 const styles = StyleSheet.create({
     container: {
         flex: 1,
+        backgroundColor: color.canvas,
     },
     content: {
         flex: 1,
         justifyContent: 'center',
-        padding: 24,
-        alignItems: 'center'
+        padding: space.xxl,
     },
 
-    // Icon Styles
     iconContainer: {
         alignItems: 'center',
-        marginBottom: 40,
+        marginBottom: space.xxl,
     },
     iconCircle: {
-        width: 100,
-        height: 100,
-        borderRadius: 50,
-        backgroundColor: 'rgba(255,255,255,0.1)',
+        width: 88,
+        height: 88,
+        borderRadius: 44,
+        backgroundColor: color.brand100,
         justifyContent: 'center',
         alignItems: 'center',
-        marginBottom: 16,
-        borderWidth: 1,
-        borderColor: 'rgba(255,255,255,0.2)'
+        marginBottom: space.md,
     },
     statusBadge: {
-        backgroundColor: '#EF4444',
+        backgroundColor: '#FDECEC',
         paddingHorizontal: 12,
         paddingVertical: 4,
-        borderRadius: 12,
+        borderRadius: 999,
     },
     statusText: {
-        color: '#FFF',
-        fontWeight: '800',
-        fontSize: 10,
-        letterSpacing: 1,
+        color: '#B91C1C',
+        fontFamily: font.extrabold,
+        fontSize: 10.5,
+        letterSpacing: 0.6,
+        textTransform: 'uppercase',
     },
 
-    // Text Styles
     title: {
-        fontSize: 28,
-        fontWeight: 'bold',
-        color: '#FFF',
-        marginBottom: 12,
-        textAlign: 'center'
+        ...type.titleLg,
+        textAlign: 'center',
+        marginBottom: space.sm,
     },
     subtitle: {
-        fontSize: 15,
-        color: '#C7D2FE',
+        fontFamily: font.medium,
+        fontSize: 14,
+        color: color.ink400,
         textAlign: 'center',
-        marginBottom: 40,
-        lineHeight: 22
+        marginBottom: space.xxl,
+        lineHeight: 21,
     },
 
-    // Input Styles
-    inputWrapper: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        backgroundColor: '#FFF',
-        borderRadius: 16,
-        paddingHorizontal: 16,
-        height: 60,
-        width: '100%',
-        marginBottom: 24,
-        shadowColor: "#000",
-        shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.2,
-        shadowRadius: 8,
-        elevation: 5
+    inputContainer: {
+        marginBottom: space.xl,
     },
-    inputIcon: {
-        marginRight: 12,
-        opacity: 0.8
-    },
-    input: {
-        flex: 1,
-        fontSize: 18,
-        color: '#1F2937',
-        fontWeight: '600',
-        letterSpacing: 1
-    },
-
-    // Button Styles
     button: {
-        backgroundColor: '#4ADE80',
-        width: '100%',
-        height: 60,
-        borderRadius: 16,
-        justifyContent: 'center',
-        alignItems: 'center',
-        marginBottom: 30,
-        shadowColor: "#4ADE80",
-        shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.3,
-        shadowRadius: 10,
-        elevation: 6
-    },
-    buttonText: {
-        color: '#064E3B',
-        fontSize: 18,
-        fontWeight: 'bold'
+        marginBottom: space.xxl,
     },
 
-    // Footer Styles
     footer: {
         flexDirection: 'row',
         justifyContent: 'space-between',
-        width: '100%',
-        paddingHorizontal: 10
+        alignItems: 'center',
+        paddingHorizontal: space.sm,
     },
     logoutBtn: {
         flexDirection: 'row',
         alignItems: 'center',
-        gap: 6
+        gap: 6,
     },
     logoutText: {
-        color: '#A5B4FC',
-        fontSize: 16,
-        fontWeight: '500'
+        color: color.ink400,
+        fontFamily: font.bold,
+        fontSize: 14,
     },
     helpText: {
-        color: '#FFF',
-        fontSize: 14,
-        textDecorationLine: 'underline',
-        opacity: 0.8
-    }
+        color: color.brand600,
+        fontFamily: font.extrabold,
+        fontSize: 13.5,
+    },
 });

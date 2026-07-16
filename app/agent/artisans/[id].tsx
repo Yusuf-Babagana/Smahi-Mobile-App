@@ -8,8 +8,10 @@ import { Ionicons } from '@expo/vector-icons';
 import { artisanAPI } from '@/src/api/client';
 import { colors } from '@/styles/commonStyles';
 import { LinearGradient } from 'expo-linear-gradient';
+import { useTranslation } from 'react-i18next';
 
 export default function ArtisanDetailScreen() {
+    const { i18n } = useTranslation();
     const { id } = useLocalSearchParams();
     const router = useRouter();
     const [artisan, setArtisan] = useState<any>(null);
@@ -101,7 +103,7 @@ export default function ArtisanDetailScreen() {
                 {/* 2. Basic Info */}
                 <View style={styles.headerInfo}>
                     <Text style={styles.name}>{artisan.first_name} {artisan.last_name}</Text>
-                    <Text style={styles.category}>{artisan.service_category || 'General Services'}</Text>
+                    <Text style={styles.category}>{i18n.language === 'ha' && artisan.category_name_ha ? artisan.category_name_ha : (artisan.service_category || 'General Services')}</Text>
 
                     <View style={styles.statusRow}>
                         {artisan.is_verified ? (

@@ -1,6 +1,6 @@
 {
   "expo": {
-    "name": "smahi",
+    "name": "SmahiApp",
     "slug": "Natively",
     "version": "1.0.0",
     "orientation": "portrait",
@@ -14,7 +14,10 @@
     },
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.anonymous.Natively",
+      "bundleIdentifier": "com.smahi.app",
+      "config": {
+        "googleMapsApiKey": "AIzaSyBypBFMwHGnv-gGDXL3VlG-IMUkU3sOT6E"
+      },
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false
       }
@@ -25,7 +28,12 @@
         "backgroundColor": "#ffffff"
       },
       "edgeToEdgeEnabled": true,
-      "package": "com.anonymous.Natively"
+      "package": "com.smahi.app",
+      "config": {
+        "googleMaps": {
+          "apiKey": "AIzaSyBypBFMwHGnv-gGDXL3VlG-IMUkU3sOT6E"
+        }
+      }
     },
     "web": {
       "favicon": "./assets/images/smahi.png",
@@ -35,7 +43,8 @@
       "expo-font",
       "expo-router",
       "expo-web-browser",
-      "expo-localization"
+      "expo-localization",
+      "expo-speech-recognition"
     ],
     "scheme": "natively",
     "experiments": {

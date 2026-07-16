@@ -3,6 +3,13 @@
 import "react-native-reanimated";
 import React, { useEffect } from "react";
 import { useFonts } from "expo-font";
+import {
+  Manrope_400Regular,
+  Manrope_500Medium,
+  Manrope_600SemiBold,
+  Manrope_700Bold,
+  Manrope_800ExtraBold,
+} from "@expo-google-fonts/manrope";
 import { Stack } from "expo-router";
 import * as SplashScreen from "expo-splash-screen";
 import { SystemBars } from "react-native-edge-to-edge";
@@ -21,7 +28,8 @@ import { WidgetProvider } from "@/src/contexts/WidgetContext";
 // ✅ 1. Import the Notification Provider
 import { NotificationProvider } from '@/src/contexts/NotificationContext';
 import { AuthProvider } from '@/src/contexts/AuthContext';
-import '@/src/i18n';
+import { LocationProvider } from '@/src/contexts/LocationContext';
+import '@/src/locales/i18n';
 
 
 SplashScreen.preventAutoHideAsync();
@@ -31,6 +39,11 @@ export default function RootLayout() {
   const networkState = useNetworkState();
   const [loaded] = useFonts({
     SpaceMono: require("../assets/fonts/SpaceMono-Regular.ttf"),
+    Manrope_400Regular,
+    Manrope_500Medium,
+    Manrope_600SemiBold,
+    Manrope_700Bold,
+    Manrope_800ExtraBold,
   });
 
   useEffect(() => {
@@ -61,12 +74,12 @@ export default function RootLayout() {
     ...DefaultTheme,
     dark: false,
     colors: {
-      primary: "rgb(0, 122, 255)",
-      background: "rgb(242, 242, 247)",
-      card: "rgb(255, 255, 255)",
-      text: "rgb(0, 0, 0)",
-      border: "rgb(216, 216, 220)",
-      notification: "rgb(255, 59, 48)",
+      primary: "#1B5FD9",
+      background: "#F6F8FB",
+      card: "#FFFFFF",
+      text: "#0B1F3F",
+      border: "#E2E8F0",
+      notification: "#DC2626",
     },
   };
 
@@ -87,36 +100,44 @@ export default function RootLayout() {
   return (
     <ThemeProvider value={theme}>
       <WidgetProvider>
-        {/* ✅ 2. Wrap App in AuthProvider & NotificationProvider */}
-        <AuthProvider>
-          <NotificationProvider>
-            <GestureHandlerRootView style={{ flex: 1 }}>
-              <StatusBar style={colorScheme === "dark" ? "light" : "dark"} />
+        <LocationProvider>
+          {/* ✅ Wrap App in AuthProvider & NotificationProvider */}
+          <AuthProvider>
+            <NotificationProvider>
+              <GestureHandlerRootView style={{ flex: 1 }}>
+                <StatusBar style={colorScheme === "dark" ? "light" : "dark"} />
 
-              <Stack screenOptions={{ contentStyle: { backgroundColor: theme.colors.background } }}>
-                {/* Auth & Base Screens */}
-                <Stack.Screen name="index" options={{ headerShown: false }} />
-                <Stack.Screen name="login" options={{ headerShown: false }} />
-                <Stack.Screen name="register" options={{ headerShown: false }} />
-                <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+                <Stack screenOptions={{ contentStyle: { backgroundColor: theme.colors.background } }}>
+                  {/* Auth & Base Screens */}
+                  <Stack.Screen name="index" options={{ headerShown: false }} />
+                  <Stack.Screen name="welcome" options={{ headerShown: false }} />
+                  <Stack.Screen name="login" options={{ headerShown: false }} />
+                  <Stack.Screen name="register" options={{ headerShown: false }} />
+                  <Stack.Screen name="forgot-password" options={{ headerShown: false }} />
+                  <Stack.Screen name="verify-email" options={{ headerShown: false }} />
+                  <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
 
-                {/* Dashboard Screens */}
-                <Stack.Screen name="artisan/dashboard" options={{ headerShown: false }} />
-                <Stack.Screen name="agent/dashboard" options={{ headerShown: false }} />
-                <Stack.Screen name="admin/dashboard" options={{ headerShown: false }} />
+                  {/* Dashboard Screens */}
+                  <Stack.Screen name="artisan/dashboard" options={{ headerShown: false }} />
+                  <Stack.Screen name="agent/dashboard" options={{ headerShown: false }} />
+                  <Stack.Screen name="admin/dashboard" options={{ headerShown: false }} />
 
-                {/* ✅ 3. Add Chat & Profile Screens */}
-                <Stack.Screen name="artisan-profile" options={{ headerShown: false }} />
-                <Stack.Screen name="chat/index" options={{ headerShown: false }} />
-                <Stack.Screen name="chat/[id]" options={{ headerShown: false }} />
+                  {/* ✅ 3. Add Chat & Profile Screens */}
+                  <Stack.Screen name="artisan-profile" options={{ headerShown: false }} />
+                  <Stack.Screen name="artisan/[id]" options={{ headerShown: false }} />
+                  <Stack.Screen name="booking/[artisanId]" options={{ headerShown: false }} />
+                  <Stack.Screen name="booking/detail/[id]" options={{ headerShown: false }} />
+                  <Stack.Screen name="chat/index" options={{ headerShown: false }} />
+                  <Stack.Screen name="chat/[id]" options={{ headerShown: false }} />
 
-                <Stack.Screen name="+not-found" />
-              </Stack>
+                  <Stack.Screen name="+not-found" />
+                </Stack>
 
-              <SystemBars style="auto" />
-            </GestureHandlerRootView>
-          </NotificationProvider>
-        </AuthProvider>
+                <SystemBars style="auto" />
+              </GestureHandlerRootView>
+            </NotificationProvider>
+          </AuthProvider>
+        </LocationProvider>
       </WidgetProvider>
     </ThemeProvider>
   );

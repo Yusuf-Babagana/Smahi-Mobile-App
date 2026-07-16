@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import {
-    View, Text, StyleSheet, FlatList, Image, TouchableOpacity, Alert, ActivityIndicator, StatusBar, Platform
+    View, Text, StyleSheet, FlatList, Image, TouchableOpacity, Alert, ActivityIndicator, StatusBar
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
@@ -9,10 +9,9 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import axios from 'axios';
 import * as SecureStore from 'expo-secure-store';
-import { colors, shadows } from '@/styles/commonStyles';
 
-const BASE_URL = 'https://smahi1.pythonanywhere.com/api';
-const CLOUD_NAME = 'dvj6cw5dq'; // ✅ Your Cloud Name
+import { color, font, radius, shadow, space, type } from '@/constants/theme';
+import { API_URL as BASE_URL, CLOUDINARY_CLOUD_NAME as CLOUD_NAME } from '@/src/constants/env';
 
 export default function PortfolioScreen() {
     const router = useRouter();
@@ -30,7 +29,6 @@ export default function PortfolioScreen() {
             const response = await axios.get(`${BASE_URL}/auth/profile/`, {
                 headers: { Authorization: `Bearer ${token}` }
             });
-            console.log("Portfolio Data:", response.data.portfolio_images);
             setImages(response.data.portfolio_images || []);
         } catch (error) {
             console.log("Error fetching portfolio", error);
@@ -109,13 +107,11 @@ export default function PortfolioScreen() {
         ]);
     };
 
-    // ✅ INTELLIGENT URL RESOLVER
     const getImageUrl = (item: any) => {
         if (!item) return null;
 
         let url = '';
 
-        // 1. Extract URL string from object or string
         if (typeof item.image === 'string') {
             url = item.image;
         } else if (item.image && item.image.url) {
@@ -124,13 +120,10 @@ export default function PortfolioScreen() {
 
         if (!url) return null;
 
-        // 2. Fix Relative Paths (The Cloudinary Fix)
-        // If it starts with "image/upload", it's missing the domain
         if (!url.startsWith('http') && url.includes('image/upload')) {
             return `https://res.cloudinary.com/${CLOUD_NAME}/${url}`;
         }
 
-        // 3. Fix Insecure HTTP
         if (url.startsWith('http:')) {
             return url.replace('http:', 'https:');
         }
@@ -142,9 +135,8 @@ export default function PortfolioScreen() {
         <View style={styles.container}>
             <StatusBar barStyle="light-content" />
 
-            {/* --- GRADIENT HEADER --- */}
             <LinearGradient
-                colors={['#103d75', '#1e64bc']}
+                colors={[color.brand900, color.brand600]}
                 style={styles.header}
                 start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
             >
@@ -161,7 +153,7 @@ export default function PortfolioScreen() {
             </LinearGradient>
 
             {loading ? (
-                <ActivityIndicator size="large" color={colors.primary} style={{ marginTop: 50 }} />
+                <ActivityIndicator size="large" color={color.brand600} style={{ marginTop: 50 }} />
             ) : (
                 <FlatList
                     data={[{ id: 'add_btn' }, ...images]}
@@ -174,11 +166,11 @@ export default function PortfolioScreen() {
                             return (
                                 <TouchableOpacity style={styles.addCard} onPress={pickImage} disabled={uploading}>
                                     {uploading ? (
-                                        <ActivityIndicator color={colors.primary} />
+                                        <ActivityIndicator color={color.brand600} />
                                     ) : (
                                         <>
                                             <View style={styles.iconCircle}>
-                                                <Ionicons name="camera" size={24} color={colors.primary} />
+                                                <Ionicons name="camera" size={24} color={color.brand600} />
                                             </View>
                                             <Text style={styles.addText}>Add Photo</Text>
                                         </>
@@ -199,7 +191,7 @@ export default function PortfolioScreen() {
                                     />
                                 ) : (
                                     <View style={[styles.image, { justifyContent: 'center', alignItems: 'center' }]}>
-                                        <Ionicons name="image-outline" size={24} color="#CCC" />
+                                        <Ionicons name="image-outline" size={24} color={color.ink300} />
                                     </View>
                                 )}
                                 <TouchableOpacity style={styles.deleteBtn} onPress={() => deleteImage(item.id)}>
@@ -215,79 +207,77 @@ export default function PortfolioScreen() {
 }
 
 const styles = StyleSheet.create({
-    container: { flex: 1, backgroundColor: '#F8F9FA' },
+    container: { flex: 1, backgroundColor: color.surfaceSunken },
 
-    // Header
     header: {
-        paddingBottom: 24,
-        borderBottomLeftRadius: 24,
-        borderBottomRightRadius: 24,
-        ...shadows.medium
+        paddingBottom: space.xxl,
+        borderBottomLeftRadius: radius.xxl,
+        borderBottomRightRadius: radius.xxl,
+        ...shadow.e2
     },
     headerContent: {
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'space-between',
-        paddingHorizontal: 20,
-        marginTop: 10,
-        marginBottom: 8
+        paddingHorizontal: space.xl,
+        marginTop: space.sm,
+        marginBottom: space.sm
     },
     backBtn: {
         width: 40,
         height: 40,
         borderRadius: 20,
-        backgroundColor: 'rgba(255,255,255,0.2)',
+        backgroundColor: 'rgba(255,255,255,0.16)',
         justifyContent: 'center',
         alignItems: 'center',
         borderWidth: 1,
-        borderColor: 'rgba(255,255,255,0.1)'
+        borderColor: 'rgba(255,255,255,0.12)'
     },
-    title: { fontSize: 20, fontWeight: '700', color: '#FFF' },
+    title: { fontFamily: font.extrabold, fontSize: 20, color: '#FFF' },
     subtitle: {
-        paddingHorizontal: 20,
-        color: 'rgba(255,255,255,0.8)',
+        paddingHorizontal: space.xl,
+        color: 'rgba(255,255,255,0.80)',
+        fontFamily: font.medium,
         fontSize: 13,
         textAlign: 'center'
     },
 
-    // Grid
-    grid: { padding: 16, paddingBottom: 50 },
+    grid: { padding: space.lg, paddingBottom: 50 },
 
-    // Cards
     addCard: {
         width: '31%',
         aspectRatio: 1,
         margin: '1.15%',
-        backgroundColor: '#F0F9FF',
-        borderRadius: 16,
+        backgroundColor: color.brand100,
+        borderRadius: radius.lg,
         borderWidth: 1.5,
-        borderColor: '#BAE6FD',
+        borderColor: color.brand100,
         borderStyle: 'dashed',
         justifyContent: 'center',
         alignItems: 'center'
     },
     iconCircle: {
-        width: 36, height: 36, borderRadius: 18, backgroundColor: '#FFF',
+        width: 36, height: 36, borderRadius: 18, backgroundColor: color.surface,
         justifyContent: 'center', alignItems: 'center', marginBottom: 6,
-        ...shadows.small
+        ...shadow.e1
     },
-    addText: { fontSize: 11, fontWeight: '600', color: '#0284C7' },
+    addText: { fontFamily: font.semibold, fontSize: 11, color: color.brand600 },
 
     imageCard: {
         width: '31%',
         aspectRatio: 1,
         margin: '1.15%',
-        borderRadius: 16,
+        borderRadius: radius.lg,
         overflow: 'hidden',
-        ...shadows.small,
-        backgroundColor: '#FFF'
+        ...shadow.e1,
+        backgroundColor: color.surface
     },
     image: { width: '100%', height: '100%' },
     deleteBtn: {
         position: 'absolute', top: 6, right: 6,
-        backgroundColor: 'rgba(239, 68, 68, 0.9)', // Red semi-transparent
+        backgroundColor: 'rgba(220, 38, 38, 0.9)',
         width: 26, height: 26, borderRadius: 13,
         justifyContent: 'center', alignItems: 'center',
-        borderWidth: 1.5, borderColor: '#FFF'
+        borderWidth: 1.5, borderColor: color.surface
     }
 });

@@ -4,6 +4,7 @@ import { useRouter } from 'expo-router';
 import { useTheme } from '@react-navigation/native';
 import { storage } from '@/src/utils/storage';
 import { authAPI } from '@/src/api/client';
+import { getHomeRouteForRole } from '@/src/constants/roleRoutes';
 import * as SplashScreen from 'expo-splash-screen';
 
 export default function Index() {
@@ -25,24 +26,22 @@ export default function Index() {
         // const freshProfile = await authAPI.getCurrentUser();
         // if (!freshProfile) throw new Error('Session expired');
 
-        // 2. Navigate based on role (Client vs Artisan)
-        if (user.role === 'artisan') {
-          router.replace('/artisan/dashboard');
-        } else if (user.role === 'admin') {
-          router.replace('/admin/dashboard');
-        } else if (user.role === 'agent') {
-          router.replace('/agent/dashboard');
+        // 2. Account gates first (same rules as login), then route by role
+        // via the shared map — cold start must land on the same screen login does.
+        if (user.account_status === 'locked') {
+          router.replace('/activate');
+        } else if (user.account_status === 'suspended') {
+          router.replace('/login');
         } else {
-          // Default to Client Home
-          router.replace('/(tabs)/(home)/');
+          router.replace(getHomeRouteForRole(user.role));
         }
       } else {
-        // 3. No user found, go to Login
-        router.replace('/login');
+        // 3. No user found, go to Welcome (register / login entry point)
+        router.replace('/welcome');
       }
     } catch (error) {
       console.log('Session check failed:', error);
-      router.replace('/login');
+      router.replace('/welcome');
     } finally {
       setIsReady(true);
       SplashScreen.hideAsync();

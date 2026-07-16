@@ -1,17 +1,22 @@
 import React, { useState, useEffect } from 'react';
 import {
-    View, Text, StyleSheet, TextInput, TouchableOpacity, ScrollView,
-    ActivityIndicator, Alert, KeyboardAvoidingView, Platform
+    View, Text, StyleSheet, TextInput, ScrollView,
+    Alert, KeyboardAvoidingView, Platform, Pressable,
 } from 'react-native';
 import { useRouter } from 'expo-router';
-import { Ionicons } from '@expo/vector-icons';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import { MaterialIcons } from '@expo/vector-icons';
 import { Picker } from '@react-native-picker/picker';
+import { useTranslation } from 'react-i18next';
+
 import { useAuth } from '@/src/contexts/AuthContext';
-import { agentAPI, authAPI } from '@/src/api/client';
-import { colors } from '@/styles/commonStyles';
+import { agentAPI, categoryAPI } from '@/src/api/client';
+import { color, font, radius, space } from '@/constants/theme';
+import { Button, Input } from '@/src/components/ui';
 
 export default function AgentRegisterScreen() {
     const router = useRouter();
+    const { t } = useTranslation();
     const { user } = useAuth(); // Get Agent's details
 
     const [loading, setLoading] = useState(false);
@@ -21,7 +26,7 @@ export default function AgentRegisterScreen() {
     const [formData, setFormData] = useState({
         first_name: '',
         last_name: '',
-        email: '', // Optional or auto-generated? Let's require it for now.
+        email: '',
         phone: '',
         password: 'Password@123', // Default password for Agent registrations
         service_category: '',
@@ -33,8 +38,11 @@ export default function AgentRegisterScreen() {
 
     const loadServices = async () => {
         try {
-            const data = await authAPI.getServices();
-            setServices(data);
+            const data = await categoryAPI.getCategoriesFlat();
+            setServices(data.map((cat: any) => ({
+                label: cat.name,
+                value: cat.id.toString()
+            })));
         } catch (e) {
             console.log("Failed to load services");
         }
@@ -85,119 +93,171 @@ export default function AgentRegisterScreen() {
     };
 
     return (
-        <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : "height"} style={{ flex: 1 }}>
-            <View style={styles.header}>
-                <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
-                    <Ionicons name="arrow-back" size={24} color="#FFF" />
-                </TouchableOpacity>
-                <Text style={styles.headerTitle}>Register New Artisan</Text>
-            </View>
+        <View style={styles.container}>
+            {/* Header */}
+            <SafeAreaView edges={['top']} style={styles.headerSafe}>
+                <View style={styles.header}>
+                    <Pressable onPress={() => router.back()} style={styles.backButton} accessibilityRole="button" accessibilityLabel={t('Back')}>
+                        <MaterialIcons name="arrow-back" size={20} color="#FFF" />
+                    </Pressable>
+                    <Text style={styles.headerTitle}>{t('Register new artisan')}</Text>
+                    <View style={{ width: 40 }} />
+                </View>
+            </SafeAreaView>
 
-            <ScrollView contentContainerStyle={styles.content}>
-                <Text style={styles.subText}>
-                    You are registering this artisan in <Text style={{ fontWeight: 'bold' }}>{user?.lga_details?.name}</Text>.
-                </Text>
+            <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : "height"} style={{ flex: 1 }}>
+                <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
+                    <View style={styles.noteBanner}>
+                        <MaterialIcons name="place" size={16} color={color.brand600} />
+                        <Text style={styles.noteText}>
+                            {t('You are registering this artisan in')}{' '}
+                            <Text style={styles.noteStrong}>{user?.lga_details?.name || t('your LGA')}</Text>.
+                        </Text>
+                    </View>
 
-                <View style={styles.formGroup}>
-                    <Text style={styles.label}>First Name</Text>
-                    <TextInput
-                        style={styles.input}
+                    <Input
+                        label={t('First name')}
                         placeholder="e.g. Ibrahim"
                         value={formData.first_name}
-                        onChangeText={t => setFormData({ ...formData, first_name: t })}
+                        onChangeText={v => setFormData({ ...formData, first_name: v })}
+                        icon="person-outline"
+                        containerStyle={styles.field}
                     />
-                </View>
-
-                <View style={styles.formGroup}>
-                    <Text style={styles.label}>Last Name</Text>
-                    <TextInput
-                        style={styles.input}
+                    <Input
+                        label={t('Last name')}
                         placeholder="e.g. Musa"
                         value={formData.last_name}
-                        onChangeText={t => setFormData({ ...formData, last_name: t })}
+                        onChangeText={v => setFormData({ ...formData, last_name: v })}
+                        icon="person-outline"
+                        containerStyle={styles.field}
                     />
-                </View>
-
-                <View style={styles.formGroup}>
-                    <Text style={styles.label}>Phone Number</Text>
-                    <TextInput
-                        style={styles.input}
+                    <Input
+                        label={t('Phone number')}
                         placeholder="080..."
                         keyboardType="phone-pad"
                         value={formData.phone}
-                        onChangeText={t => setFormData({ ...formData, phone: t })}
+                        onChangeText={v => setFormData({ ...formData, phone: v })}
+                        icon="phone-iphone"
+                        containerStyle={styles.field}
                     />
-                </View>
-
-                <View style={styles.formGroup}>
-                    <Text style={styles.label}>Email (Optional)</Text>
-                    <TextInput
-                        style={styles.input}
+                    <Input
+                        label={t('Email (optional)')}
                         placeholder="artisan@gmail.com"
                         keyboardType="email-address"
                         autoCapitalize="none"
                         value={formData.email}
-                        onChangeText={t => setFormData({ ...formData, email: t })}
+                        onChangeText={v => setFormData({ ...formData, email: v })}
+                        icon="mail-outline"
+                        containerStyle={styles.field}
                     />
-                </View>
 
-                <View style={styles.formGroup}>
-                    <Text style={styles.label}>Service Category</Text>
-                    <View style={styles.pickerContainer}>
-                        <Picker
-                            selectedValue={formData.service_category}
-                            onValueChange={(itemValue) => setFormData({ ...formData, service_category: itemValue })}
-                        >
-                            <Picker.Item label="Select Service..." value="" />
-                            {services.map((s: any) => (
-                                <Picker.Item key={s.value} label={s.label} value={s.value} />
-                            ))}
-                        </Picker>
+                    <View style={styles.field}>
+                        <Text style={styles.label}>{t('Service category')}</Text>
+                        <View style={styles.pickerContainer}>
+                            <Picker
+                                selectedValue={formData.service_category}
+                                onValueChange={(itemValue) => setFormData({ ...formData, service_category: itemValue })}
+                            >
+                                <Picker.Item label={t('Select Service...')} value="" />
+                                {services.map((s: any) => (
+                                    <Picker.Item key={s.value} label={s.label} value={s.value} />
+                                ))}
+                            </Picker>
+                        </View>
                     </View>
-                </View>
 
-                <View style={styles.divider} />
+                    <View style={styles.divider} />
 
-                <View style={styles.formGroup}>
-                    <Text style={styles.label}>Default Password</Text>
-                    <TextInput
-                        style={[styles.input, { backgroundColor: '#F3F4F6', color: '#6B7280' }]}
-                        value={formData.password}
-                        editable={false}
+                    <View style={styles.field}>
+                        <Text style={styles.label}>{t('Default password')}</Text>
+                        <View style={styles.passwordBox}>
+                            <MaterialIcons name="lock-outline" size={18} color={color.ink300} />
+                            <TextInput
+                                style={styles.passwordInput}
+                                value={formData.password}
+                                editable={false}
+                            />
+                        </View>
+                        <Text style={styles.hint}>{t('Share this password with the artisan.')}</Text>
+                    </View>
+
+                    <Button
+                        title={t('Register & verify')}
+                        onPress={handleRegister}
+                        loading={loading}
+                        style={styles.submitButton}
                     />
-                    <Text style={styles.hint}>Share this password with the artisan.</Text>
-                </View>
-
-                <TouchableOpacity
-                    style={styles.submitButton}
-                    onPress={handleRegister}
-                    disabled={loading}
-                >
-                    {loading ? <ActivityIndicator color="#FFF" /> : <Text style={styles.submitText}>REGISTER & VERIFY</Text>}
-                </TouchableOpacity>
-
-            </ScrollView>
-        </KeyboardAvoidingView>
+                </ScrollView>
+            </KeyboardAvoidingView>
+        </View>
     );
 }
 
 const styles = StyleSheet.create({
-    header: { height: 100, backgroundColor: colors.primary, flexDirection: 'row', alignItems: 'flex-end', paddingBottom: 16, paddingHorizontal: 20 },
-    headerTitle: { fontSize: 20, fontWeight: '700', color: '#FFF', marginLeft: 16, marginBottom: 2 },
-    backButton: { marginBottom: 2 },
+    container: { flex: 1, backgroundColor: color.surfaceSunken },
 
-    content: { padding: 24, backgroundColor: '#FFF', flexGrow: 1 },
-    subText: { fontSize: 14, color: '#4B5563', marginBottom: 24, backgroundColor: '#EFF6FF', padding: 12, borderRadius: 8 },
+    headerSafe: { backgroundColor: color.brand900 },
+    header: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        paddingHorizontal: space.xl,
+        paddingVertical: space.md,
+        backgroundColor: color.brand900,
+    },
+    headerTitle: { fontFamily: font.extrabold, fontSize: 16, color: '#FFF' },
+    backButton: {
+        width: 40,
+        height: 40,
+        borderRadius: radius.md,
+        backgroundColor: 'rgba(255,255,255,0.12)',
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
 
-    formGroup: { marginBottom: 16 },
-    label: { fontSize: 14, fontWeight: '600', color: '#374151', marginBottom: 6 },
-    input: { borderWidth: 1, borderColor: '#D1D5DB', borderRadius: 8, padding: 12, fontSize: 16 },
+    content: { padding: space.xl, paddingBottom: 60 },
+    noteBanner: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 8,
+        backgroundColor: color.brand100,
+        borderRadius: radius.md,
+        padding: space.md,
+        marginBottom: space.xl,
+    },
+    noteText: { flex: 1, fontFamily: font.medium, fontSize: 13, color: color.brand600 },
+    noteStrong: { fontFamily: font.extrabold },
 
-    pickerContainer: { borderWidth: 1, borderColor: '#D1D5DB', borderRadius: 8, overflow: 'hidden' },
+    field: { marginBottom: space.lg },
+    label: {
+        fontFamily: font.bold,
+        fontSize: 12.5,
+        color: color.ink600,
+        marginBottom: 6,
+    },
+    pickerContainer: {
+        borderWidth: 1.5,
+        borderColor: color.border,
+        borderRadius: 14,
+        backgroundColor: color.surface,
+        overflow: 'hidden',
+    },
 
-    divider: { height: 1, backgroundColor: '#E5E7EB', marginVertical: 20 },
-    hint: { fontSize: 12, color: '#9CA3AF', marginTop: 4 },
+    divider: { height: 1, backgroundColor: color.border, marginVertical: space.lg },
 
-    submitButton: { backgroundColor: '#10B981', padding: 16, borderRadius: 12, alignItems: 'center', marginTop: 10 },
-    submitText: { color: '#FFF', fontSize: 16, fontWeight: '800', letterSpacing: 0.5 }
+    passwordBox: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 10,
+        height: 52,
+        borderRadius: 14,
+        borderWidth: 1.5,
+        borderColor: color.border,
+        backgroundColor: color.surfaceChip,
+        paddingHorizontal: space.lg,
+    },
+    passwordInput: { flex: 1, fontFamily: font.bold, fontSize: 14.5, color: color.ink400 },
+    hint: { fontFamily: font.bold, fontSize: 12, color: color.ink300, marginTop: 6 },
+
+    submitButton: { marginTop: space.md },
 });

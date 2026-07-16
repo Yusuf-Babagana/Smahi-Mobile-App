@@ -1,18 +1,24 @@
-import React, { useState, useCallback, useEffect } from 'react';
-import { View, Text, FlatList, TouchableOpacity, Image, StyleSheet, ActivityIndicator, RefreshControl, TextInput } from 'react-native';
+import React, { useState, useCallback, useEffect, useRef } from 'react';
+import {
+    View, Text, FlatList, TouchableOpacity, StyleSheet,
+    ActivityIndicator, RefreshControl, TextInput, Pressable,
+} from 'react-native';
 import { useRouter, useFocusEffect } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Ionicons } from '@expo/vector-icons';
+import { MaterialIcons } from '@expo/vector-icons';
+import { useTranslation } from 'react-i18next';
 
 // ✅ Import artisanAPI for global search
 import { chatAPI, artisanAPI } from '@/src/api/client';
-import { colors, shadows } from '@/styles/commonStyles';
 import { storage } from '@/src/utils/storage';
-
-const CLOUD_NAME = 'dvj6cw5dq';
+import { CLOUDINARY_CLOUD_NAME as CLOUD_NAME } from '@/src/constants/env';
+import { color, font, radius, space, type } from '@/constants/theme';
+import { Avatar, EmptyState } from '@/src/components/ui';
 
 export default function ChatListScreen() {
     const router = useRouter();
+    const { t } = useTranslation();
+    const searchRef = useRef<TextInput>(null);
 
     // --- Data State ---
     const [conversations, setConversations] = useState<any[]>([]); // Existing chats
@@ -33,11 +39,9 @@ export default function ChatListScreen() {
     const loadConversations = async (showLoader = false) => {
         if (showLoader) setLoading(true);
         try {
-            const response = await chatAPI.getConversations();
+            const data = await chatAPI.getConversations();
 
-            let list = [];
-            if (Array.isArray(response)) list = response;
-            else if (response && Array.isArray(response.results)) list = response.results;
+            const list = Array.isArray(data) ? data : (data.results || []);
 
             const sorted = list.sort((a: any, b: any) =>
                 new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime()
@@ -55,16 +59,16 @@ export default function ChatListScreen() {
     useFocusEffect(
         useCallback(() => {
             loadConversations(true);
-        }, [])
+        }, [currentUserId])
     );
 
     // Polling (Only when not searching)
     useEffect(() => {
         const interval = setInterval(() => {
-            if (searchQuery === '') loadConversations(false);
+            if (searchQuery === '' && !loading) loadConversations(false);
         }, 5000);
         return () => clearInterval(interval);
-    }, [searchQuery]);
+    }, [searchQuery, loading, currentUserId]);
 
     // 2. ✅ GLOBAL SEARCH LOGIC (Debounced)
     useEffect(() => {
@@ -82,8 +86,11 @@ export default function ChatListScreen() {
                 const apiList = Array.isArray(data) ? data : (data.results || []);
 
                 // Filter out people we ALREADY have a chat with
-                // We map existing conversation IDs to a Set for O(1) lookup
-                const existingChatPartnerIds = new Set(conversations.map(c => c.other_user?.id));
+                const existingChatPartnerIds = new Set();
+                conversations.forEach(c => {
+                    const other = c.participants_details?.find((p: any) => p.id !== currentUserId);
+                    if (other) existingChatPartnerIds.add(other.id);
+                });
 
                 // Only keep artisans who are NOT in our conversation list
                 const newPeople = apiList.filter((p: any) => !existingChatPartnerIds.has(p.id));
@@ -120,7 +127,7 @@ export default function ChatListScreen() {
         const days = Math.floor((now.getTime() - date.getTime()) / (1000 * 60 * 60 * 24));
 
         if (days === 0) return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-        if (days === 1) return 'Yesterday';
+        if (days === 1) return t('Yesterday');
         if (days < 7) return date.toLocaleDateString([], { weekday: 'short' });
         return date.toLocaleDateString([], { month: 'short', day: 'numeric' });
     };
@@ -129,12 +136,12 @@ export default function ChatListScreen() {
     const getDisplayData = () => {
         // A. Filter existing conversations locally
         const localMatches = conversations.filter(c => {
-            const name = `${c.other_user?.first_name} ${c.other_user?.last_name}`.toLowerCase();
+            const other = c.participants_details?.find((p: any) => p.id !== currentUserId);
+            const name = other ? `${other.first_name} ${other.last_name}`.toLowerCase() : "unknown";
             return name.includes(searchQuery.toLowerCase());
         });
 
         // B. Combine [Local Chats] + [New Search Results]
-        // Add a 'type' flag to distinguish them
         const combined = [
             ...localMatches.map(item => ({ ...item, type: 'chat' })),
             ...searchResults.map(item => ({ ...item, type: 'new_artisan' }))
@@ -146,11 +153,14 @@ export default function ChatListScreen() {
     const renderItem = ({ item }: { item: any }) => {
         // --- CASE 1: EXISTING CHAT ---
         if (item.type === 'chat') {
-            let other = item.other_user || { first_name: "Unknown", last_name: "" };
+            const other = item.participants_details?.find((p: any) => p.id !== currentUserId) || { first_name: "User", last_name: "" };
             const lastMsg = item.last_message;
             const avatar = getAvatar(other.profile_picture);
-            const displayName = `${other.first_name || 'User'} ${other.last_name || ''}`;
+            const displayName = `${other.first_name || 'User'} ${other.last_name || ''}`.trim();
             const isSelfMsg = lastMsg && Number(lastMsg.sender_id) === Number(currentUserId);
+            const unreadCount = Number(item.unread_count || 0);
+            const hasUnread = unreadCount > 0;
+            const msgSeen = !!(lastMsg?.seen || lastMsg?.is_seen || lastMsg?.read);
 
             return (
                 <TouchableOpacity
@@ -161,28 +171,41 @@ export default function ChatListScreen() {
                     })}
                     activeOpacity={0.7}
                 >
-                    <View style={styles.avatarContainer}>
-                        {avatar ? (
-                            <Image source={{ uri: avatar }} style={styles.avatar} />
-                        ) : (
-                            <View style={[styles.avatar, styles.placeholder]}>
-                                <Text style={styles.initial}>{displayName.charAt(0)}</Text>
-                            </View>
-                        )}
-                    </View>
+                    <Avatar
+                        name={displayName}
+                        uri={avatar}
+                        size={50}
+                        online={!!(other.is_online || other.online)}
+                    />
                     <View style={styles.content}>
                         <View style={styles.row}>
                             <Text style={styles.name} numberOfLines={1}>{displayName}</Text>
-                            <Text style={styles.time}>
+                            <Text style={[styles.time, hasUnread && styles.timeUnread]}>
                                 {lastMsg ? formatTime(lastMsg.updated_at || lastMsg.created_at) : ''}
                             </Text>
                         </View>
                         <View style={styles.row}>
-                            <Text style={styles.message} numberOfLines={1}>
-                                {isSelfMsg && <Text style={{ color: colors.primary }}>You: </Text>}
-                                {lastMsg ? lastMsg.text : 'Start a conversation'}
-                            </Text>
-                            <Ionicons name="chevron-forward" size={16} color="#E5E7EB" />
+                            <View style={styles.previewRow}>
+                                {isSelfMsg && (
+                                    <MaterialIcons
+                                        name="done-all"
+                                        size={15}
+                                        color={msgSeen ? color.brand600 : color.ink300}
+                                        style={styles.ticks}
+                                    />
+                                )}
+                                <Text
+                                    style={[styles.message, hasUnread && styles.messageUnread]}
+                                    numberOfLines={1}
+                                >
+                                    {lastMsg ? lastMsg.text : t('Start a conversation')}
+                                </Text>
+                            </View>
+                            {hasUnread && (
+                                <View style={styles.unreadPill}>
+                                    <Text style={styles.unreadPillText}>{unreadCount > 99 ? '99+' : unreadCount}</Text>
+                                </View>
+                            )}
                         </View>
                     </View>
                 </TouchableOpacity>
@@ -192,7 +215,7 @@ export default function ChatListScreen() {
         // --- CASE 2: NEW ARTISAN (FROM SEARCH) ---
         else {
             const avatar = getAvatar(item.profile_picture);
-            const displayName = `${item.first_name} ${item.last_name}`;
+            const displayName = `${item.first_name} ${item.last_name}`.trim();
 
             return (
                 <TouchableOpacity
@@ -204,27 +227,18 @@ export default function ChatListScreen() {
                     })}
                     activeOpacity={0.7}
                 >
-                    <View style={styles.avatarContainer}>
-                        {avatar ? (
-                            <Image source={{ uri: avatar }} style={styles.avatar} />
-                        ) : (
-                            <View style={[styles.avatar, styles.placeholder, { backgroundColor: '#9CA3AF' }]}>
-                                <Text style={styles.initial}>{displayName.charAt(0)}</Text>
-                            </View>
-                        )}
-                        {/* New Badge */}
+                    <View>
+                        <Avatar name={displayName} uri={avatar} size={50} />
                         <View style={styles.newBadge}>
-                            <Ionicons name="add" size={12} color="#FFF" />
+                            <MaterialIcons name="add" size={12} color="#FFF" />
                         </View>
                     </View>
                     <View style={styles.content}>
                         <View style={styles.row}>
                             <Text style={styles.name} numberOfLines={1}>{displayName}</Text>
-                            <Text style={[styles.time, { color: colors.primary, fontWeight: '600' }]}>New</Text>
+                            <Text style={styles.newLabel}>{t('New')}</Text>
                         </View>
-                        <Text style={[styles.message, { fontStyle: 'italic', color: colors.primary }]}>
-                            Tap to start a new chat
-                        </Text>
+                        <Text style={styles.newHint}>{t('Tap to start a new chat')}</Text>
                     </View>
                 </TouchableOpacity>
             );
@@ -236,52 +250,60 @@ export default function ChatListScreen() {
             {/* HEADER */}
             <View style={styles.header}>
                 <View style={styles.headerTop}>
-                    <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
-                        <Ionicons name="chevron-back" size={28} color={colors.primary} />
-                    </TouchableOpacity>
-                    <Text style={styles.headerTitle}>Messages</Text>
-                    <View style={{ width: 28 }} />
+                    {/* Hidden when rendered as the Chat tab (nothing to go back to). */}
+                    {router.canGoBack() ? (
+                        <Pressable onPress={() => router.back()} style={styles.backBtn} accessibilityRole="button" accessibilityLabel={t('Back')}>
+                            <MaterialIcons name="arrow-back" size={22} color={color.ink900} />
+                        </Pressable>
+                    ) : (
+                        <View style={{ width: 40 }} />
+                    )}
+                    <Text style={styles.headerTitle}>{t('Messages')}</Text>
+                    <Pressable
+                        onPress={() => searchRef.current?.focus()}
+                        style={styles.composeBtn}
+                        accessibilityRole="button"
+                        accessibilityLabel={t('New chat')}
+                    >
+                        <MaterialIcons name="edit" size={18} color="#FFF" />
+                    </Pressable>
                 </View>
 
-                {/* SEARCH BAR (Functional) */}
+                {/* SEARCH BAR — chats + new-people search in one field */}
                 <View style={styles.searchBar}>
-                    <Ionicons name="search" size={20} color="#9CA3AF" />
+                    <MaterialIcons name="search" size={20} color={color.ink300} />
                     <TextInput
-                        placeholder="Search chats or find people..."
+                        ref={searchRef}
+                        placeholder={t('Search people or start a new chat')}
                         style={styles.searchInput}
-                        placeholderTextColor="#9CA3AF"
+                        placeholderTextColor={color.ink300}
                         value={searchQuery}
-                        onChangeText={setSearchQuery} // ✅ Triggers search
+                        onChangeText={setSearchQuery}
                         autoCapitalize="none"
                     />
-                    {isSearching && <ActivityIndicator size="small" color={colors.primary} />}
+                    {isSearching && <ActivityIndicator size="small" color={color.brand600} />}
                 </View>
             </View>
 
             {/* LIST */}
             {loading && !searchQuery ? (
-                <ActivityIndicator size="large" color={colors.primary} style={{ marginTop: 50 }} />
+                <ActivityIndicator size="large" color={color.brand600} style={{ marginTop: 50 }} />
             ) : (
                 <FlatList
                     data={getDisplayData()}
                     keyExtractor={(item) => `${item.type}_${item.id}`}
                     renderItem={renderItem}
                     contentContainerStyle={styles.list}
-                    refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
+                    refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={color.brand600} />}
                     ListEmptyComponent={
-                        <View style={styles.empty}>
-                            <View style={styles.emptyIcon}>
-                                <Ionicons name="chatbubbles-outline" size={48} color="#9CA3AF" />
-                            </View>
-                            <Text style={styles.emptyTitle}>
-                                {searchQuery ? "No results found" : "No Messages"}
-                            </Text>
-                            <Text style={styles.emptyText}>
-                                {searchQuery
-                                    ? "Try searching for a different name."
-                                    : "Connect with an artisan to start chatting."}
-                            </Text>
-                        </View>
+                        <EmptyState
+                            icon={searchQuery ? 'search-off' : 'chat-bubble-outline'}
+                            title={searchQuery ? t('No results found') : t('No Messages')}
+                            message={searchQuery
+                                ? t('Try searching for a different name.')
+                                : t('Connect with an artisan to start chatting.')}
+                            style={{ marginTop: 60 }}
+                        />
                     }
                     ItemSeparatorComponent={() => <View style={styles.separator} />}
                 />
@@ -292,45 +314,99 @@ export default function ChatListScreen() {
 
 // --- STYLES ---
 const styles = StyleSheet.create({
-    container: { flex: 1, backgroundColor: '#FFF' },
+    container: { flex: 1, backgroundColor: color.surface },
 
-    header: { paddingBottom: 10, borderBottomWidth: 1, borderBottomColor: '#F3F4F6' },
-    headerTop: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, paddingVertical: 12 },
-    headerTitle: { fontSize: 28, fontWeight: '800', color: '#111' },
-    backBtn: { paddingRight: 10 },
+    header: { paddingBottom: space.md, borderBottomWidth: 1, borderBottomColor: '#F1F5F9' },
+    headerTop: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        paddingHorizontal: space.lg,
+        paddingVertical: space.md,
+    },
+    headerTitle: { ...type.titleLg },
+    backBtn: {
+        width: 40,
+        height: 40,
+        borderRadius: radius.md,
+        borderWidth: 1.5,
+        borderColor: color.border,
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    composeBtn: {
+        width: 40,
+        height: 40,
+        borderRadius: radius.md,
+        backgroundColor: color.brand600,
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
 
     searchBar: {
-        flexDirection: 'row', alignItems: 'center', backgroundColor: '#F3F4F6',
-        marginHorizontal: 16, padding: 10, borderRadius: 12, marginTop: 5
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 8,
+        backgroundColor: color.surfaceSunken,
+        marginHorizontal: space.lg,
+        paddingHorizontal: space.md,
+        height: 46,
+        borderRadius: radius.lg,
     },
-    searchInput: { flex: 1, marginLeft: 10, fontSize: 16, color: '#111' },
+    searchInput: {
+        flex: 1,
+        fontFamily: font.semibold,
+        fontSize: 14,
+        color: color.ink900,
+        paddingVertical: 0,
+    },
 
-    list: { paddingBottom: 20 },
-    separator: { height: 1, backgroundColor: '#F3F4F6', marginLeft: 80 },
+    list: { paddingBottom: 100 },
+    separator: { height: 1, backgroundColor: '#F1F5F9', marginLeft: 82 },
 
-    chatItem: { flexDirection: 'row', alignItems: 'center', paddingVertical: 14, paddingHorizontal: 16, backgroundColor: '#FFF' },
+    chatItem: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        paddingVertical: 14,
+        paddingHorizontal: space.lg,
+        backgroundColor: color.surface,
+    },
 
-    avatarContainer: { marginRight: 15 },
-    avatar: { width: 56, height: 56, borderRadius: 28, backgroundColor: '#E0E7FF' },
-    placeholder: { justifyContent: 'center', alignItems: 'center', backgroundColor: '#E0E7FF' },
-    initial: { color: colors.primary, fontSize: 24, fontWeight: '700' },
-
-    // New User Badge
     newBadge: {
-        position: 'absolute', bottom: 0, right: 0,
-        backgroundColor: colors.primary, width: 20, height: 20, borderRadius: 10,
-        justifyContent: 'center', alignItems: 'center', borderWidth: 2, borderColor: '#FFF'
+        position: 'absolute',
+        bottom: 0,
+        right: 0,
+        backgroundColor: color.brand600,
+        width: 20,
+        height: 20,
+        borderRadius: 10,
+        justifyContent: 'center',
+        alignItems: 'center',
+        borderWidth: 2,
+        borderColor: '#FFF',
     },
 
-    content: { flex: 1 },
-    row: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 },
+    content: { flex: 1, marginLeft: space.md },
+    row: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 3 },
 
-    name: { fontSize: 17, fontWeight: '600', color: '#1F2937' },
-    time: { fontSize: 13, color: '#9CA3AF' },
-    message: { fontSize: 15, color: '#6B7280', flex: 1, marginRight: 10 },
+    name: { fontFamily: font.extrabold, fontSize: 15, color: color.ink900, flexShrink: 1 },
+    time: { fontFamily: font.bold, fontSize: 12, color: color.ink300, marginLeft: 8 },
+    timeUnread: { color: color.brand600 },
+    previewRow: { flex: 1, flexDirection: 'row', alignItems: 'center', marginRight: 10 },
+    ticks: { marginRight: 4 },
+    message: { fontFamily: font.semibold, fontSize: 13.5, color: color.ink400, flexShrink: 1 },
+    messageUnread: { fontFamily: font.extrabold, color: color.ink900 },
+    unreadPill: {
+        minWidth: 19,
+        height: 19,
+        borderRadius: 10,
+        backgroundColor: color.brand600,
+        alignItems: 'center',
+        justifyContent: 'center',
+        paddingHorizontal: 5,
+    },
+    unreadPillText: { fontFamily: font.extrabold, fontSize: 10.5, color: '#FFF' },
 
-    empty: { alignItems: 'center', marginTop: 100 },
-    emptyIcon: { width: 80, height: 80, borderRadius: 40, backgroundColor: '#F3F4F6', justifyContent: 'center', alignItems: 'center', marginBottom: 16 },
-    emptyTitle: { fontSize: 18, fontWeight: '700', color: '#111', marginBottom: 8 },
-    emptyText: { color: '#9CA3AF', fontSize: 14, width: '60%', textAlign: 'center' }
+    newLabel: { fontFamily: font.extrabold, fontSize: 12, color: color.brand600 },
+    newHint: { fontFamily: font.semibold, fontSize: 13, color: color.brand600, fontStyle: 'italic' },
 });

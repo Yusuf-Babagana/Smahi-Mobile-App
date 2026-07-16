@@ -1,4 +1,7 @@
-const tintColorLight = "#0a7ea4";
+// DEPRECATED — migration shim. New code should import tokens from '@/constants/theme'.
+export { color, space, radius, shadow, font, theme } from './theme';
+
+const tintColorLight = "#1B5FD9";
 const tintColorDark = "#fff";
 
 export const zincColors = {

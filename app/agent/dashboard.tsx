@@ -1,22 +1,25 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import {
   View, Text, StyleSheet, ScrollView, TouchableOpacity, RefreshControl,
-  ActivityIndicator, Alert, Dimensions, Platform, Image
+  Alert, Pressable,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
-import { LinearGradient } from 'expo-linear-gradient';
-import { Ionicons } from '@expo/vector-icons';
-import { dashboardAPI } from '@/src/api/client';
-import { useAuth } from '@/src/contexts/AuthContext';
+import { MaterialIcons } from '@expo/vector-icons';
 import { StatusBar } from 'expo-status-bar';
 import * as SecureStore from 'expo-secure-store';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { useTranslation } from 'react-i18next';
 
-const { width } = Dimensions.get('window');
+import { dashboardAPI } from '@/src/api/client';
+import { useAuth } from '@/src/contexts/AuthContext';
+import { EmailVerificationBanner } from '@/src/components/EmailVerificationBanner';
+import { color, font, radius, shadow, space, type } from '@/constants/theme';
+import { Avatar } from '@/src/components/ui';
 
 export default function AgentDashboard() {
   const router = useRouter();
+  const { t } = useTranslation();
 
   const { user, logout } = useAuth();
 
@@ -27,7 +30,6 @@ export default function AgentDashboard() {
     resolved_tickets: 0,
     total_agents: 0
   });
-  const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
 
   // --- ACTIONS ---
@@ -39,19 +41,18 @@ export default function AgentDashboard() {
     } catch (error) {
       console.log("Dashboard Error", error);
     } finally {
-      setLoading(false);
       setRefreshing(false);
     }
   };
 
   const handleLogout = async () => {
     Alert.alert(
-      "Log Out",
-      "Are you sure you want to exit?",
+      t("Log Out"),
+      t("Are you sure you want to exit?"),
       [
-        { text: "Cancel", style: "cancel" },
+        { text: t("Cancel"), style: "cancel" },
         {
-          text: "Log Out",
+          text: t("Log Out"),
           style: 'destructive',
           onPress: async () => {
             if (logout) {
@@ -79,28 +80,51 @@ export default function AgentDashboard() {
 
   // --- SUB-COMPONENTS ---
 
-  const QuickStat = ({ value, label, color, onPress }: any) => (
+  const QuickStat = ({ value, label, valueColor, onPress }: {
+    value: string | number;
+    label: string;
+    valueColor: string;
+    onPress?: () => void;
+  }) => (
     <TouchableOpacity style={styles.quickStat} onPress={onPress} activeOpacity={onPress ? 0.7 : 1}>
-      <Text style={[styles.quickStatValue, { color }]}>{value}</Text>
+      <Text style={[styles.quickStatValue, { color: valueColor }]}>{value}</Text>
       <Text style={styles.quickStatLabel}>{label}</Text>
     </TouchableOpacity>
   );
 
-  const ActionButton = ({ title, icon, color1, color2, onPress }: any) => (
-    <TouchableOpacity style={styles.actionCard} onPress={onPress} activeOpacity={0.8}>
-      <LinearGradient colors={[color1, color2]} style={styles.actionGradient}>
-        <View style={styles.actionIconCircle}>
-          <Ionicons name={icon} size={24} color={color1} />
-        </View>
-        <Text style={styles.actionText}>{title}</Text>
-      </LinearGradient>
-    </TouchableOpacity>
+  const ActionCard = ({ title, subtitle, icon, tileBg, tileFg, onPress }: {
+    title: string;
+    subtitle?: string;
+    icon: keyof typeof MaterialIcons.glyphMap;
+    tileBg: string;
+    tileFg: string;
+    onPress: () => void;
+  }) => (
+    <Pressable
+      style={({ pressed }) => [styles.actionCard, pressed && { opacity: 0.85 }]}
+      onPress={onPress}
+      accessibilityRole="button"
+      accessibilityLabel={title}
+    >
+      <View style={[styles.actionIconTile, { backgroundColor: tileBg }]}>
+        <MaterialIcons name={icon} size={20} color={tileFg} />
+      </View>
+      <Text style={styles.actionTitle} numberOfLines={1}>{title}</Text>
+      {subtitle ? <Text style={styles.actionSubtitle} numberOfLines={1}>{subtitle}</Text> : null}
+    </Pressable>
   );
 
-  const StatRow = ({ title, value, icon, color, trend }: any) => (
+  const StatRow = ({ title, value, icon, tileBg, tileFg, trend }: {
+    title: string;
+    value: string | number;
+    icon: keyof typeof MaterialIcons.glyphMap;
+    tileBg: string;
+    tileFg: string;
+    trend?: string;
+  }) => (
     <View style={styles.statRow}>
-      <View style={[styles.iconBox, { backgroundColor: color + '15' }]}>
-        <Ionicons name={icon} size={22} color={color} />
+      <View style={[styles.iconBox, { backgroundColor: tileBg }]}>
+        <MaterialIcons name={icon} size={20} color={tileFg} />
       </View>
       <View style={styles.statRowText}>
         <Text style={styles.statRowLabel}>{title}</Text>
@@ -108,140 +132,143 @@ export default function AgentDashboard() {
       </View>
       {trend && (
         <View style={styles.trendBadge}>
-          <Ionicons name="arrow-up" size={12} color="#10B981" />
+          <MaterialIcons name="trending-up" size={12} color={color.accent600} />
           <Text style={styles.trendText}>{trend}</Text>
         </View>
       )}
     </View>
   );
 
+  const displayName = `${user?.first_name || 'Agent'} ${user?.last_name || ''}`.trim();
+
   return (
     <View style={styles.container}>
       <StatusBar style="light" />
 
-      {/* 1. HEADER SECTION */}
-      <LinearGradient
-        colors={['#1e1b4b', '#312e81', '#4338ca']}
-        style={styles.header}
-        start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
-      >
-        <SafeAreaView edges={['top', 'left', 'right']} style={{ flex: 1 }}>
+      {/* 1. HEADER (brand900, flat) */}
+      <View style={styles.header}>
+        <SafeAreaView edges={['top', 'left', 'right']}>
 
           {/* Top Bar with Logout */}
           <View style={styles.topBar}>
-            <View style={styles.branding}>
-              <View style={styles.logoCircle}>
-                <Text style={styles.logoText}>S</Text>
-              </View>
-              <Text style={styles.brandName}>Smahi Agent</Text>
-            </View>
-            <TouchableOpacity style={styles.logoutButton} onPress={handleLogout}>
-              <Ionicons name="power" size={20} color="#FECACA" />
-              <Text style={styles.logoutText}>Exit</Text>
-            </TouchableOpacity>
+            <Text style={styles.brandName}>S-MAHII {t('Agent')}</Text>
+            <Pressable style={styles.logoutButton} onPress={handleLogout} accessibilityRole="button" accessibilityLabel={t('Log Out')}>
+              <MaterialIcons name="logout" size={16} color="#FECACA" />
+              <Text style={styles.logoutText}>{t('Exit')}</Text>
+            </Pressable>
           </View>
 
           {/* User Profile Section */}
           <View style={styles.profileSection}>
-            <View style={styles.avatarContainer}>
-              {user?.profile_picture ? (
-                <Image source={{ uri: user.profile_picture }} style={styles.avatar} />
-              ) : (
-                <View style={[styles.avatar, styles.avatarPlaceholder]}>
-                  <Text style={styles.avatarText}>
-                    {user?.first_name?.[0]}{user?.last_name?.[0]}
-                  </Text>
-                </View>
-              )}
-              <View style={styles.onlineBadge} />
-            </View>
-
+            <Avatar name={displayName} uri={user?.profile_picture} size={60} borderRadius={20} online />
             <View style={styles.profileInfo}>
-              <Text style={styles.userName}>
-                {user?.first_name || 'Agent'} {user?.last_name || ''}
-              </Text>
-
+              <Text style={styles.userName} numberOfLines={1}>{displayName}</Text>
               <View style={styles.idBadge}>
                 <Text style={styles.idLabel}>ID:</Text>
                 <Text style={styles.idValue}>{user?.serial_number || 'PENDING'}</Text>
               </View>
-
               <View style={styles.locationRow}>
-                <Ionicons name="location" size={12} color="#93C5FD" />
+                <MaterialIcons name="place" size={12} color="rgba(255,255,255,0.72)" />
                 <Text style={styles.locationText}>
-                  {user?.lga_details?.name || 'Local Govt'}, {user?.state_details?.name || 'State'}
+                  {user?.lga_details?.name || t('Local Govt')}, {user?.state_details?.name || t('State')}
                 </Text>
               </View>
             </View>
           </View>
 
         </SafeAreaView>
-      </LinearGradient>
+      </View>
 
-      {/* 2. FLOATING STATS CARD */}
+      {/* 2. FLOATING STATS CARD (overlaps header) */}
       <View style={styles.floatingStatsContainer}>
         <View style={styles.floatingStatsCard}>
           <QuickStat
             value={stats.total_artisans}
-            label="Artisans"
-            color="#4F46E5"
+            label={t('Artisans')}
+            valueColor={color.brand600}
             onPress={() => router.push('/agent/artisans')}
           />
           <View style={styles.verticalDivider} />
-          <QuickStat value={stats.verified_artisans} label="Verified" color="#10B981" />
+          <QuickStat value={stats.verified_artisans} label={t('Verified')} valueColor={color.accent600} />
           <View style={styles.verticalDivider} />
-          <QuickStat value={stats.pending_tickets} label="Pending" color="#F59E0B" />
+          <QuickStat value={stats.pending_tickets} label={t('Pending')} valueColor={color.warn600} />
         </View>
       </View>
 
       {/* 3. SCROLL CONTENT */}
       <ScrollView
         style={styles.content}
-        contentContainerStyle={{ paddingBottom: 100, paddingTop: 60 }}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#4F46E5" />}
+        contentContainerStyle={{ paddingBottom: 100, paddingTop: 56 }}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={color.brand600} />}
         showsVerticalScrollIndicator={false}
       >
 
-        {/* QUICK ACTIONS */}
-        <Text style={styles.sectionTitle}>Agent Actions</Text>
+        <EmailVerificationBanner />
+
+        {/* QUICK ACTIONS — 2×2 grid of white cards with tonal icon tiles */}
+        <Text style={styles.sectionTitle}>{t('Agent actions')}</Text>
         <View style={styles.actionGrid}>
-          <ActionButton
-            title="Register Artisan"
+          <ActionCard
+            title={t('Register artisan')}
+            subtitle={t('New profile')}
             icon="person-add"
-            color1="#4F46E5" color2="#4338ca"
+            tileBg={color.brand100}
+            tileFg={color.brand600}
             onPress={() => router.push('/agent/register')}
           />
-
-          {/* ✅ FIXED: Now points to /agent/tickets (mapped to app/agent/tickets/index.tsx) */}
-          <ActionButton
-            title="My Complaints"
-            icon="document-text"
-            color1="#F59E0B" color2="#D97706"
+          <ActionCard
+            title={t('Verify identity')}
+            subtitle={t('Scan documents')}
+            icon="qr-code-scanner"
+            tileBg={color.accent100}
+            tileFg={color.accent600}
+            onPress={() => router.push('/agent/scan')}
+          />
+          <ActionCard
+            title={t('Complaints')}
+            subtitle={`${stats.pending_tickets} ${t('pending')}`}
+            icon="description"
+            tileBg={color.warn100}
+            tileFg={color.warn600}
             onPress={() => router.push('/agent/tickets')}
           />
-
-          <ActionButton
-            title="Verify Identity"
-            icon="scan"
-            color1="#10B981" color2="#059669"
-            onPress={() => Alert.alert("Scan", "Scanner opening...")}
-          />
-          <ActionButton
-            title="My Wallet"
-            icon="wallet"
-            color1="#EC4899" color2="#DB2777"
-            onPress={() => Alert.alert("Balance", "₦0.00")}
+          <ActionCard
+            title={t('My wallet')}
+            subtitle="₦0.00"
+            icon="account-balance-wallet"
+            tileBg="#FDEAF0"
+            tileFg="#C22B63"
+            onPress={() => router.push('/agent/wallet')}
           />
         </View>
 
         {/* PERFORMANCE OVERVIEW */}
-        <Text style={styles.sectionTitle}>Performance</Text>
+        <Text style={styles.sectionTitle}>{t('Performance')}</Text>
         <View style={styles.statsCard}>
-          <StatRow title="Funds Collected" value="₦0.00" icon="cash" color="#10B981" trend="+0%" />
+          <StatRow
+            title={t('Funds collected')}
+            value="₦0.00"
+            icon="payments"
+            tileBg={color.accent100}
+            tileFg={color.accent600}
+            trend="+0%"
+          />
           <View style={styles.horizontalDivider} />
-          <StatRow title="Resolved Cases" value={stats.resolved_tickets} icon="checkmark-done-circle" color="#3B82F6" />
+          <StatRow
+            title={t('Resolved cases')}
+            value={stats.resolved_tickets}
+            icon="done-all"
+            tileBg={color.brand100}
+            tileFg={color.brand600}
+          />
           <View style={styles.horizontalDivider} />
-          <StatRow title="Pending Verifications" value="0" icon="time" color="#F59E0B" />
+          <StatRow
+            title={t('Pending verifications')}
+            value="0"
+            icon="schedule"
+            tileBg={color.warn100}
+            tileFg={color.warn600}
+          />
         </View>
 
       </ScrollView>
@@ -250,62 +277,138 @@ export default function AgentDashboard() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#F9FAFB' },
+  container: { flex: 1, backgroundColor: color.surfaceSunken },
 
   // Header
-  header: { height: 240, borderBottomLeftRadius: 36, borderBottomRightRadius: 36, paddingBottom: 20 },
-  topBar: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 24, marginTop: 10, marginBottom: 20 },
-  branding: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  logoCircle: { width: 32, height: 32, borderRadius: 16, backgroundColor: 'rgba(255,255,255,0.2)', justifyContent: 'center', alignItems: 'center' },
-  logoText: { color: '#FFF', fontWeight: 'bold', fontSize: 18 },
-  brandName: { color: '#FFF', fontSize: 16, fontWeight: '600', letterSpacing: 0.5 },
-
-  logoutButton: { flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: 'rgba(239, 68, 68, 0.2)', paddingVertical: 6, paddingHorizontal: 12, borderRadius: 20 },
-  logoutText: { color: '#FECACA', fontSize: 12, fontWeight: '700' },
+  header: {
+    backgroundColor: color.brand900,
+    paddingBottom: 64,
+    borderBottomLeftRadius: radius.xxl,
+    borderBottomRightRadius: radius.xxl,
+  },
+  topBar: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: space.xl,
+    marginTop: space.md,
+    marginBottom: space.xl,
+  },
+  brandName: {
+    color: '#FFF',
+    fontFamily: font.extrabold,
+    fontSize: 15,
+    letterSpacing: 0.3,
+  },
+  logoutButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: 'rgba(239, 68, 68, 0.18)',
+    paddingVertical: 7,
+    paddingHorizontal: 12,
+    borderRadius: radius.full,
+  },
+  logoutText: { color: '#FECACA', fontFamily: font.extrabold, fontSize: 12 },
 
   // Profile Section
-  profileSection: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 24 },
-  avatarContainer: { position: 'relative', marginRight: 16 },
-  avatar: { width: 64, height: 64, borderRadius: 32, borderWidth: 3, borderColor: 'rgba(255,255,255,0.3)' },
-  avatarPlaceholder: { backgroundColor: '#4F46E5', justifyContent: 'center', alignItems: 'center' },
-  avatarText: { color: '#FFF', fontSize: 24, fontWeight: 'bold' },
-  onlineBadge: { position: 'absolute', bottom: 2, right: 2, width: 14, height: 14, borderRadius: 7, backgroundColor: '#10B981', borderWidth: 2, borderColor: '#1e1b4b' },
-
-  profileInfo: { flex: 1 },
-  userName: { color: '#FFF', fontSize: 20, fontWeight: 'bold', marginBottom: 4 },
-  idBadge: { flexDirection: 'row', alignItems: 'center', backgroundColor: 'rgba(255,255,255,0.15)', alignSelf: 'flex-start', paddingHorizontal: 8, paddingVertical: 2, borderRadius: 4, marginBottom: 6 },
-  idLabel: { color: '#BFDBFE', fontSize: 11, fontWeight: '600', marginRight: 4 },
-  idValue: { color: '#FFF', fontSize: 12, fontWeight: '800', letterSpacing: 0.5 },
+  profileSection: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: space.xl },
+  profileInfo: { flex: 1, marginLeft: space.lg },
+  userName: { color: '#FFF', fontFamily: font.extrabold, fontSize: 19, letterSpacing: -0.19 },
+  idBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(255,255,255,0.14)',
+    alignSelf: 'flex-start',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 6,
+    marginTop: 5,
+    marginBottom: 5,
+  },
+  idLabel: { color: 'rgba(255,255,255,0.72)', fontFamily: font.bold, fontSize: 10.5, marginRight: 4 },
+  idValue: { color: '#FFF', fontFamily: font.extrabold, fontSize: 11.5, letterSpacing: 0.4 },
   locationRow: { flexDirection: 'row', alignItems: 'center', gap: 4 },
-  locationText: { color: '#BFDBFE', fontSize: 12, fontWeight: '500' },
+  locationText: { color: 'rgba(255,255,255,0.72)', fontFamily: font.bold, fontSize: 12 },
 
   // Floating Stats
-  floatingStatsContainer: { position: 'absolute', top: 200, left: 20, right: 20, zIndex: 10 },
-  floatingStatsCard: { flexDirection: 'row', backgroundColor: '#FFF', borderRadius: 24, padding: 20, shadowColor: "#000", shadowOffset: { width: 0, height: 12 }, shadowOpacity: 0.1, shadowRadius: 24, elevation: 12, alignItems: 'center', justifyContent: 'space-between' },
+  floatingStatsContainer: { marginTop: -44, paddingHorizontal: space.xl, zIndex: 10 },
+  floatingStatsCard: {
+    flexDirection: 'row',
+    backgroundColor: color.surface,
+    borderRadius: radius.xl,
+    paddingVertical: space.lg,
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    ...shadow.e2,
+  },
   quickStat: { alignItems: 'center', flex: 1 },
-  quickStatValue: { fontSize: 20, fontWeight: '800' },
-  quickStatLabel: { fontSize: 11, color: '#6B7280', marginTop: 4, fontWeight: '600', textTransform: 'uppercase' },
-  verticalDivider: { width: 1, height: 32, backgroundColor: '#F3F4F6' },
+  quickStatValue: { fontFamily: font.extrabold, fontSize: 20 },
+  quickStatLabel: {
+    fontFamily: font.extrabold,
+    fontSize: 10.5,
+    color: color.ink400,
+    marginTop: 4,
+    textTransform: 'uppercase',
+    letterSpacing: 0.4,
+  },
+  verticalDivider: { width: StyleSheet.hairlineWidth, height: 32, backgroundColor: color.border },
 
   // Content
-  content: { flex: 1, paddingHorizontal: 20 },
-  sectionTitle: { fontSize: 16, fontWeight: '700', color: '#374151', marginBottom: 12, marginTop: 24, textTransform: 'uppercase', letterSpacing: 0.5 },
+  content: { flex: 1, paddingHorizontal: space.xl, marginTop: -40 },
+  sectionTitle: { ...type.heading, marginBottom: space.md, marginTop: space.xxl },
 
   // Action Grid
-  actionGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 12 },
-  actionCard: { width: (width - 52) / 2, height: 100, borderRadius: 20, shadowColor: "#4F46E5", shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.1, shadowRadius: 8, elevation: 4, backgroundColor: '#FFF', overflow: 'hidden' },
-  actionGradient: { flex: 1, padding: 14, justifyContent: 'space-between' },
-  actionIconCircle: { width: 36, height: 36, borderRadius: 18, backgroundColor: '#FFF', justifyContent: 'center', alignItems: 'center' },
-  actionText: { color: '#FFF', fontSize: 14, fontWeight: '700' },
+  actionGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: space.md },
+  actionCard: {
+    flexBasis: '47%',
+    flexGrow: 1,
+    backgroundColor: color.surface,
+    borderRadius: radius.lg,
+    borderWidth: 1,
+    borderColor: '#EEF2F8',
+    padding: space.lg,
+    ...shadow.e1,
+  },
+  actionIconTile: {
+    width: 40,
+    height: 40,
+    borderRadius: radius.md,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: space.md,
+  },
+  actionTitle: { fontFamily: font.extrabold, fontSize: 13.5, color: color.ink900 },
+  actionSubtitle: { fontFamily: font.bold, fontSize: 11.5, color: color.ink400, marginTop: 2 },
 
   // Stats Rows
-  statsCard: { backgroundColor: '#FFF', borderRadius: 24, padding: 20, shadowColor: "#000", shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.05, shadowRadius: 10, elevation: 2 },
-  statRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: 12 },
-  iconBox: { width: 40, height: 40, borderRadius: 12, justifyContent: 'center', alignItems: 'center', marginRight: 14 },
+  statsCard: {
+    backgroundColor: color.surface,
+    borderRadius: radius.xl,
+    padding: space.lg,
+    borderWidth: 1,
+    borderColor: '#EEF2F8',
+  },
+  statRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: space.md },
+  iconBox: {
+    width: 40,
+    height: 40,
+    borderRadius: radius.md,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: space.md,
+  },
   statRowText: { flex: 1 },
-  statRowLabel: { fontSize: 13, color: '#6B7280', fontWeight: '600' },
-  statRowValue: { fontSize: 16, fontWeight: '800', color: '#111827', marginTop: 1 },
-  trendBadge: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#ECFDF5', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 12 },
-  trendText: { color: '#10B981', fontSize: 11, fontWeight: '700', marginLeft: 2 },
-  horizontalDivider: { height: 1, backgroundColor: '#F3F4F6' },
+  statRowLabel: { fontFamily: font.bold, fontSize: 12.5, color: color.ink400 },
+  statRowValue: { fontFamily: font.extrabold, fontSize: 15.5, color: color.ink900, marginTop: 1 },
+  trendBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: color.accent100,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: radius.full,
+  },
+  trendText: { color: color.accent600, fontFamily: font.extrabold, fontSize: 11, marginLeft: 2 },
+  horizontalDivider: { height: StyleSheet.hairlineWidth, backgroundColor: color.border },
 });
