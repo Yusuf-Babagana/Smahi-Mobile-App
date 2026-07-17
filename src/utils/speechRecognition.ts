@@ -1,6 +1,6 @@
 import { Audio } from 'expo-av';
 import { Platform } from 'react-native';
-import { OPENAI_API_KEY } from '@/src/constants/config';
+import { API_URL } from '@/src/constants/env';
 
 let recording: Audio.Recording | null = null;
 
@@ -69,11 +69,6 @@ export async function stopSpeechRecognition(): Promise<string | null> {
       return '';
     }
 
-    if (!OPENAI_API_KEY) {
-      console.log(TAG, 'OPENAI_API_KEY is empty or not set');
-      return null;
-    }
-
     console.log(TAG, 'Proceeding to transcribeAudio');
     return transcribeAudio(uri);
   } catch (err: any) {
@@ -107,22 +102,17 @@ async function transcribeAudio(uri: string): Promise<string | null> {
 
     console.log(TAG, 'File details:', { filename, ext, mimeType, platform: Platform.OS });
 
-    formData.append('file', {
+    formData.append('audio', {
       uri: Platform.OS === 'ios' ? uri.replace('file://', '') : uri,
       name: filename,
       type: mimeType,
     } as any);
-    formData.append('model', 'whisper-1');
-    formData.append('language', 'en');
 
-    console.log(TAG, 'Sending request to OpenAI Whisper API...');
+    console.log(TAG, 'Sending request to backend transcribe endpoint...');
     const startTime = Date.now();
 
-    const response = await fetch('https://api.openai.com/v1/audio/transcriptions', {
+    const response = await fetch(`${API_URL}/ai/transcribe/`, {
       method: 'POST',
-      headers: {
-        Authorization: `Bearer ${OPENAI_API_KEY}`,
-      },
       body: formData,
     });
 
@@ -131,7 +121,8 @@ async function transcribeAudio(uri: string): Promise<string | null> {
 
     if (!response.ok) {
       const errorBody = await response.text();
-      console.error(TAG, 'OpenAI Whisper error:', response.status, errorBody);
+      console.error(TAG, 'Transcription error:', response.status, errorBody);
+      if (response.status === 429) return '___QUOTA_ERROR___';
       return null;
     }
 
