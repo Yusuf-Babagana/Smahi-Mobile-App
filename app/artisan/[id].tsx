@@ -17,13 +17,14 @@ import { Avatar, Badge, Chip } from '@/src/components/ui';
 
 // --- Helper: Local Distance Calculation (Haversine) ---
 const calculateLocalDistance = (lat1: any, lon1: any, lat2: any, lon2: any) => {
-  if (!lat1 || !lon1 || !lat2 || !lon2) return null;
+  const lat1n = parseFloat(lat1), lon1n = parseFloat(lon1), lat2n = parseFloat(lat2), lon2n = parseFloat(lon2);
+  if (isNaN(lat1n) || isNaN(lon1n) || isNaN(lat2n) || isNaN(lon2n)) return null;
   try {
     const R = 6371; // Earth radius in km
-    const dLat = (lat2 - lat1) * (Math.PI / 180);
-    const dLon = (lon2 - lon1) * (Math.PI / 180);
+    const dLat = (lat2n - lat1n) * (Math.PI / 180);
+    const dLon = (lon2n - lon1n) * (Math.PI / 180);
     const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-      Math.cos(lat1 * (Math.PI / 180)) * Math.cos(lat2 * (Math.PI / 180)) *
+      Math.cos(lat1n * (Math.PI / 180)) * Math.cos(lat2n * (Math.PI / 180)) *
       Math.sin(dLon / 2) * Math.sin(dLon / 2);
     const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
     const dist = R * c;
@@ -121,8 +122,8 @@ export default function ArtisanProfileRoom() {
     ? artisan.category_name_ha
     : (artisan?.profession_name || "Artisan");
 
-  const artisanLat = artisan?.user_details?.latitude || artisan?.user?.latitude;
-  const artisanLon = artisan?.user_details?.longitude || artisan?.user?.longitude;
+  const artisanLat = artisan?.user_details?.latitude ?? artisan?.user?.latitude;
+  const artisanLon = artisan?.user_details?.longitude ?? artisan?.user?.longitude;
   const distance = calculateLocalDistance(location?.latitude, location?.longitude, artisanLat, artisanLon);
 
   const rawPic = artisan?.user_details?.profile_picture || artisan?.user?.profile_picture || artisan.profile_picture;

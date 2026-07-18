@@ -59,8 +59,9 @@ export default function PublicArtisanProfile() {
         const lName = artisan.user_details?.last_name || artisan.user?.last_name || artisan.last_name || "";
 
         router.push({
-            pathname: '/chat/new',
+            pathname: '/chat/[id]',
             params: {
+                id: 'new',
                 recipientId: artisan.user || artisan.id,
                 name: `${fName} ${lName}`
             }

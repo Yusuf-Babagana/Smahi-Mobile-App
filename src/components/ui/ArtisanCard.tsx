@@ -50,7 +50,7 @@ export const ArtisanCard = React.memo(function ArtisanCard({
   const professionName =
     i18n.language === 'ha' && artisan?.category_name_ha
       ? artisan.category_name_ha
-      : artisan?.profession_name || 'Artisan';
+      : artisan?.profession_name || artisan?.category_name || artisan?.service_category || 'Artisan';
 
   const photo = optimizedPhoto(userObj.profile_picture || artisan.profile_picture);
   const rating = artisan.rating || 4.8;

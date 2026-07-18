@@ -1,12 +1,17 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, StyleSheet, FlatList, TouchableOpacity, ActivityIndicator, Image } from 'react-native';
+import { View, Text, StyleSheet, FlatList, Pressable } from 'react-native';
 import { useRouter } from 'expo-router';
-import { Ionicons } from '@expo/vector-icons';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import { MaterialIcons } from '@expo/vector-icons';
+import { useTranslation } from 'react-i18next';
+
 import { adminAPI } from '@/src/api/client';
-import { colors } from '@/styles/commonStyles';
+import { color, font, radius, shadow, space } from '@/constants/theme';
+import { Avatar, Badge, EmptyState, SkeletonCard } from '@/src/components/ui';
 
 export default function AgentListScreen() {
     const router = useRouter();
+    const { t } = useTranslation();
     const [agents, setAgents] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
 
@@ -16,9 +21,9 @@ export default function AgentListScreen() {
 
     const fetchAgents = async () => {
         try {
-            // In a real app, ensure this API returns only agents for this LGA
-            const data = await adminAPI.getAgents();
-            // Client-side filter if backend returns everyone (Safety check)
+            // Backend has no agents-only endpoint yet — fetch all users and
+            // filter to agents client-side (the filter below already did this).
+            const data = await adminAPI.getAllUsers();
             const myAgents = Array.isArray(data) ? data.filter((u: any) => u.role === 'agent') : [];
             setAgents(myAgents);
         } catch (error) {
@@ -28,45 +33,49 @@ export default function AgentListScreen() {
         }
     };
 
-    const renderItem = ({ item }: any) => (
-        <View style={styles.card}>
-            <View style={styles.row}>
-                <View style={[styles.avatar, styles.placeholder]}>
-                    <Text style={styles.placeholderText}>{item.first_name?.[0]}</Text>
-                </View>
-
+    const renderItem = ({ item }: any) => {
+        const name = `${item.first_name || ''} ${item.last_name || ''}`.trim();
+        return (
+            <View style={styles.card}>
+                <Avatar name={name} uri={item.profile_picture} size={46} />
                 <View style={styles.info}>
-                    <Text style={styles.name}>{item.first_name} {item.last_name}</Text>
-                    <Text style={styles.detail}>{item.email}</Text>
-                    <Text style={styles.detail}>{item.phone_number || 'No Phone'}</Text>
+                    <Text style={styles.name} numberOfLines={1}>{name}</Text>
+                    <Text style={styles.detail} numberOfLines={1}>{item.email}</Text>
+                    <Text style={styles.detail}>{item.phone_number || t('No Phone')}</Text>
                 </View>
-
-                <View style={styles.statusCol}>
-                    <View style={[styles.badge, { backgroundColor: item.is_active ? '#D1FAE5' : '#FEE2E2' }]}>
-                        <Text style={[styles.badgeText, { color: item.is_active ? '#065F46' : '#991B1B' }]}>
-                            {item.is_active ? 'ACTIVE' : 'INACTIVE'}
-                        </Text>
-                    </View>
-                </View>
+                <Badge
+                    label={item.is_active ? t('Active') : t('Inactive')}
+                    status={item.is_active ? 'verified' : 'cancelled'}
+                />
             </View>
-        </View>
-    );
+        );
+    };
 
     return (
         <View style={styles.container}>
             {/* Header */}
-            <View style={styles.header}>
-                <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
-                    <Ionicons name="arrow-back" size={24} color="#1F2937" />
-                </TouchableOpacity>
-                <Text style={styles.headerTitle}>Field Agents</Text>
-                <TouchableOpacity onPress={() => router.push('/lg-admin/agents/create')} style={styles.addButton}>
-                    <Ionicons name="person-add" size={20} color="#FFF" />
-                </TouchableOpacity>
-            </View>
+            <SafeAreaView edges={['top']} style={styles.headerSafe}>
+                <View style={styles.header}>
+                    <Pressable onPress={() => router.back()} style={styles.backButton} accessibilityRole="button" accessibilityLabel={t('Back')}>
+                        <MaterialIcons name="arrow-back" size={20} color={color.ink900} />
+                    </Pressable>
+                    <Text style={styles.headerTitle}>{t('Field agents')}</Text>
+                    <Pressable
+                        onPress={() => router.push('/lg-admin/agents/create')}
+                        style={styles.addButton}
+                        accessibilityRole="button"
+                        accessibilityLabel={t('Add agent')}
+                    >
+                        <MaterialIcons name="person-add" size={20} color="#FFF" />
+                    </Pressable>
+                </View>
+            </SafeAreaView>
 
             {loading ? (
-                <ActivityIndicator size="large" color={colors.primary} style={{ marginTop: 50 }} />
+                <View style={styles.skeletonWrap}>
+                    <SkeletonCard />
+                    <SkeletonCard />
+                </View>
             ) : (
                 <FlatList
                     data={agents}
@@ -74,9 +83,11 @@ export default function AgentListScreen() {
                     keyExtractor={(item) => item.id.toString()}
                     contentContainerStyle={styles.listContent}
                     ListEmptyComponent={
-                        <View style={styles.emptyState}>
-                            <Text style={styles.emptyText}>No agents found in this LGA.</Text>
-                        </View>
+                        <EmptyState
+                            icon="badge"
+                            title={t('No agents found in this LGA.')}
+                            message={t('Agents you create will appear here.')}
+                        />
                     }
                 />
             )}
@@ -85,24 +96,53 @@ export default function AgentListScreen() {
 }
 
 const styles = StyleSheet.create({
-    container: { flex: 1, backgroundColor: '#F9FAFB' },
-    header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 20, paddingTop: 60, paddingBottom: 20, backgroundColor: '#FFF', borderBottomWidth: 1, borderBottomColor: '#E5E7EB' },
-    headerTitle: { fontSize: 18, fontWeight: '700', color: '#111827' },
-    backButton: { padding: 8 },
-    addButton: { backgroundColor: colors.primary, padding: 8, borderRadius: 20 },
+    container: { flex: 1, backgroundColor: color.surfaceSunken },
 
-    listContent: { padding: 20 },
-    card: { backgroundColor: '#FFF', padding: 16, borderRadius: 12, marginBottom: 12, shadowColor: '#000', shadowOpacity: 0.05, elevation: 2 },
-    row: { flexDirection: 'row', alignItems: 'center' },
-    avatar: { width: 46, height: 46, borderRadius: 23, marginRight: 12 },
-    placeholder: { backgroundColor: '#E0E7FF', justifyContent: 'center', alignItems: 'center' },
-    placeholderText: { fontSize: 18, fontWeight: '700', color: '#4F46E5' },
-    info: { flex: 1 },
-    name: { fontSize: 16, fontWeight: '700', color: '#1F2937' },
-    detail: { fontSize: 12, color: '#6B7280' },
-    statusCol: { alignItems: 'flex-end' },
-    badge: { paddingHorizontal: 8, paddingVertical: 2, borderRadius: 6 },
-    badgeText: { fontSize: 10, fontWeight: '700' },
-    emptyState: { alignItems: 'center', marginTop: 50 },
-    emptyText: { color: '#6B7280' }
+    headerSafe: { backgroundColor: color.surface },
+    header: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        paddingHorizontal: space.xl,
+        paddingVertical: space.md,
+        backgroundColor: color.surface,
+        borderBottomWidth: 1,
+        borderBottomColor: '#F1F5F9',
+    },
+    headerTitle: { fontFamily: font.extrabold, fontSize: 16, color: color.ink900 },
+    backButton: {
+        width: 40,
+        height: 40,
+        borderRadius: radius.md,
+        borderWidth: 1.5,
+        borderColor: color.border,
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    addButton: {
+        width: 40,
+        height: 40,
+        borderRadius: radius.md,
+        backgroundColor: color.brand600,
+        justifyContent: 'center',
+        alignItems: 'center',
+        ...shadow.cta,
+    },
+
+    skeletonWrap: { padding: space.xl },
+    listContent: { padding: space.xl },
+
+    card: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        backgroundColor: color.surface,
+        padding: space.lg,
+        borderRadius: radius.lg,
+        marginBottom: space.md,
+        borderWidth: 1,
+        borderColor: '#EEF2F8',
+    },
+    info: { flex: 1, marginHorizontal: space.md },
+    name: { fontFamily: font.extrabold, fontSize: 14.5, color: color.ink900 },
+    detail: { fontFamily: font.bold, fontSize: 12, color: color.ink400, marginTop: 1 },
 });

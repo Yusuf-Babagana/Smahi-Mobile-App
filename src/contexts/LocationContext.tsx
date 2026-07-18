@@ -57,8 +57,7 @@ export const LocationProvider = ({ children }: { children: React.ReactNode }) =>
     });
   }, []);
 
-  console.log("CURRENT SAVED LOCATION:", location);
-  console.log("CURRENT GPS ERROR:", errorMsg);
+  if (errorMsg) console.log("CURRENT GPS ERROR:", errorMsg);
 
   return (
     <LocationContext.Provider value={{ location, errorMsg, isLoading, requestLocationPermission }}>

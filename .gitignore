@@ -40,3 +40,12 @@ package-lock.json
 
 # local env files (EXPO_PUBLIC_* values) — never commit
 .env
+
+# Python
+__pycache__/
+
+# Debug / scratch files
+check_dbs.py
+major_key_code.txt
+backend_ai_proxy.py
+*.pyc

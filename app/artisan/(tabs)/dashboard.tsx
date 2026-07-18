@@ -1,6 +1,6 @@
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState, useCallback, useRef } from 'react';
 import {
-  View, Text, StyleSheet, ScrollView, TouchableOpacity, Switch,
+  View, Text, StyleSheet, ScrollView, TouchableOpacity,
   RefreshControl, Alert, ActivityIndicator, StatusBar, Pressable,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -11,10 +11,11 @@ import { useTranslation } from 'react-i18next';
 
 // API & UTILS
 import { authAPI, artisanAPI, bookingAPI } from '@/src/api/client';
+import { useLocation } from '@/src/contexts/LocationContext';
 import { EmailVerificationBanner } from '@/src/components/EmailVerificationBanner';
 import { CLOUDINARY_CLOUD_NAME as CLOUD_NAME } from '@/src/constants/env';
 import { color, font, radius, shadow, space, type } from '@/constants/theme';
-import { Avatar, StatTile } from '@/src/components/ui';
+import { Avatar, Badge, StatTile } from '@/src/components/ui';
 
 export default function ArtisanDashboard() {
   const router = useRouter();
@@ -71,6 +72,19 @@ export default function ArtisanDashboard() {
     loadData();
   }, [loadData]);
 
+  // Keep the artisan's saved GPS point fresh — this is the position clients'
+  // "X km away" search measures against. Synced once per dashboard visit.
+  const { location } = useLocation();
+  const coordsSynced = useRef(false);
+  useEffect(() => {
+    if (location && !coordsSynced.current) {
+      coordsSynced.current = true;
+      authAPI.saveCoordinates(location.latitude, location.longitude)
+        .then((updated) => setUser((prev: any) => ({ ...prev, ...updated })))
+        .catch(() => {});
+    }
+  }, [location]);
+
   const onRefresh = () => {
     setRefreshing(true);
     loadData();
@@ -90,7 +104,12 @@ export default function ArtisanDashboard() {
     }
   };
 
-  const respondToRequest = async (bookingId: number, newStatus: 'confirmed' | 'cancelled') => {
+  // Artisan-side lifecycle: pending→confirmed→in_progress→completed,
+  // plus pending/confirmed→cancelled (backend enforces the state machine).
+  const updateBookingStatus = async (
+    bookingId: number,
+    newStatus: 'confirmed' | 'cancelled' | 'in_progress' | 'completed'
+  ) => {
     try {
       await bookingAPI.updateBooking(bookingId, { status: newStatus });
       await loadData();
@@ -109,24 +128,32 @@ export default function ArtisanDashboard() {
         {
           text: t('Decline'),
           style: 'destructive',
-          onPress: () => respondToRequest(bookingId, 'cancelled'),
+          onPress: () => updateBookingStatus(bookingId, 'cancelled'),
         },
       ]
     );
   };
 
-  const handleLogout = async () => {
-    Alert.alert(t("Logout"), t("Are you sure?"), [
-      { text: t("Cancel"), style: "cancel" },
-      {
-        text: t("Logout"),
-        style: 'destructive',
-        onPress: async () => {
-          await authAPI.logout();
-          router.replace('/login');
-        }
-      }
-    ]);
+  const handleMarkDone = (bookingId: number) => {
+    Alert.alert(
+      t('Mark job as done'),
+      t('This completes the booking and adds it to your jobs done. Continue?'),
+      [
+        { text: t('Not yet'), style: 'cancel' },
+        { text: t('Mark done'), onPress: () => updateBookingStatus(bookingId, 'completed') },
+      ]
+    );
+  };
+
+  const openClientChat = (booking: any) => {
+    const clientUser = booking.client_details;
+    const recipientId = clientUser?.id ?? booking.client;
+    const name = clientUser?.first_name || t('Client');
+    if (recipientId) {
+      router.push({ pathname: '/chat/[id]', params: { id: 'new', name, recipientId } });
+    } else {
+      router.push('/chat');
+    }
   };
 
   const getImageUrl = (imgData: any) => {
@@ -140,6 +167,22 @@ export default function ArtisanDashboard() {
       return url.replace('http:', 'https:');
     }
     return url;
+  };
+
+  // "X km away" between this artisan and a booking's client (both need
+  // saved coords; hidden otherwise). Matches the backend's Haversine.
+  const kmAway = (clientUser: any): string | null => {
+    const lat1 = Number(user?.latitude);
+    const lon1 = Number(user?.longitude);
+    const lat2 = Number(clientUser?.latitude);
+    const lon2 = Number(clientUser?.longitude);
+    if ([lat1, lon1, lat2, lon2].some((v) => !v || isNaN(v))) return null;
+    const rad = (d: number) => d * (Math.PI / 180);
+    const a =
+      Math.sin(rad(lat2 - lat1) / 2) ** 2 +
+      Math.cos(rad(lat1)) * Math.cos(rad(lat2)) * Math.sin(rad(lon2 - lon1) / 2) ** 2;
+    const km = 6371 * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+    return km < 100 ? km.toFixed(1) : String(Math.round(km));
   };
 
   const relativeTime = (iso: string) => {
@@ -179,11 +222,29 @@ export default function ArtisanDashboard() {
     ? Number(rawRating).toFixed(1)
     : '5.0';
 
-  const jobCount = bookings.length;
-  const earnings = "₦0.00";
   const profilePicUrl = getImageUrl(user?.profile_picture);
 
   const newRequests = bookings.filter(b => b.status === 'pending');
+  // Accepted or started jobs, soonest scheduled first
+  const activeJobs = bookings
+    .filter(b => b.status === 'confirmed' || b.status === 'in_progress')
+    .sort((a, b) => String(a.scheduled_date || a.date || '').localeCompare(String(b.scheduled_date || b.date || '')));
+  // total_bookings = completed jobs (backend counter); fall back to a local count
+  const jobsDone = Number(artisan?.total_bookings ?? bookings.filter(b => b.status === 'completed').length);
+  const totalReviews = Number(artisan?.total_reviews ?? 0);
+  // Jobs completed this month with a recorded cost (price is agreed off-app,
+  // so this stays ₦0 until costs are captured).
+  const now = new Date();
+  const earningsThisMonth = bookings
+    .filter(b => {
+      if (b.status !== 'completed') return false;
+      const d = new Date(b.updated_at || b.created_at || 0);
+      return d.getFullYear() === now.getFullYear() && d.getMonth() === now.getMonth();
+    })
+    .reduce((sum, b) => sum + (Number(b.total_cost) || 0), 0);
+  const earningsLabel = earningsThisMonth >= 1000
+    ? `₦${Math.round(earningsThisMonth / 1000)}k`
+    : `₦${earningsThisMonth.toLocaleString()}`;
 
   return (
     <View style={styles.container}>
@@ -194,7 +255,7 @@ export default function ArtisanDashboard() {
         <SafeAreaView edges={['top']}>
           <View style={styles.headerContent}>
             <TouchableOpacity onPress={() => router.push('/artisan/profile')} accessibilityRole="button">
-              <Avatar name={displayName} uri={profilePicUrl} size={52} borderRadius={18} />
+              <Avatar name={displayName} uri={profilePicUrl} size={46} />
             </TouchableOpacity>
 
             <View style={styles.headerText}>
@@ -204,8 +265,8 @@ export default function ArtisanDashboard() {
               </Text>
             </View>
 
-            <Pressable onPress={handleLogout} style={styles.iconBtn} accessibilityRole="button" accessibilityLabel={t('Logout')}>
-              <MaterialIcons name="logout" size={18} color="#FFF" />
+            <Pressable style={styles.iconBtn} accessibilityRole="button" accessibilityLabel={t('Notifications')}>
+              <MaterialIcons name="notifications" size={19} color="#FFF" />
             </Pressable>
           </View>
         </SafeAreaView>
@@ -223,17 +284,18 @@ export default function ArtisanDashboard() {
             <View style={styles.statusIndicator}>
               <View style={[styles.dot, { backgroundColor: isAvailable ? color.online : color.ink300 }]} />
               <Text style={styles.statusTitle}>
-                {isAvailable ? t("Available for Jobs") : t("Currently Offline")}
+                {isAvailable ? t("Available for jobs") : t("Currently offline")}
               </Text>
             </View>
-            <Switch
-              value={isAvailable}
-              onValueChange={toggleAvailability}
-              trackColor={{ false: color.border, true: color.online }}
-              thumbColor="#FFFFFF"
-              ios_backgroundColor={color.border}
+            <Pressable
+              onPress={() => toggleAvailability(!isAvailable)}
               disabled={togglingAvailability}
-            />
+              accessibilityRole="switch"
+              accessibilityState={{ checked: isAvailable }}
+              style={[styles.toggleTrack, { backgroundColor: isAvailable ? color.online : color.border }]}
+            >
+              <View style={[styles.toggleThumb, { left: isAvailable ? 23 : 3 }]} />
+            </Pressable>
           </View>
           <Text style={styles.statusSubtitle}>
             {isAvailable
@@ -246,13 +308,13 @@ export default function ArtisanDashboard() {
 
         {/* 3. STATS GRID */}
         <View style={styles.grid}>
-          <StatTile icon="account-balance-wallet" value={earnings} label={t('Earnings')} tileBg={color.brand100} tileFg={color.brand600} />
-          <StatTile icon="work-outline" value={jobCount} label={t('Jobs')} tileBg={color.accent100} tileFg={color.accent600} />
-          <StatTile icon="star" value={rating} label={t('Rating')} tileBg={color.warn100} tileFg={color.warn600} />
+          <StatTile icon="account-balance-wallet" value={earningsLabel} label={t('This month')} tileBg={color.brand100} tileFg={color.brand600} />
+          <StatTile icon="work" value={jobsDone} label={t('Jobs done')} tileBg={color.accent100} tileFg={color.accent600} />
+          <StatTile icon="star" value={rating} label={`${totalReviews} ${t('reviews')}`} tileBg={color.warn100} tileFg={color.star} />
         </View>
 
         {/* 4. VERIFICATION ALERT */}
-        {artisan?.verificationStatus && artisan?.verificationStatus !== 'approved' && (
+        {artisan?.verification_status && artisan?.verification_status !== 'approved' && (
           <View style={styles.alertBox}>
             <MaterialIcons name="error-outline" size={22} color={color.warn600} />
             <View style={{ flex: 1 }}>
@@ -267,21 +329,29 @@ export default function ArtisanDashboard() {
         {/* 5. NEW REQUESTS */}
         {newRequests.length > 0 && (
           <>
-            <Text style={styles.sectionTitle}>{t('New requests')}</Text>
+            <View style={styles.sectionRow}>
+              <Text style={styles.sectionTitle}>{t('New requests')}</Text>
+              <View style={styles.countPill}>
+                <Text style={styles.countPillText}>{newRequests.length} {t('new')}</Text>
+              </View>
+            </View>
             <View style={styles.requestsList}>
               {newRequests.map((req, i) => {
                 const client = req.client_details || req.client || {};
                 const clientName = `${client.first_name || ''} ${client.last_name || ''}`.trim() || t('Client');
+                const km = kmAway(client);
+                const metaParts = [req.location, km ? `${km} ${t('km away')}` : null].filter(Boolean);
                 return (
                   <View key={req.id ?? i} style={[styles.requestCard, i > 0 && { marginTop: space.md }]}>
                     <View style={styles.requestHead}>
-                      <Avatar name={clientName} uri={getImageUrl(client.profile_picture)} size={40} />
+                      <Avatar name={clientName} uri={getImageUrl(client.profile_picture)} size={44} />
                       <View style={styles.requestHeadText}>
                         <Text style={styles.requestName} numberOfLines={1}>{clientName}</Text>
-                        <Text style={styles.requestMeta}>
-                          {req.location ? `${req.location} · ` : ''}{relativeTime(req.created_at)}
-                        </Text>
+                        {metaParts.length > 0 ? (
+                          <Text style={styles.requestMeta} numberOfLines={1}>{metaParts.join(' · ')}</Text>
+                        ) : null}
                       </View>
+                      <Text style={styles.requestAgo}>{relativeTime(req.created_at)}</Text>
                     </View>
                     {req.description ? (
                       <View style={styles.requestInset}>
@@ -289,9 +359,12 @@ export default function ArtisanDashboard() {
                       </View>
                     ) : null}
                     <View style={styles.requestFooter}>
-                      <Text style={styles.requestDate}>
-                        {req.date}{req.time ? ` · ${req.time}` : ''}
-                      </Text>
+                      <View style={styles.whenRow}>
+                        <MaterialIcons name="event" size={16} color={color.ink400} />
+                        <Text style={styles.requestDate} numberOfLines={1}>
+                          {req.date}{req.time ? ` · ${req.time}` : ''}
+                        </Text>
+                      </View>
                       <View style={styles.requestActions}>
                         <Pressable
                           onPress={() => handleDecline(req.id)}
@@ -301,7 +374,7 @@ export default function ArtisanDashboard() {
                           <Text style={styles.declineText}>{t('Decline')}</Text>
                         </Pressable>
                         <Pressable
-                          onPress={() => respondToRequest(req.id, 'confirmed')}
+                          onPress={() => updateBookingStatus(req.id, 'confirmed')}
                           style={styles.acceptPill}
                           accessibilityRole="button"
                         >
@@ -316,76 +389,78 @@ export default function ArtisanDashboard() {
           </>
         )}
 
-        {/* 6. QUICK ACTIONS */}
-        <Text style={styles.sectionTitle}>{t('Quick Actions')}</Text>
-
-        <View style={styles.actionList}>
-
-          <TouchableOpacity
-            style={styles.actionItem}
-            onPress={() => router.push('/chat')}
-          >
-            <View style={[styles.actionIcon, { backgroundColor: color.accent100 }]}>
-              <MaterialIcons name="chat-bubble-outline" size={20} color={color.accent600} />
+        {/* 6. ACTIVE JOBS — accepted or started; drives the job lifecycle */}
+        {activeJobs.length > 0 && (
+          <>
+            <Text style={styles.sectionTitle}>{t('Active jobs')}</Text>
+            <View style={styles.requestsList}>
+              {activeJobs.map((job, i) => {
+                const client = job.client_details || {};
+                const clientName = `${client.first_name || ''} ${client.last_name || ''}`.trim() || t('Client');
+                const inProgress = job.status === 'in_progress';
+                return (
+                  <View key={job.id ?? i} style={[styles.requestCard, i > 0 && { marginTop: space.md }]}>
+                    <View style={styles.requestHead}>
+                      <Avatar name={clientName} uri={getImageUrl(client.profile_picture)} size={44} />
+                      <View style={styles.requestHeadText}>
+                        <Text style={styles.requestName} numberOfLines={1}>{clientName}</Text>
+                        {job.location ? (
+                          <Text style={styles.requestMeta} numberOfLines={1}>{job.location}</Text>
+                        ) : null}
+                      </View>
+                      <Badge
+                        label={inProgress ? t('In progress') : t('Accepted')}
+                        status="confirmed"
+                      />
+                    </View>
+                    {job.description ? (
+                      <View style={styles.requestInset}>
+                        <Text style={styles.requestDesc} numberOfLines={2}>{job.description}</Text>
+                      </View>
+                    ) : null}
+                    <View style={styles.requestFooter}>
+                      <View style={styles.whenRow}>
+                        <MaterialIcons name="event" size={16} color={color.ink400} />
+                        <Text style={styles.requestDate} numberOfLines={1}>
+                          {job.date}{job.time ? ` · ${job.time}` : ''}
+                        </Text>
+                      </View>
+                      <View style={styles.requestActions}>
+                        <Pressable
+                          onPress={() => openClientChat(job)}
+                          style={styles.chatPill}
+                          accessibilityRole="button"
+                        >
+                          <Text style={styles.chatPillText}>{t('Chat')}</Text>
+                        </Pressable>
+                        {inProgress ? (
+                          <Pressable
+                            onPress={() => handleMarkDone(job.id)}
+                            style={styles.tonalPill}
+                            accessibilityRole="button"
+                          >
+                            <Text style={styles.tonalPillText}>{t('Mark done')}</Text>
+                          </Pressable>
+                        ) : (
+                          <Pressable
+                            onPress={() => updateBookingStatus(job.id, 'in_progress')}
+                            style={styles.tonalPill}
+                            accessibilityRole="button"
+                          >
+                            <Text style={styles.tonalPillText}>{t('Start job')}</Text>
+                          </Pressable>
+                        )}
+                      </View>
+                    </View>
+                  </View>
+                );
+              })}
             </View>
-            <View style={styles.actionTextContainer}>
-              <Text style={styles.actionTitle}>{t('Messages')}</Text>
-              <Text style={styles.actionSubtitle}>{t('Chat with your clients')}</Text>
-            </View>
-            <MaterialIcons name="chevron-right" size={20} color={color.ink300} />
-          </TouchableOpacity>
+          </>
+        )}
 
-          <View style={styles.separator} />
-
-          <TouchableOpacity
-            style={styles.actionItem}
-            onPress={() => router.push('/artisan/profile')}
-          >
-            <View style={[styles.actionIcon, { backgroundColor: color.brand100 }]}>
-              <MaterialIcons name="person-outline" size={20} color={color.brand600} />
-            </View>
-            <View style={styles.actionTextContainer}>
-              <Text style={styles.actionTitle}>{t('Edit Profile')}</Text>
-              <Text style={styles.actionSubtitle}>{t('Update your information')}</Text>
-            </View>
-            <MaterialIcons name="chevron-right" size={20} color={color.ink300} />
-          </TouchableOpacity>
-
-          <View style={styles.separator} />
-
-          <TouchableOpacity
-            style={styles.actionItem}
-            onPress={() => router.push('/artisan/portfolio')}
-          >
-            <View style={[styles.actionIcon, { backgroundColor: '#F0EAFD' }]}>
-              <MaterialIcons name="collections" size={20} color="#6D4AC9" />
-            </View>
-            <View style={styles.actionTextContainer}>
-              <Text style={styles.actionTitle}>{t('My Portfolio')}</Text>
-              <Text style={styles.actionSubtitle}>{t('Showcase your work')}</Text>
-            </View>
-            <MaterialIcons name="chevron-right" size={20} color={color.ink300} />
-          </TouchableOpacity>
-
-          <View style={styles.separator} />
-
-          <TouchableOpacity
-            style={styles.actionItem}
-            onPress={() => Alert.alert(t("Coming Soon"))}
-          >
-            <View style={[styles.actionIcon, { backgroundColor: color.warn100 }]}>
-              <MaterialIcons name="settings" size={20} color={color.warn600} />
-            </View>
-            <View style={styles.actionTextContainer}>
-              <Text style={styles.actionTitle}>{t('Settings')}</Text>
-              <Text style={styles.actionSubtitle}>{t('App preferences')}</Text>
-            </View>
-            <MaterialIcons name="chevron-right" size={20} color={color.ink300} />
-          </TouchableOpacity>
-
-        </View>
-
-        <View style={{ height: 40 }} />
+        {/* Bottom clearance for the floating tab bar */}
+        <View style={{ height: 100 }} />
       </ScrollView>
     </View>
   );
@@ -409,21 +484,19 @@ const styles = StyleSheet.create({
     paddingTop: space.md,
   },
   headerText: { flex: 1, marginLeft: space.md },
-  nameLabel: { fontFamily: font.extrabold, fontSize: 19, letterSpacing: -0.19, color: '#FFF' },
-  tradeLabel: { fontFamily: font.bold, fontSize: 12.5, color: 'rgba(255,255,255,0.72)', marginTop: 2 },
+  nameLabel: { fontFamily: font.extrabold, fontSize: 17, letterSpacing: -0.17, color: '#FFF' },
+  tradeLabel: { fontFamily: font.bold, fontSize: 12, color: '#B9CBE6', marginTop: 2 },
   iconBtn: {
-    width: 40,
-    height: 40,
-    backgroundColor: 'rgba(255,255,255,0.10)',
+    width: 38,
+    height: 38,
+    backgroundColor: 'rgba(255,255,255,0.12)',
     borderRadius: radius.md,
     justifyContent: 'center',
     alignItems: 'center',
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.12)',
   },
 
   // Availability card overlaps the header (zIndex above it).
-  scrollContent: { paddingHorizontal: space.xl, marginTop: -40 },
+  scrollContent: { paddingHorizontal: space.xl, paddingTop: space.lg },
   statusCard: {
     backgroundColor: color.surface,
     borderRadius: radius.xl,
@@ -439,9 +512,27 @@ const styles = StyleSheet.create({
     marginBottom: 6,
   },
   statusIndicator: { flexDirection: 'row', alignItems: 'center' },
-  dot: { width: 10, height: 10, borderRadius: 5, marginRight: 8 },
+  dot: { width: 10, height: 10, borderRadius: 5, marginRight: 9 },
   statusTitle: { fontFamily: font.extrabold, fontSize: 15, color: color.ink900 },
-  statusSubtitle: { fontFamily: font.medium, fontSize: 12.5, color: color.ink400, lineHeight: 18 },
+  statusSubtitle: { fontFamily: font.medium, fontSize: 12.5, color: color.ink400, lineHeight: 18, marginTop: 3 },
+  toggleTrack: {
+    width: 48,
+    height: 28,
+    borderRadius: radius.full,
+  },
+  toggleThumb: {
+    position: 'absolute',
+    top: 3,
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    backgroundColor: '#FFFFFF',
+    shadowColor: '#000',
+    shadowOpacity: 0.2,
+    shadowRadius: 4,
+    shadowOffset: { width: 0, height: 1 },
+    elevation: 2,
+  },
 
   // Grid
   grid: { flexDirection: 'row', gap: space.md, marginBottom: space.xl },
@@ -463,32 +554,46 @@ const styles = StyleSheet.create({
 
   // Requests
   sectionTitle: { ...type.heading, marginBottom: space.md },
+  sectionRow: {
+    flexDirection: 'row',
+    alignItems: 'baseline',
+    justifyContent: 'space-between',
+  },
+  countPill: {
+    paddingHorizontal: 9,
+    paddingVertical: 3,
+    borderRadius: radius.full,
+    backgroundColor: color.brand100,
+  },
+  countPillText: { fontFamily: font.extrabold, fontSize: 11, color: color.brand600 },
   requestsList: { marginBottom: space.xl },
   requestCard: {
     backgroundColor: color.surface,
     borderRadius: radius.xl,
-    borderWidth: 1,
-    borderColor: '#EEF2F8',
     padding: space.lg,
+    ...shadow.e2,
   },
   requestHead: { flexDirection: 'row', alignItems: 'center' },
-  requestHeadText: { flex: 1, marginLeft: space.md },
+  requestHeadText: { flex: 1, marginLeft: space.md, minWidth: 0 },
   requestName: { fontFamily: font.extrabold, fontSize: 14, color: color.ink900 },
-  requestMeta: { fontFamily: font.bold, fontSize: 12, color: color.ink400, marginTop: 2 },
+  requestMeta: { fontFamily: font.medium, fontSize: 12, color: color.ink400, marginTop: 2 },
+  requestAgo: { fontFamily: font.bold, fontSize: 11, color: color.ink300, marginLeft: space.sm },
   requestInset: {
     backgroundColor: color.surfaceSunken,
     borderRadius: radius.md,
-    padding: space.md,
-    marginTop: space.md,
+    paddingVertical: 11,
+    paddingHorizontal: 13,
+    marginTop: 11,
   },
-  requestDesc: { fontFamily: font.medium, fontSize: 13, lineHeight: 19, color: color.ink600 },
+  requestDesc: { fontFamily: font.medium, fontSize: 13, lineHeight: 20, color: color.ink600 },
   requestFooter: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
     marginTop: space.md,
   },
-  requestDate: { fontFamily: font.bold, fontSize: 12, color: color.ink400, flexShrink: 1 },
+  whenRow: { flexDirection: 'row', alignItems: 'center', gap: 6, flexShrink: 1 },
+  requestDate: { fontFamily: font.bold, fontSize: 12.5, color: color.ink900, flexShrink: 1 },
   requestActions: { flexDirection: 'row', gap: space.sm },
   declinePill: {
     height: 36,
@@ -500,7 +605,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  declineText: { fontFamily: font.extrabold, fontSize: 12.5, color: color.ink600 },
+  declineText: { fontFamily: font.extrabold, fontSize: 12, color: color.ink400 },
   acceptPill: {
     height: 36,
     paddingHorizontal: 18,
@@ -510,31 +615,25 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     ...shadow.cta,
   },
-  acceptText: { fontFamily: font.extrabold, fontSize: 12.5, color: '#FFF' },
-
-  // Actions
-  actionList: {
+  acceptText: { fontFamily: font.extrabold, fontSize: 12, color: '#FFF' },
+  chatPill: {
+    height: 36,
+    paddingHorizontal: 14,
+    borderRadius: radius.full,
+    borderWidth: 1.5,
+    borderColor: '#DCE3EE',
     backgroundColor: color.surface,
-    borderRadius: radius.xl,
-    paddingVertical: space.sm,
-    borderWidth: 1,
-    borderColor: '#EEF2F8',
-  },
-  actionItem: {
-    flexDirection: 'row',
     alignItems: 'center',
-    padding: space.lg,
-  },
-  separator: { height: 1, backgroundColor: '#F1F5F9', marginLeft: 70 },
-  actionIcon: {
-    width: 40,
-    height: 40,
-    borderRadius: radius.md,
     justifyContent: 'center',
-    alignItems: 'center',
-    marginRight: space.lg,
   },
-  actionTextContainer: { flex: 1 },
-  actionTitle: { fontFamily: font.extrabold, fontSize: 14, color: color.ink900, marginBottom: 2 },
-  actionSubtitle: { fontFamily: font.bold, fontSize: 12, color: color.ink300 },
+  chatPillText: { fontFamily: font.extrabold, fontSize: 12, color: color.ink900 },
+  tonalPill: {
+    height: 36,
+    paddingHorizontal: 14,
+    borderRadius: radius.full,
+    backgroundColor: color.brand100,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  tonalPillText: { fontFamily: font.extrabold, fontSize: 12, color: color.brand600 },
 });

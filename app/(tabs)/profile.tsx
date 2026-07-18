@@ -9,6 +9,7 @@ import { useTranslation } from "react-i18next";
 import { authAPI } from "@/src/api/client";
 import { storage } from "@/src/utils/storage";
 import { EmailVerificationBanner } from "@/src/components/EmailVerificationBanner";
+import ContactList from "@/src/components/ContactList";
 import { color, font, radius, space, type } from "@/constants/theme";
 import { Avatar, Badge } from "@/src/components/ui";
 
@@ -54,6 +55,7 @@ export default function ProfileScreen() {
   const router = useRouter();
   const { t } = useTranslation();
   const [user, setUser] = React.useState<any>(null);
+  const [showContacts, setShowContacts] = React.useState(false);
 
   React.useEffect(() => {
     storage.getCurrentUser().then(setUser);
@@ -101,20 +103,29 @@ export default function ProfileScreen() {
         <Animated.View entering={FadeInDown.delay(100).duration(400)}>
           <Text style={styles.sectionTitle}>{t('Account')}</Text>
           <View style={styles.sectionContainer}>
-            <SettingsRow icon="person-outline" label={t('Personal Information')} onPress={() => { }} />
+            <SettingsRow icon="person-outline" label={t('Personal Information')} onPress={() => router.push('/personal-info')} />
             <View style={styles.separator} />
-            <SettingsRow icon="credit-card" label={t('Payment Methods')} onPress={() => { }} />
-            <View style={styles.separator} />
-            <SettingsRow icon="notifications-none" label={t('Notifications')} onPress={() => { }} />
+            <SettingsRow icon="notifications-none" label={t('Notifications')} onPress={() => router.push('/notification-settings')} />
           </View>
         </Animated.View>
 
         <Animated.View entering={FadeInDown.delay(200).duration(400)}>
           <Text style={styles.sectionTitle}>{t('Support')}</Text>
           <View style={styles.sectionContainer}>
-            <SettingsRow icon="help-outline" label={t('Help Center')} onPress={() => { }} />
+            <SettingsRow icon="help-outline" label={t('Help Center')} onPress={() => router.push('/help-center')} />
             <View style={styles.separator} />
-            <SettingsRow icon="mail-outline" label={t('Contact Us')} onPress={() => { }} />
+            <SettingsRow
+              icon="mail-outline"
+              label={t('Contact Us')}
+              value={showContacts ? undefined : t('Show')}
+              onPress={() => setShowContacts(prev => !prev)}
+            />
+            {showContacts && (
+              <>
+                <View style={styles.separator} />
+                <ContactList />
+              </>
+            )}
           </View>
         </Animated.View>
 

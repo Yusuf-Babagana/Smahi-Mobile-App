@@ -50,6 +50,15 @@ export default function BookingFlow() {
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
   const [selectedTime, setSelectedTime] = useState<string | null>(null);
 
+  // A slot that has already passed today can't be booked (backend rejects it).
+  const todayIso = new Date().toISOString().slice(0, 10);
+  const isSlotPast = (slot: string) => {
+    if (selectedDate !== todayIso) return false;
+    const [h, m] = slot.split(':').map(Number);
+    const now = new Date();
+    return h < now.getHours() || (h === now.getHours() && m <= now.getMinutes());
+  };
+
   // Step 2 — details
   const [description, setDescription] = useState('');
   const [photos, setPhotos] = useState<string[]>([]);
@@ -98,9 +107,13 @@ export default function BookingFlow() {
         location: address,
       });
       setSubmitted(true);
-    } catch (error) {
-      console.log('BOOKING ERROR:', error);
-      Alert.alert(t('Error'), t('Failed to send booking request.'));
+    } catch (error: any) {
+      console.log('BOOKING ERROR:', error?.response?.data || error);
+      const data = error?.response?.data;
+      const serverMessage = data && typeof data === 'object'
+        ? Object.values(data).flat().find((v) => typeof v === 'string') as string | undefined
+        : undefined;
+      Alert.alert(t('Error'), serverMessage || t('Failed to send booking request.'));
     } finally {
       setSubmitting(false);
     }
@@ -137,7 +150,7 @@ export default function BookingFlow() {
   }
 
   const continueDisabled =
-    (step === 1 && (!selectedDate || !selectedTime)) ||
+    (step === 1 && (!selectedDate || !selectedTime || isSlotPast(selectedTime))) ||
     (step === 2 && description.trim().length === 0) ||
     submitting;
 
@@ -182,15 +195,17 @@ export default function BookingFlow() {
                 <View style={styles.slotGrid}>
                   {TIME_SLOTS.map((slot) => {
                     const active = selectedTime === slot;
+                    const past = isSlotPast(slot);
                     return (
                       <Pressable
                         key={slot}
-                        onPress={() => setSelectedTime(slot)}
+                        onPress={() => !past && setSelectedTime(slot)}
+                        disabled={past}
                         accessibilityRole="button"
-                        accessibilityState={{ selected: active }}
-                        style={[styles.slot, active && styles.slotActive]}
+                        accessibilityState={{ selected: active, disabled: past }}
+                        style={[styles.slot, active && styles.slotActive, past && styles.slotDisabled]}
                       >
-                        <Text style={[styles.slotText, active && styles.slotTextActive]}>{slot}</Text>
+                        <Text style={[styles.slotText, active && styles.slotTextActive, past && styles.slotTextDisabled]}>{slot}</Text>
                       </Pressable>
                     );
                   })}
@@ -354,8 +369,10 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   slotActive: { backgroundColor: color.brand600, borderColor: color.brand600 },
+  slotDisabled: { backgroundColor: color.surfaceSunken, borderColor: '#EDF1F7' },
   slotText: { fontFamily: font.extrabold, fontSize: 13.5, color: color.ink600 },
   slotTextActive: { color: '#FFF' },
+  slotTextDisabled: { color: color.ink300 },
 
   // Step 2
   textarea: {

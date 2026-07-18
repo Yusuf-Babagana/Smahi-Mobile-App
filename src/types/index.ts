@@ -80,6 +80,8 @@ export interface User {
   is_verified: boolean;
   // Email OTP confirmation — distinct from is_verified (the artisan ID-verification badge)
   email_verified?: boolean;
+  // Artisans must pay a registration fee before their account is activated
+  registration_fee_paid?: boolean;
   account_status?: 'active' | 'suspended' | 'locked';
   created_at?: string;
   serial_number?: string;
@@ -133,3 +135,49 @@ export interface Booking {
   estimatedCost?: number;
   createdAt: string;
 }
+
+// --- AI Action types (returned by the AI chat backend) ---
+
+export interface AIArtisanResult {
+  id: number;
+  user_id: number;
+  name: string;
+  category: string;
+  rating: number;
+  is_verified: boolean;
+}
+
+export interface AISearchActionResult {
+  type: 'search_results';
+  data: { query: string; results: AIArtisanResult[] };
+}
+
+export interface AICategoryFilterAction {
+  type: 'category_filter';
+  data: { category: string; category_id?: number; results: AIArtisanResult[] };
+}
+
+export interface AIArtisanProfileAction {
+  type: 'artisan_profile';
+  data: {
+    found: boolean;
+    name: string;
+    id?: number;
+    user_id?: number;
+    category?: string;
+    rating?: number;
+    is_verified?: boolean;
+    bio?: string;
+  };
+}
+
+export interface AINavigationAction {
+  type: 'navigation';
+  data: { screen: string; route: string };
+}
+
+export type AIAction =
+  | AISearchActionResult
+  | AICategoryFilterAction
+  | AIArtisanProfileAction
+  | AINavigationAction;

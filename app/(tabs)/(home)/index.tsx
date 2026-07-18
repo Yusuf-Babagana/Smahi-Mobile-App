@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import {
   View, Text, StyleSheet, FlatList, TextInput, Alert,
   TouchableOpacity, ActivityIndicator, ScrollView, RefreshControl, Pressable
@@ -6,13 +6,13 @@ import {
 import MapView, { Marker, PROVIDER_GOOGLE, Callout } from 'react-native-maps';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
-import { useRouter } from 'expo-router';
+import { useRouter, useLocalSearchParams } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useTranslation } from 'react-i18next';
 import axios from 'axios'; // Import Axios directly for the location fetch
 
-import { artisanAPI, categoryAPI } from '@/src/api/client';
+import { artisanAPI, authAPI, categoryAPI } from '@/src/api/client';
 import { useLocation } from '@/src/contexts/LocationContext';
 import { CategoryGroup } from '@/src/types';
 import {
@@ -24,6 +24,7 @@ import { color, font, radius, shadow, space, type } from '@/constants/theme';
 import {
   ArtisanCard, Avatar, Chip, EmptyState, SegmentedControl, SkeletonCard,
 } from '@/src/components/ui';
+import { recordSearch } from '@/src/utils/recommendations';
 
 const DISTANCE_OPTIONS = [
   { label: '5 km', value: 5 },
@@ -34,10 +35,34 @@ const DISTANCE_OPTIONS = [
 ];
 const CACHE_KEY = 'cached_artisans_list';
 
+function haversineKm(lat1: number, lon1: number, lat2: number, lon2: number): number {
+  const R = 6371;
+  const dLat = (lat2 - lat1) * (Math.PI / 180);
+  const dLon = (lon2 - lon1) * (Math.PI / 180);
+  const a =
+    Math.sin(dLat / 2) ** 2 +
+    Math.cos(lat1 * (Math.PI / 180)) * Math.cos(lat2 * (Math.PI / 180)) *
+    Math.sin(dLon / 2) ** 2;
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+}
+
+function filterByDistance(artisans: any[], clientLat: number, clientLon: number, maxKm: number | null) {
+  const withDistance = artisans.map((a) => {
+    const lat = parseFloat(a.latitude ?? a.user_details?.latitude ?? a.user?.latitude);
+    const lon = parseFloat(a.longitude ?? a.user_details?.longitude ?? a.user?.longitude);
+    if (isNaN(lat) || isNaN(lon)) return { ...a, distance: Infinity };
+    return { ...a, distance: haversineKm(clientLat, clientLon, lat, lon) };
+  });
+  withDistance.sort((a, b) => a.distance - b.distance);
+  if (maxKm !== null) return withDistance.filter((a) => a.distance <= maxKm);
+  return withDistance;
+}
+
 export default function ClientHomeScreen() {
   const router = useRouter();
   const { t, i18n } = useTranslation();
-  const { location, isLoading: locationLoading } = useLocation();
+  const { location, isLoading: locationLoading, errorMsg: locationError, requestLocationPermission } = useLocation();
+  const aiParams = useLocalSearchParams<{ aiSearch?: string; aiCategoryId?: string; aiCategoryName?: string }>();
 
   // --- State ---
   const [artisans, setArtisans] = useState<any[]>([]);
@@ -76,8 +101,8 @@ export default function ClientHomeScreen() {
   const fetchLocations = async () => {
     try {
       const [statesRes, lgasRes] = await Promise.all([
-        axios.get(`${BACKEND_URL}/api/common/states/`).catch(() => ({ data: [] })),
-        axios.get(`${BACKEND_URL}/api/common/lgas/`).catch(() => ({ data: [] }))
+        axios.get(`${BACKEND_URL}/api/locations/states/`).catch(() => ({ data: [] })),
+        axios.get(`${BACKEND_URL}/api/locations/lgas/`).catch(() => ({ data: [] }))
       ]);
 
       const map: Record<number, string> = {};
@@ -108,10 +133,45 @@ export default function ClientHomeScreen() {
     categoryAPI.getCategories().then(setParentCategories).catch(() => {});
   }, []);
 
+  // Save the client's GPS point on their profile (fire-and-forget) so
+  // "use my saved address" search works even when GPS is off later.
+  const coordsSynced = useRef(false);
+  useEffect(() => {
+    if (location && !coordsSynced.current) {
+      coordsSynced.current = true;
+      authAPI.saveCoordinates(location.latitude, location.longitude).catch(() => {});
+    }
+  }, [location]);
+
   // Voice Search
   useEffect(() => {
     return () => { abortSpeechRecognition(); };
   }, []);
+
+  // --- Handle AI-initiated search/category params from the AI chat screen ---
+  useEffect(() => {
+    if (aiParams.aiSearch) {
+      setSearchQuery(aiParams.aiSearch);
+      setActiveSearch(aiParams.aiSearch);
+      setPage(1);
+      setHasMore(true);
+      fetchArtisans(1, true, undefined, aiParams.aiSearch);
+      // Clear the param so it doesn't re-trigger
+      router.replace('/(tabs)/(home)' as any);
+    } else if (aiParams.aiCategoryId) {
+      const catId = parseInt(aiParams.aiCategoryId, 10);
+      if (!isNaN(catId)) {
+        setSelectedCategoryId(catId);
+        setSearchQuery('');
+        setActiveSearch('');
+        setPage(1);
+        setHasMore(true);
+        fetchArtisans(1, true, catId, '');
+        recordSearch(catId, aiParams.aiCategoryName);
+      }
+      router.replace('/(tabs)/(home)' as any);
+    }
+  }, [aiParams.aiSearch, aiParams.aiCategoryId]);
 
   const toggleVoiceSearch = async () => {
     if (isVoiceSearching) {
@@ -123,12 +183,13 @@ export default function ClientHomeScreen() {
         setSearchQuery(transcript);
         setActiveSearch(transcript);
       } else {
-        Alert.alert(
-          'No Result',
-          transcript === null
-            ? 'Set your OpenAI API key in src/constants/config.ts to enable voice transcription.'
-            : 'No speech detected. Please try again.'
-        );
+        let message = 'No speech detected. Please try again.';
+        if (transcript === '___NO_API_KEY___') {
+          message = 'Voice transcription requires an OpenAI API key. Set it in src/constants/config.ts.';
+        } else if (transcript === '___QUOTA_ERROR___') {
+          message = 'Voice transcription is temporarily unavailable. Please try again later or type your search.';
+        }
+        Alert.alert('No Result', message);
       }
       return;
     }
@@ -211,12 +272,12 @@ export default function ClientHomeScreen() {
         filters.longitude = location.longitude;
       }
 
-      if (maxDistance !== null) {
-        filters.max_distance = maxDistance;
-      }
-
       const data = await artisanAPI.getArtisans(filters, pageNum);
-      const results = Array.isArray(data) ? data : (data.results || []);
+      let results = Array.isArray(data) ? data : (data.results || []);
+
+      if (locationMode === 'live' && location && maxDistance !== null) {
+        results = filterByDistance(results, location.latitude, location.longitude, maxDistance);
+      }
 
       const processedData = processArtisans(results);
 
@@ -259,6 +320,7 @@ export default function ClientHomeScreen() {
         setPage(1);
         setHasMore(true);
         fetchArtisans(1, true, selectedCategoryId, searchQuery);
+        if (searchQuery.trim()) recordSearch(undefined, searchQuery);
       }
     }, 500);
     return () => clearTimeout(delayDebounceFn);
@@ -332,6 +394,8 @@ export default function ClientHomeScreen() {
     setPage(1);
     setHasMore(true);
     fetchArtisans(1, true, subId, '');
+    const sub = expandedParent?.subcategories?.find((s) => s.id === subId);
+    recordSearch(subId, sub?.name);
   };
 
   const handleClearSearch = () => {
@@ -418,7 +482,7 @@ export default function ClientHomeScreen() {
                   <Avatar name={railName} uri={a.profile_picture} size={48} borderRadius={16} verified />
                   <Text style={styles.railName} numberOfLines={1}>{railName}</Text>
                   <Text style={styles.railTrade} numberOfLines={1}>
-                    {i18n.language === 'ha' && a.category_name_ha ? a.category_name_ha : (a.profession_name || t('Artisan'))}
+                    {i18n.language === 'ha' && a.category_name_ha ? a.category_name_ha : (a.profession_name || a.category_name || t('Artisan'))}
                   </Text>
                   <View style={styles.railRating}>
                     <MaterialIcons name="star" size={12} color={color.star} />
@@ -434,6 +498,52 @@ export default function ClientHomeScreen() {
       {artisans.length > 0 && (
         <Text style={[styles.sectionHeading, styles.listHeading]}>{t('All artisans')}</Text>
       )}
+
+      {/* Category chips (moved from filtersArea) */}
+      <View style={styles.categoryListWrap}>
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.categoryListScroll}
+        >
+          <Chip
+            label={t('All')}
+            selected={selectedCategoryId === null && expandedParentId === null}
+            onPress={() => handleParentSelect(null)}
+          />
+          {parentCategories.map((cat) => {
+            const catLabel = i18n.language === 'ha' && cat.name_ha ? cat.name_ha : cat.name;
+            return (
+              <Chip
+                key={cat.id}
+                label={catLabel}
+                selected={expandedParentId === cat.id || selectedCategoryId === cat.id}
+                onPress={() => handleParentSelect(cat.id)}
+              />
+            );
+          })}
+        </ScrollView>
+        {expandedParent && (
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.categoryListScroll}
+          >
+            {expandedParent.subcategories.map((sub) => {
+              const subLabel = i18n.language === 'ha' && sub.name_ha ? sub.name_ha : sub.name;
+              return (
+                <Chip
+                  key={sub.id}
+                  label={subLabel}
+                  subcategory
+                  selected={selectedSubcategoryId === sub.id}
+                  onPress={() => handleSubcategorySelect(sub.id)}
+                />
+              );
+            })}
+          </ScrollView>
+        )}
+      </View>
     </View>
   );
 
@@ -627,52 +737,6 @@ export default function ClientHomeScreen() {
 
       {/* --- FILTERS (light area) --- */}
       <View style={styles.filtersArea}>
-        {/* Parent category chips */}
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={styles.categoryScroll}
-        >
-          <Chip
-            label={t('All')}
-            selected={selectedCategoryId === null && expandedParentId === null}
-            onPress={() => handleParentSelect(null)}
-          />
-          {parentCategories.map((cat) => {
-            const catLabel = i18n.language === 'ha' && cat.name_ha ? cat.name_ha : cat.name;
-            return (
-              <Chip
-                key={cat.id}
-                label={catLabel}
-                selected={expandedParentId === cat.id || selectedCategoryId === cat.id}
-                onPress={() => handleParentSelect(cat.id)}
-              />
-            );
-          })}
-        </ScrollView>
-
-        {/* Expanded subcategory chips */}
-        {expandedParent && (
-          <ScrollView
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            contentContainerStyle={styles.subcategoryScroll}
-          >
-            {expandedParent.subcategories.map((sub) => {
-              const subLabel = i18n.language === 'ha' && sub.name_ha ? sub.name_ha : sub.name;
-              return (
-                <Chip
-                  key={sub.id}
-                  label={subLabel}
-                  subcategory
-                  selected={selectedSubcategoryId === sub.id}
-                  onPress={() => handleSubcategorySelect(sub.id)}
-                />
-              );
-            })}
-          </ScrollView>
-        )}
-
         {/* View toggle + distance chips */}
         <View style={styles.controlsRow}>
           <SegmentedControl
@@ -728,9 +792,9 @@ export default function ClientHomeScreen() {
 
               {/* Artisan Markers */}
               {artisans.map((artisan) => {
-                const lat = artisan?.latitude || artisan?.user_details?.latitude;
-                const lon = artisan?.longitude || artisan?.user_details?.longitude;
-                if (lat && lon) {
+                const lat = artisan?.latitude ?? artisan?.user_details?.latitude;
+                const lon = artisan?.longitude ?? artisan?.user_details?.longitude;
+                if (lat != null && lon != null) {
                   return (
                     <Marker
                       key={artisan.id}
@@ -768,8 +832,21 @@ export default function ClientHomeScreen() {
             </MapView>
           ) : (
             <View style={styles.mapCenter}>
-              <ActivityIndicator color={color.brand600} />
-              <Text style={styles.mapCenterText}>{t('Capturing GPS...')}</Text>
+              {locationError ? (
+                <>
+                  <MaterialIcons name="location-off" size={36} color={color.ink300} />
+                  <Text style={styles.mapCenterText}>{locationError}</Text>
+                  <TouchableOpacity onPress={requestLocationPermission} style={styles.retryBtn}>
+                    <MaterialIcons name="refresh" size={18} color="#FFF" />
+                    <Text style={styles.retryBtnText}>{t('Try again')}</Text>
+                  </TouchableOpacity>
+                </>
+              ) : (
+                <>
+                  <ActivityIndicator color={color.brand600} />
+                  <Text style={styles.mapCenterText}>{t('Capturing GPS...')}</Text>
+                </>
+              )}
             </View>
           )}
         </View>
@@ -1051,6 +1128,8 @@ const styles = StyleSheet.create({
   },
   sectionHeading: { ...type.heading },
   listHeading: { marginBottom: space.md },
+  categoryListWrap: { marginBottom: space.sm },
+  categoryListScroll: { paddingHorizontal: space.xl, gap: 8 },
   railSection: { marginBottom: space.lg },
   railScroll: { gap: space.md, paddingVertical: space.md },
   railCard: {
@@ -1105,8 +1184,19 @@ const styles = StyleSheet.create({
   // Map
   mapWrap: { flex: 1, backgroundColor: color.surfaceSunken, marginTop: space.md },
   map: { width: '100%', height: '100%' },
-  mapCenter: { flex: 1, justifyContent: 'center', alignItems: 'center' },
-  mapCenterText: { fontFamily: font.bold, marginTop: 10, color: color.ink400 },
+  mapCenter: { flex: 1, justifyContent: 'center', alignItems: 'center', gap: space.md },
+  mapCenterText: { fontFamily: font.bold, marginTop: 4, color: color.ink400, textAlign: 'center', paddingHorizontal: space.xl },
+  retryBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: color.brand600,
+    paddingHorizontal: space.lg,
+    paddingVertical: space.sm,
+    borderRadius: radius.full,
+    marginTop: space.sm,
+  },
+  retryBtnText: { fontFamily: font.extrabold, fontSize: 13, color: '#FFF' },
 
   pulseContainer: { width: 30, height: 30, justifyContent: 'center', alignItems: 'center' },
   pulseDot: {

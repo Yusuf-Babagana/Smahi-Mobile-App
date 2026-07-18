@@ -34,6 +34,17 @@ export const authAPI = {
     return response.data;
   },
 
+  // Persist the device GPS point on the user's profile. This is what powers
+  // "X km away": artisan search compares the client's coords against each
+  // artisan's SAVED coords, so both sides should sync when they get a fix.
+  saveCoordinates: async (latitude: number, longitude: number) => {
+    const response = await apiClient.patch('auth/profile/', {
+      latitude: latitude.toFixed(6),
+      longitude: longitude.toFixed(6),
+    });
+    return response.data;
+  },
+
   register: async (data: any) => {
     // Collect names: either from direct fields or by splitting 'name'
     let firstName = data.first_name;
@@ -45,19 +56,28 @@ export const authAPI = {
       lastName = nameParts.slice(1).join(' ') || '';
     }
 
-    const payload = {
+    const payload: Record<string, any> = {
       email: data.email,
       password: data.password,
       password_confirm: data.password_confirm || data.password,
       first_name: firstName || '',
       last_name: lastName || '',
       role: data.role,
-      service_category: data.service_category,
       phone_number: data.phone_number || data.phone,
       country: data.country,
       state: data.state,
       lga: data.lga
     };
+
+    // Artisan category: either an existing category ID or a custom name
+    if (data.role === 'artisan') {
+      if (data.custom_category_name) {
+        payload.custom_category_name = data.custom_category_name;
+        payload.category_id = null;
+      } else if (data.category_id) {
+        payload.category_id = Number(data.category_id);
+      }
+    }
 
     const response = await apiClient.post('auth/register/', payload);
     if (response.data.tokens) {
@@ -228,8 +248,8 @@ export const artisanAPI = {
       if (filters?.service && filters.service !== 'All') params.category_id = filters.service;
       if (filters?.lga) params.lga_id = filters.lga;
       if (filters?.state) params.state_id = filters.state;
-      if (filters?.latitude && !filters.use_saved) params.latitude = filters.latitude;
-      if (filters?.longitude && !filters.use_saved) params.longitude = filters.longitude;
+      if (filters?.latitude != null && !filters.use_saved) params.latitude = filters.latitude;
+      if (filters?.longitude != null && !filters.use_saved) params.longitude = filters.longitude;
       if (filters?.use_saved) params.use_saved = 'true';
       if (filters?.max_distance !== undefined && filters?.max_distance !== null) {
         params.max_distance = filters.max_distance;
@@ -245,6 +265,14 @@ export const artisanAPI = {
       }
       throw error;
     }
+  },
+
+  // Update the logged-in artisan's own profile (bio, rates, availability).
+  // Note: bio lives on the ArtisanProfile model, NOT the user account —
+  // auth/profile/ silently ignores it.
+  updateMyProfile: async (data: Record<string, any>) => {
+    const response = await apiClient.patch('artisan/profile/', data);
+    return response.data;
   },
 
   // Fetch artisan profile by user ID
@@ -404,6 +432,16 @@ export const ticketAPI = {
       console.error(`Fetch Ticket ${id} Error:`, error);
       throw error;
     }
+  },
+
+  updateTicket: async (id: string | number, data: any) => {
+    try {
+      const response = await apiClient.patch(`/core/tickets/${id}/`, data);
+      return response.data;
+    } catch (error) {
+      console.error(`Update Ticket ${id} Error:`, error);
+      throw error;
+    }
   }
 };
 // src/api/client.ts
@@ -414,4 +452,17 @@ export const agentAPI = {
     const response = await apiClient.post('/auth/agent/register-artisan/', data);
     return response.data;
   }
+};
+
+// --- PAYMENTS (Paystack registration fee) ---
+export const paymentAPI = {
+  initialize: async () => {
+    const response = await apiClient.post('auth/payments/initialize/');
+    return response.data;
+  },
+
+  verify: async (reference: string) => {
+    const response = await apiClient.post(`auth/payments/verify/${reference}/`);
+    return response.data;
+  },
 };

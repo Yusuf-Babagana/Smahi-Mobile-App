@@ -22,6 +22,7 @@ import { useAuth } from '@/src/contexts/AuthContext';
 import { getHomeRouteForRole } from '@/src/constants/roleRoutes';
 import { color, font, radius, shadow, space, type } from '@/constants/theme';
 import { Button, Input } from '@/src/components/ui';
+import { paymentAPI } from '@/src/api/client';
 
 export default function LoginScreen() {
   const router = useRouter();
@@ -54,6 +55,26 @@ export default function LoginScreen() {
 
       if (user.account_status === 'suspended') {
         Alert.alert('Access Denied', 'Your account has been suspended. Please contact Admin.');
+        return;
+      }
+
+      // ✅ Artisans who haven't paid registration fee are redirected to payment
+      if (user.role === 'artisan' && user.registration_fee_paid === false) {
+        try {
+          const payResult = await paymentAPI.initialize();
+          router.replace({
+            pathname: '/payment',
+            params: {
+              authorizationUrl: payResult.authorization_url,
+              reference: payResult.reference,
+            },
+          });
+        } catch (payErr: any) {
+          Alert.alert(
+            'Payment Required',
+            'You need to pay the registration fee to activate your account. Please try again.',
+          );
+        }
         return;
       }
 

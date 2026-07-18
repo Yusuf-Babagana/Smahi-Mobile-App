@@ -10,6 +10,7 @@ import * as SecureStore from 'expo-secure-store';
 
 import { artisanAPI, authAPI } from "@/src/api/client";
 import { storage } from "@/src/utils/storage";
+import ContactList from "@/src/components/ContactList";
 import { color, font, radius, shadow, space, type } from '@/constants/theme';
 import { useTranslation } from 'react-i18next';
 
@@ -17,7 +18,7 @@ import { API_URL as BASE_URL, CLOUDINARY_CLOUD_NAME as CLOUD_NAME } from '@/src/
 
 export default function ArtisanProfileScreen() {
     const router = useRouter();
-    const { i18n } = useTranslation();
+    const { t, i18n } = useTranslation();
     const [loading, setLoading] = useState(true);
     const [uploadingProfile, setUploadingProfile] = useState(false);
     const [user, setUser] = useState<any>(null);
@@ -109,13 +110,29 @@ export default function ArtisanProfileScreen() {
         }
     };
 
+    const handleLogout = () => {
+        Alert.alert(t('Logout'), t('Are you sure?'), [
+            { text: t('Cancel'), style: 'cancel' },
+            {
+                text: t('Logout'),
+                style: 'destructive',
+                onPress: async () => {
+                    await authAPI.logout();
+                    router.replace('/login');
+                },
+            },
+        ]);
+    };
+
     const handleSave = async () => {
         try {
-            await authAPI.updateProfile({ bio });
+            // bio lives on the artisan profile, not the user account
+            const updated = await artisanAPI.updateMyProfile({ bio });
+            setArtisan((prev: any) => ({ ...prev, ...updated }));
             setIsEditing(false);
-            Alert.alert("Success", "Profile updated successfully!");
+            Alert.alert(t('Success'), t('Profile updated successfully!'));
         } catch (error) {
-            Alert.alert("Error", "Failed to update profile.");
+            Alert.alert(t('Error'), t('Failed to update profile.'));
         }
     };
 
@@ -200,18 +217,23 @@ export default function ArtisanProfileScreen() {
                 {/* Stats Row */}
                 <Animated.View entering={FadeInDown.delay(200)} style={styles.statsRow}>
                     <View style={styles.statItem}>
-                        <Text style={styles.statValue}>{artisan?.rating ? artisan.rating.toFixed(1) : "5.0"}</Text>
+                        {/* rating can arrive as a string (Django DecimalField) — coerce before toFixed */}
+                        <Text style={styles.statValue}>
+                            {!isNaN(Number(artisan?.rating)) && artisan?.rating != null
+                                ? Number(artisan.rating).toFixed(1)
+                                : "5.0"}
+                        </Text>
                         <Text style={styles.statLabel}>Rating</Text>
                     </View>
                     <View style={styles.divider} />
                     <View style={styles.statItem}>
-                        <Text style={styles.statValue}>0</Text>
-                        <Text style={styles.statLabel}>Reviews</Text>
+                        <Text style={styles.statValue}>{artisan?.total_reviews ?? 0}</Text>
+                        <Text style={styles.statLabel}>{t('Reviews')}</Text>
                     </View>
                     <View style={styles.divider} />
                     <View style={styles.statItem}>
-                        <Text style={styles.statValue}>1+</Text>
-                        <Text style={styles.statLabel}>Years Exp.</Text>
+                        <Text style={styles.statValue}>{artisan?.experience_years ? `${artisan.experience_years}+` : '1+'}</Text>
+                        <Text style={styles.statLabel}>{t('Years Exp.')}</Text>
                     </View>
                 </Animated.View>
 
@@ -251,6 +273,26 @@ export default function ArtisanProfileScreen() {
                     </ScrollView>
                 </Animated.View>
 
+                {/* Contact S-MAHII */}
+                <Animated.View entering={FadeInDown.delay(450)} style={styles.section}>
+                    <Text style={styles.sectionTitle}>{t('Contact Us')}</Text>
+                    <View style={styles.contactCard}>
+                        <ContactList />
+                    </View>
+                </Animated.View>
+
+                {/* Logout */}
+                <Animated.View entering={FadeInDown.delay(500)}>
+                    <Pressable
+                        onPress={handleLogout}
+                        style={styles.logoutBtn}
+                        accessibilityRole="button"
+                    >
+                        <Ionicons name="log-out-outline" size={19} color={color.danger600} />
+                        <Text style={styles.logoutText}>{t('Logout')}</Text>
+                    </Pressable>
+                </Animated.View>
+
                 <View style={{ height: 40 }} />
             </ScrollView>
         </SafeAreaView>
@@ -260,6 +302,19 @@ export default function ArtisanProfileScreen() {
 const styles = StyleSheet.create({
     container: { flex: 1, backgroundColor: color.surfaceSunken },
     center: { flex: 1, justifyContent: 'center', alignItems: 'center' },
+    logoutBtn: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        gap: 8,
+        height: 48,
+        borderRadius: radius.lg,
+        borderWidth: 1.5,
+        borderColor: '#F3D1D1',
+        backgroundColor: '#FFF7F7',
+        marginTop: space.md,
+    },
+    logoutText: { fontFamily: font.extrabold, fontSize: 14, color: color.danger600 },
     content: { padding: space.xl },
 
     navBar: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: space.xxl },
@@ -298,6 +353,14 @@ const styles = StyleSheet.create({
     bioInput: { borderRadius: radius.lg, padding: space.lg, fontFamily: font.semibold, fontSize: 15, minHeight: 100, textAlignVertical: 'top', backgroundColor: color.surface, color: color.ink900, borderWidth: 1.5, borderColor: color.border },
     manageLink: { fontFamily: font.semibold, fontSize: 13.5, color: color.brand600 },
     emptyText: { color: color.ink300, fontFamily: font.medium, fontSize: 14, fontStyle: 'italic' },
+
+    contactCard: {
+        backgroundColor: color.surface,
+        borderRadius: radius.lg,
+        borderWidth: 1,
+        borderColor: '#EEF2F8',
+        overflow: 'hidden',
+    },
 
     portfolioScroll: { gap: space.md },
     portfolioItem: { width: 120, height: 120, borderRadius: radius.lg, overflow: 'hidden', backgroundColor: color.surfaceChip, ...shadow.e1 },

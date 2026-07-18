@@ -16,3 +16,6 @@ export const CLOUDINARY_CLOUD_NAME =
 // (gitignored), never in committed source. Long-term the Whisper call should
 // move behind the Django backend so no key ships in the bundle at all.
 export const OPENAI_API_KEY = process.env.EXPO_PUBLIC_OPENAI_API_KEY || '';
+
+// Paystack public key for client-side payment verification
+export const PAYSTACK_PUBLIC_KEY = process.env.EXPO_PUBLIC_PAYSTACK_PUBLIC_KEY || '';

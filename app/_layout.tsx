@@ -118,7 +118,8 @@ export default function RootLayout() {
                   <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
 
                   {/* Dashboard Screens */}
-                  <Stack.Screen name="artisan/dashboard" options={{ headerShown: false }} />
+                  <Stack.Screen name="artisan/(tabs)" options={{ headerShown: false }} />
+                  <Stack.Screen name="artisan/profile" options={{ headerShown: false }} />
                   <Stack.Screen name="agent/dashboard" options={{ headerShown: false }} />
                   <Stack.Screen name="admin/dashboard" options={{ headerShown: false }} />
 
@@ -129,6 +130,14 @@ export default function RootLayout() {
                   <Stack.Screen name="booking/detail/[id]" options={{ headerShown: false }} />
                   <Stack.Screen name="chat/index" options={{ headerShown: false }} />
                   <Stack.Screen name="chat/[id]" options={{ headerShown: false }} />
+
+                  {/* Profile settings screens */}
+                  <Stack.Screen name="personal-info" options={{ headerShown: false }} />
+                  <Stack.Screen name="notification-settings" options={{ headerShown: false }} />
+                  <Stack.Screen name="help-center" options={{ headerShown: false }} />
+
+                  {/* Payment */}
+                  <Stack.Screen name="payment" options={{ headerShown: false, presentation: 'modal' }} />
 
                   <Stack.Screen name="+not-found" />
                 </Stack>

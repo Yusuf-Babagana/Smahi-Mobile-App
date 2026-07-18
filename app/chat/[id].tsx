@@ -82,14 +82,17 @@ export default function ChatRoomScreen() {
             try {
                 const response = await chatAPI.getMessages(convId);
                 const data = Array.isArray(response) ? response : (response.results || []);
+                const sorted = data.sort((a: any, b: any) =>
+                    new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+                );
 
                 setMessages(prev => {
-                    if (data.length > 0) {
-                        const isNew = prev.length === 0 || data[0].id !== prev[0].id;
-                        if (isNew && currentUserIdRef.current && Number(data[0].sender) !== currentUserIdRef.current) {
+                    if (sorted.length > 0) {
+                        const isNew = prev.length === 0 || sorted[0].id !== prev[0].id;
+                        if (isNew && currentUserIdRef.current && Number(sorted[0].sender) !== currentUserIdRef.current) {
                             playSound('receive');
                         }
-                        if (isNew || data.length !== prev.length) return data;
+                        if (isNew || sorted.length !== prev.length) return sorted;
                     }
                     return prev;
                 });
@@ -218,9 +221,11 @@ export default function ChatRoomScreen() {
                 </Pressable>
             </View>
 
+            {/* "padding" on both platforms: Android edge-to-edge mode never
+                resizes the window for the keyboard, so "height" is a no-op. */}
             <KeyboardAvoidingView
                 style={{ flex: 1 }}
-                behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+                behavior="padding"
                 keyboardVerticalOffset={Platform.OS === 'ios' ? 100 : 0}
             >
                 <FlatList

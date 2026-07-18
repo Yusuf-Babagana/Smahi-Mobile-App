@@ -16,7 +16,7 @@ import Animated, { FadeInUp } from 'react-native-reanimated';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useTranslation } from 'react-i18next';
 
-import { authAPI, locationAPI, categoryAPI } from '@/src/api/client';
+import { authAPI, locationAPI, categoryAPI, paymentAPI } from '@/src/api/client';
 import { UserRole } from '@/src/types';
 import CustomPicker from '@/src/components/CustomPicker';
 import { color, font, radius, space, type } from '@/constants/theme';
@@ -31,6 +31,7 @@ const STEP_META = [
   { title: 'Tell us about you', subtitle: "Let's get to know you." },
   { title: 'How will you use S-MAHII?', subtitle: 'Pick the role that fits you.' },
   { title: 'Where are you based?', subtitle: 'We use this to match you locally.' },
+  { title: 'Complete Registration', subtitle: 'Pay the one-time registration fee to activate your account.' },
 ];
 
 const TERMS_POINTS: { icon: keyof typeof MaterialIcons.glyphMap; text: string }[] = [
@@ -45,7 +46,6 @@ export default function RegisterScreen() {
 
   // --- STEPS STATE ---
   const [currentStep, setCurrentStep] = useState(1);
-  const totalSteps = 4;
 
   // --- FORM STATE ---
   const [acceptedTerms, setAcceptedTerms] = useState(false);
@@ -59,9 +59,17 @@ export default function RegisterScreen() {
   const [loading, setLoading] = useState(false);
   const [errors, setErrors] = useState<{ [key: string]: string }>({});
 
+  const totalSteps = role === 'artisan' ? 5 : 4;
+
+  // Clamp step if role change reduces totalSteps
+  useEffect(() => {
+    if (currentStep > totalSteps) setCurrentStep(totalSteps);
+  }, [role]);
+
   // --- DATA STATE ---
   const [services, setServices] = useState<any[]>([]);
   const [selectedService, setSelectedService] = useState('');
+  const [customCategoryName, setCustomCategoryName] = useState('');
   const [countries, setCountries] = useState<any[]>([]);
   const [states, setStates] = useState<any[]>([]);
   const [lgas, setLgas] = useState<any[]>([]);
@@ -82,6 +90,8 @@ export default function RegisterScreen() {
         label: cat.name,
         value: cat.id.toString()
       }));
+      // Append "Other" option at the end so artisans can type a custom profession
+      mapped.push({ label: 'Other (type below…)', value: '__custom__' });
       setServices(mapped);
     }).catch(err => console.error("❌ CATEGORIES ERROR:", err));
   }, []);
@@ -124,7 +134,13 @@ export default function RegisterScreen() {
       if (!selectedCountry) newErrors['country'] = "Select your country";
       if (!selectedState) newErrors['state'] = "Select your state";
       if (!selectedLga) newErrors['lga'] = "Select your city/LGA";
-      if (role === 'artisan' && !selectedService) newErrors['service'] = "Select your service";
+      if (role === 'artisan') {
+        if (!selectedService) {
+          newErrors['service'] = "Select your service";
+        } else if (selectedService === '__custom__' && !customCategoryName.trim()) {
+          newErrors['customCategory'] = "Enter your profession";
+        }
+      }
     }
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
@@ -148,7 +164,7 @@ export default function RegisterScreen() {
       // Split name for backend compatibility
       const nameParts = name.trim().split(' ');
       const firstName = nameParts[0];
-      const lastName = nameParts.slice(1).join(' ') || firstName; // Fallback to firstName if single name entered
+      const lastName = nameParts.slice(1).join(' ') || firstName;
 
       await authAPI.register({
         first_name: firstName,
@@ -157,13 +173,20 @@ export default function RegisterScreen() {
         password,
         role,
         phone_number: phone,
-        service_category: role === 'artisan' ? selectedService : undefined,
+        category_id: role === 'artisan' && selectedService !== '__custom__' ? selectedService : undefined,
+        custom_category_name: role === 'artisan' && selectedService === '__custom__' ? customCategoryName.trim() : undefined,
         country: selectedCountry,
         state: selectedState,
         lga: selectedLga
       });
 
-      // ✅ SUCCESS LOGIC: Check for Locked Roles
+      // ✅ Artisans advance to payment step (step 5)
+      if (role === 'artisan') {
+        setCurrentStep(5);
+        return;
+      }
+
+      // ✅ Non-artisans: check for locked roles
       if (['agent', 'lga_admin', 'state_coordinator'].includes(role)) {
         Alert.alert(
           'Account Created',
@@ -186,8 +209,48 @@ export default function RegisterScreen() {
     }
   };
 
+  const handlePayNow = async () => {
+    setLoading(true);
+    try {
+      const payResult = await paymentAPI.initialize();
+      router.replace({
+        pathname: '/payment',
+        params: {
+          authorizationUrl: payResult.authorization_url,
+          reference: payResult.reference,
+        },
+      });
+    } catch (payErr: any) {
+      Alert.alert(
+        'Payment Error',
+        'Could not initialize payment. You can complete payment later when you log in.',
+        [{ text: 'Go to Login', onPress: () => router.replace('/login') }]
+      );
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const meta = STEP_META[currentStep - 1];
   const continueDisabled = loading || (currentStep === 1 && !acceptedTerms);
+
+  const isLastStep = currentStep === totalSteps;
+  const isPaymentStep = role === 'artisan' && currentStep === 5;
+  const isRegisterStep = currentStep === 4 && !isPaymentStep;
+
+  const buttonLabel = isPaymentStep
+    ? t('Pay ₦2,500 & Activate')
+    : currentStep === 1
+      ? t('I agree & continue')
+      : isLastStep
+        ? t('Create account')
+        : t('Continue');
+
+  const handleButtonPress = isPaymentStep
+    ? handlePayNow
+    : isLastStep
+      ? handleRegister
+      : nextStep;
 
   return (
     <SafeAreaView style={styles.container}>
@@ -344,8 +407,21 @@ export default function RegisterScreen() {
                 {role === 'artisan' && (
                   <View style={styles.sectionCard}>
                     <Text style={styles.cardTitle}>{t('Your expertise')}</Text>
-                    <CustomPicker label={t('Service provided')} placeholder={t('Select Service')} value={selectedService} onValueChange={setSelectedService} items={services} />
+                    <CustomPicker label={t('Service provided')} placeholder={t('Select Service')} value={selectedService} onValueChange={(val) => { setSelectedService(val); setCustomCategoryName(''); }} items={services} />
                     {errors.service && <Text style={styles.errorText}>{errors.service}</Text>}
+
+                    {selectedService === '__custom__' && (
+                      <View style={{ marginTop: space.md }}>
+                        <Input
+                          label={t('Your profession')}
+                          placeholder={t('e.g. Solar Panel Installer')}
+                          value={customCategoryName}
+                          onChangeText={setCustomCategoryName}
+                          icon="edit"
+                          error={errors.customCategory}
+                        />
+                      </View>
+                    )}
                   </View>
                 )}
 
@@ -366,20 +442,63 @@ export default function RegisterScreen() {
                 </View>
               </View>
             )}
+
+            {/* STEP 5: ARTISAN PAYMENT (only for artisans) */}
+            {currentStep === 5 && role === 'artisan' && (
+              <View style={styles.formSection}>
+                <View style={styles.paymentCard}>
+                  <View style={styles.paymentHeader}>
+                    <View style={styles.paymentIcon}>
+                      <MaterialIcons name="payment" size={28} color={color.brand600} />
+                    </View>
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.paymentTitle}>Registration Fee</Text>
+                      <Text style={styles.paymentSubtitle}>One-time payment via Paystack</Text>
+                    </View>
+                    <Text style={styles.paymentAmount}>₦2,500</Text>
+                  </View>
+
+                  <View style={styles.paymentDivider} />
+
+                  <View style={styles.paymentSummary}>
+                    <Text style={styles.paymentSummaryTitle}>Your details</Text>
+                    <View style={styles.paymentRow}>
+                      <Text style={styles.paymentLabel}>Name</Text>
+                      <Text style={styles.paymentValue}>{name}</Text>
+                    </View>
+                    <View style={styles.paymentRow}>
+                      <Text style={styles.paymentLabel}>Email</Text>
+                      <Text style={styles.paymentValue}>{email}</Text>
+                    </View>
+                    <View style={styles.paymentRow}>
+                      <Text style={styles.paymentLabel}>Role</Text>
+                      <Text style={styles.paymentValue}>Artisan</Text>
+                    </View>
+                    <View style={styles.paymentRow}>
+                      <Text style={styles.paymentLabel}>Location</Text>
+                      <Text style={styles.paymentValue}>
+                        {[lgas.find((l: any) => l.id?.toString() === selectedLga)?.name, states.find((s: any) => s.id?.toString() === selectedState)?.name].filter(Boolean).join(', ')}
+                      </Text>
+                    </View>
+                  </View>
+                </View>
+
+                <View style={styles.paymentNote}>
+                  <MaterialIcons name="info-outline" size={16} color={color.brand600} />
+                  <Text style={styles.paymentNoteText}>
+                    You will be redirected to Paystack's secure payment page. After payment, your account will be activated automatically.
+                  </Text>
+                </View>
+              </View>
+            )}
           </Animated.View>
         </ScrollView>
 
         {/* FOOTER ACTION */}
         <View style={styles.footer}>
           <Button
-            title={
-              currentStep === 1
-                ? t('I agree & continue')
-                : currentStep === totalSteps
-                  ? t('Create account')
-                  : t('Continue')
-            }
-            onPress={currentStep === totalSteps ? handleRegister : nextStep}
+            title={buttonLabel}
+            onPress={handleButtonPress}
             disabled={continueDisabled}
             loading={loading}
           />
@@ -593,6 +712,57 @@ const styles = StyleSheet.create({
   },
   cardTitle: { fontFamily: font.extrabold, fontSize: 15, color: color.ink900, marginBottom: space.md },
   row: { flexDirection: 'row' },
+
+  // STEP 5 — payment
+  paymentCard: {
+    backgroundColor: color.surface,
+    borderRadius: radius.lg,
+    borderWidth: 1,
+    borderColor: '#EEF2F8',
+    overflow: 'hidden',
+  },
+  paymentHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: space.lg,
+    gap: space.md,
+  },
+  paymentIcon: {
+    width: 52,
+    height: 52,
+    borderRadius: radius.md,
+    backgroundColor: color.brand100,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  paymentTitle: { fontFamily: font.extrabold, fontSize: 16, color: color.ink900 },
+  paymentSubtitle: { fontFamily: font.medium, fontSize: 12.5, color: color.ink400, marginTop: 2 },
+  paymentAmount: { fontFamily: font.extrabold, fontSize: 22, color: color.brand600 },
+  paymentDivider: { height: 1, backgroundColor: '#F1F5F9' },
+  paymentSummary: { padding: space.lg },
+  paymentSummaryTitle: { fontFamily: font.extrabold, fontSize: 13, color: color.ink900, marginBottom: space.md },
+  paymentRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    paddingVertical: 8,
+  },
+  paymentLabel: { fontFamily: font.medium, fontSize: 13, color: color.ink400 },
+  paymentValue: { fontFamily: font.bold, fontSize: 13, color: color.ink900 },
+  paymentNote: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 8,
+    backgroundColor: color.brand100,
+    borderRadius: radius.md,
+    padding: space.md,
+  },
+  paymentNoteText: {
+    flex: 1,
+    fontFamily: font.bold,
+    fontSize: 12.5,
+    lineHeight: 18,
+    color: color.brand600,
+  },
 
   // FOOTER
   footer: {

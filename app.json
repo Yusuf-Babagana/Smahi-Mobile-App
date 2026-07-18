@@ -44,7 +44,14 @@
       "expo-router",
       "expo-web-browser",
       "expo-localization",
-      "expo-speech-recognition"
+      "expo-speech-recognition",
+      [
+        "expo-location",
+        {
+          "locationAlwaysAndWhenInUsePermission": "Allow S-MAHII to use your location to find nearby artisans."
+        }
+      ],
+      "expo-location"
     ],
     "scheme": "natively",
     "experiments": {

@@ -1,17 +1,20 @@
 import React, { useEffect, useState } from 'react';
 import {
-    View, Text, StyleSheet, ScrollView, Image, TouchableOpacity,
-    ActivityIndicator, Alert, Linking, Platform
+    View, Text, StyleSheet, ScrollView, Image,
+    ActivityIndicator, Alert, Linking, Pressable,
 } from 'react-native';
 import { useLocalSearchParams, useRouter, Stack } from 'expo-router';
-import { Ionicons } from '@expo/vector-icons';
-import { artisanAPI } from '@/src/api/client';
-import { colors } from '@/styles/commonStyles';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import { MaterialIcons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useTranslation } from 'react-i18next';
 
+import { artisanAPI } from '@/src/api/client';
+import { color, font, radius, shadow, space, type } from '@/constants/theme';
+import { Badge } from '@/src/components/ui';
+
 export default function ArtisanDetailScreen() {
-    const { i18n } = useTranslation();
+    const { t, i18n } = useTranslation();
     const { id } = useLocalSearchParams();
     const router = useRouter();
     const [artisan, setArtisan] = useState<any>(null);
@@ -71,7 +74,7 @@ export default function ArtisanDetailScreen() {
     if (loading) {
         return (
             <View style={styles.loadingContainer}>
-                <ActivityIndicator size="large" color={colors.primary} />
+                <ActivityIndicator size="large" color={color.brand600} />
             </View>
         );
     }
@@ -86,16 +89,22 @@ export default function ArtisanDetailScreen() {
                 {artisan.profile_picture ? (
                     <Image source={{ uri: artisan.profile_picture }} style={styles.profileImage} />
                 ) : (
-                    <LinearGradient colors={['#4F46E5', '#818CF8']} style={styles.placeholderImage}>
+                    <LinearGradient
+                        colors={[color.brand900, color.brand600]}
+                        start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
+                        style={styles.placeholderImage}
+                    >
                         <Text style={styles.placeholderText}>
                             {artisan.first_name?.[0]}{artisan.last_name?.[0]}
                         </Text>
                     </LinearGradient>
                 )}
 
-                <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
-                    <Ionicons name="arrow-back" size={24} color="#FFF" />
-                </TouchableOpacity>
+                <SafeAreaView edges={['top']} style={styles.navSafe}>
+                    <Pressable onPress={() => router.back()} style={styles.backButton} accessibilityRole="button" accessibilityLabel={t('Back')}>
+                        <MaterialIcons name="arrow-back" size={22} color="#FFF" />
+                    </Pressable>
+                </SafeAreaView>
             </View>
 
             <ScrollView contentContainerStyle={styles.content}>
@@ -103,51 +112,45 @@ export default function ArtisanDetailScreen() {
                 {/* 2. Basic Info */}
                 <View style={styles.headerInfo}>
                     <Text style={styles.name}>{artisan.first_name} {artisan.last_name}</Text>
-                    <Text style={styles.category}>{i18n.language === 'ha' && artisan.category_name_ha ? artisan.category_name_ha : (artisan.service_category || 'General Services')}</Text>
+                    <Text style={styles.category}>
+                        {i18n.language === 'ha' && artisan.category_name_ha
+                            ? artisan.category_name_ha
+                            : (artisan.service_category || t('General Services'))}
+                    </Text>
 
                     <View style={styles.statusRow}>
-                        {artisan.is_verified ? (
-                            <View style={[styles.badge, { backgroundColor: '#D1FAE5' }]}>
-                                <Ionicons name="checkmark-circle" size={16} color="#10B981" />
-                                <Text style={[styles.badgeText, { color: '#065F46' }]}>VERIFIED</Text>
-                            </View>
-                        ) : (
-                            <View style={[styles.badge, { backgroundColor: '#FEF3C7' }]}>
-                                <Ionicons name="time" size={16} color="#D97706" />
-                                <Text style={[styles.badgeText, { color: '#92400E' }]}>PENDING</Text>
-                            </View>
-                        )}
-                        <View style={[styles.badge, { backgroundColor: '#F3F4F6' }]}>
-                            <Text style={[styles.badgeText, { color: '#374151' }]}>ID: {id}</Text>
-                        </View>
+                        <Badge
+                            label={artisan.is_verified ? t('Verified') : t('Pending')}
+                            status={artisan.is_verified ? 'verified' : 'pending'}
+                            icon={artisan.is_verified ? 'verified' : 'schedule'}
+                        />
+                        <Badge label={`ID: ${id}`} bg={color.surfaceChip} fg={color.ink600} />
                     </View>
                 </View>
 
-                <View style={styles.divider} />
-
                 {/* 3. Contact & Location */}
-                <View style={styles.section}>
-                    <Text style={styles.sectionTitle}>Contact Info</Text>
+                <View style={styles.card}>
+                    <Text style={styles.sectionTitle}>{t('Contact info')}</Text>
 
-                    <TouchableOpacity style={styles.contactRow} onPress={handleCall}>
+                    <Pressable style={styles.contactRow} onPress={handleCall} accessibilityRole="button" accessibilityLabel={t('Call')}>
                         <View style={styles.iconBox}>
-                            <Ionicons name="call" size={20} color={colors.primary} />
+                            <MaterialIcons name="call" size={20} color={color.brand600} />
                         </View>
-                        <View>
-                            <Text style={styles.contactLabel}>Phone Number</Text>
+                        <View style={{ flex: 1 }}>
+                            <Text style={styles.contactLabel}>{t('Phone number')}</Text>
                             <Text style={styles.contactValue}>{artisan.phone_number || 'N/A'}</Text>
                         </View>
-                        <Ionicons name="chevron-forward" size={20} color="#9CA3AF" style={{ marginLeft: 'auto' }} />
-                    </TouchableOpacity>
+                        <MaterialIcons name="chevron-right" size={20} color={color.ink300} />
+                    </Pressable>
 
-                    <View style={styles.contactRow}>
+                    <View style={[styles.contactRow, styles.contactRowLast]}>
                         <View style={styles.iconBox}>
-                            <Ionicons name="location" size={20} color={colors.primary} />
+                            <MaterialIcons name="place" size={20} color={color.brand600} />
                         </View>
-                        <View>
-                            <Text style={styles.contactLabel}>Location</Text>
+                        <View style={{ flex: 1 }}>
+                            <Text style={styles.contactLabel}>{t('Location')}</Text>
                             <Text style={styles.contactValue}>
-                                {artisan.lga_details?.name || 'LGA'}, {artisan.state_details?.name || 'State'}
+                                {artisan.lga_details?.name || t('LGA')}, {artisan.state_details?.name || t('State')}
                             </Text>
                         </View>
                     </View>
@@ -156,22 +159,24 @@ export default function ArtisanDetailScreen() {
                 {/* 4. Action Button */}
                 {!artisan.is_verified && (
                     <View style={styles.footer}>
-                        <TouchableOpacity
-                            style={styles.verifyButton}
+                        <Pressable
+                            style={({ pressed }) => [styles.verifyButton, pressed && { opacity: 0.9 }]}
                             onPress={handleVerify}
                             disabled={verifying}
+                            accessibilityRole="button"
+                            accessibilityLabel={t('Verify artisan')}
                         >
                             {verifying ? (
                                 <ActivityIndicator color="#FFF" />
                             ) : (
                                 <>
-                                    <Ionicons name="shield-checkmark" size={24} color="#FFF" />
-                                    <Text style={styles.verifyText}>VERIFY ARTISAN</Text>
+                                    <MaterialIcons name="verified-user" size={22} color="#FFF" />
+                                    <Text style={styles.verifyText}>{t('Verify artisan')}</Text>
                                 </>
                             )}
-                        </TouchableOpacity>
+                        </Pressable>
                         <Text style={styles.disclaimer}>
-                            Only verify artisans you have physically met.
+                            {t('Only verify artisans you have physically met.')}
                         </Text>
                     </View>
                 )}
@@ -182,43 +187,82 @@ export default function ArtisanDetailScreen() {
 }
 
 const styles = StyleSheet.create({
-    container: { flex: 1, backgroundColor: '#FFF' },
-    loadingContainer: { flex: 1, justifyContent: 'center', alignItems: 'center' },
+    container: { flex: 1, backgroundColor: color.surfaceSunken },
+    loadingContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: color.surfaceSunken },
 
     // Image Header
-    imageContainer: { height: 250, width: '100%', position: 'relative' },
+    imageContainer: { height: 240, width: '100%', position: 'relative' },
     profileImage: { width: '100%', height: '100%' },
     placeholderImage: { width: '100%', height: '100%', justifyContent: 'center', alignItems: 'center' },
-    placeholderText: { fontSize: 80, fontWeight: 'bold', color: 'rgba(255,255,255,0.3)' },
-    backButton: { position: 'absolute', top: 50, left: 20, backgroundColor: 'rgba(0,0,0,0.3)', padding: 8, borderRadius: 20 },
+    placeholderText: { fontFamily: font.extrabold, fontSize: 72, color: 'rgba(255,255,255,0.3)' },
+    navSafe: { position: 'absolute', top: 0, left: 0, right: 0 },
+    backButton: {
+        marginTop: space.md,
+        marginLeft: space.xl,
+        width: 40,
+        height: 40,
+        borderRadius: radius.md,
+        backgroundColor: 'rgba(0,0,0,0.35)',
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
 
-    content: { padding: 24, paddingBottom: 50 },
+    content: { padding: space.xl, paddingBottom: 50 },
 
     // Header Info
-    headerInfo: { alignItems: 'center', marginBottom: 20 },
-    name: { fontSize: 24, fontWeight: '800', color: '#111827', textAlign: 'center' },
-    category: { fontSize: 16, color: '#6B7280', marginTop: 4 },
-    statusRow: { flexDirection: 'row', gap: 10, marginTop: 16 },
-    badge: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 20, gap: 6 },
-    badgeText: { fontSize: 12, fontWeight: '700' },
+    headerInfo: { alignItems: 'center', marginBottom: space.xl },
+    name: { ...type.titleLg, textAlign: 'center' },
+    category: { fontFamily: font.bold, fontSize: 14, color: color.ink400, marginTop: 4 },
+    statusRow: { flexDirection: 'row', gap: space.sm, marginTop: space.lg },
 
-    divider: { height: 1, backgroundColor: '#F3F4F6', marginVertical: 20 },
-
-    // Sections
-    section: { marginBottom: 30 },
-    sectionTitle: { fontSize: 16, fontWeight: '700', color: '#374151', marginBottom: 16 },
-    contactRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: '#F9FAFB' },
-    iconBox: { width: 40, height: 40, borderRadius: 12, backgroundColor: '#EEF2FF', justifyContent: 'center', alignItems: 'center', marginRight: 16 },
-    contactLabel: { fontSize: 12, color: '#6B7280' },
-    contactValue: { fontSize: 16, fontWeight: '600', color: '#1F2937' },
+    // Contact card
+    card: {
+        backgroundColor: color.surface,
+        borderRadius: radius.lg,
+        borderWidth: 1,
+        borderColor: '#EEF2F8',
+        padding: space.lg,
+        marginBottom: space.xl,
+    },
+    sectionTitle: { ...type.heading, marginBottom: space.sm },
+    contactRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        paddingVertical: space.md,
+        borderBottomWidth: 1,
+        borderBottomColor: '#F1F5F9',
+    },
+    contactRowLast: { borderBottomWidth: 0 },
+    iconBox: {
+        width: 40,
+        height: 40,
+        borderRadius: radius.md,
+        backgroundColor: color.brand100,
+        justifyContent: 'center',
+        alignItems: 'center',
+        marginRight: space.md,
+    },
+    contactLabel: { fontFamily: font.bold, fontSize: 11.5, color: color.ink400 },
+    contactValue: { fontFamily: font.extrabold, fontSize: 14.5, color: color.ink900, marginTop: 1 },
 
     // Footer / Action
-    footer: { marginTop: 20 },
+    footer: { marginTop: space.sm },
     verifyButton: {
-        flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10,
-        backgroundColor: '#10B981', paddingVertical: 16, borderRadius: 16,
-        shadowColor: '#10B981', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3, shadowRadius: 8, elevation: 4
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        gap: 10,
+        backgroundColor: color.accent600,
+        height: 54,
+        borderRadius: radius.lg,
+        ...shadow.e2,
     },
-    verifyText: { color: '#FFF', fontSize: 16, fontWeight: '800', letterSpacing: 0.5 },
-    disclaimer: { textAlign: 'center', color: '#9CA3AF', fontSize: 12, marginTop: 12 }
+    verifyText: { color: '#FFF', fontFamily: font.extrabold, fontSize: 15.5 },
+    disclaimer: {
+        fontFamily: font.bold,
+        textAlign: 'center',
+        color: color.ink300,
+        fontSize: 12,
+        marginTop: space.md,
+    },
 });
