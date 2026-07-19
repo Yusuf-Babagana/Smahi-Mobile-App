@@ -70,6 +70,11 @@ export default function LoginScreen() {
             },
           });
         } catch (payErr: any) {
+          // Fee already settled server-side (stale local flag): continue in.
+          if (payErr?.response?.data?.already_paid) {
+            router.replace(getHomeRouteForRole(user.role));
+            return;
+          }
           // 503 = payments not configured yet on the backend: the fee stays
           // owed, but the artisan must not be locked out of the app.
           if (payErr?.response?.status === 503) {

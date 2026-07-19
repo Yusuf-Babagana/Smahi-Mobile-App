@@ -224,6 +224,16 @@ export default function RegisterScreen() {
         },
       });
     } catch (payErr: any) {
+      // Fee already settled (e.g. a retry after a successful payment):
+      // that's success, not an error — send the user to log in.
+      if (payErr?.response?.data?.already_paid) {
+        Alert.alert(
+          'Already Paid',
+          'Your registration fee has already been paid. Please log in to continue.',
+          [{ text: 'Go to Login', onPress: () => router.replace('/login') }]
+        );
+        return;
+      }
       // Surface the real reason (server error / network) so failures are
       // debuggable instead of hiding behind a generic message.
       console.log('[PayNow] init failed:', payErr?.response?.status, payErr?.response?.data || payErr?.message);
