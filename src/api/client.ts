@@ -463,9 +463,11 @@ export const agentAPI = {
 // --- PAYMENTS (Paystack registration fee) ---
 export const paymentAPI = {
   // Pass the email explicitly when you have it (e.g. the register screen);
-  // otherwise it falls back to the cached user. The backend accepts either
-  // the JWT or the email, so sending both makes the call timing-proof.
-  initialize: async (explicitEmail?: string) => {
+  // otherwise it falls back to the cached user. An in-memory accessToken
+  // (from the registration response) bypasses the SecureStore timing race
+  // entirely. The backend accepts either identity, so sending both makes
+  // the call state-proof.
+  initialize: async (explicitEmail?: string, accessToken?: string) => {
     let email = explicitEmail;
     if (!email) {
       try {
@@ -473,12 +475,16 @@ export const paymentAPI = {
         if (stored) email = JSON.parse(stored).email;
       } catch {}
     }
+    console.log('[paymentAPI] initialize with email:', email || '(none)', 'token:', accessToken ? 'in-memory' : 'stored');
     // 30s: the backend's Paystack roundtrip on PythonAnywhere plus a mobile
     // network can exceed the client's default 15s timeout.
     const response = await apiClient.post(
       'auth/payments/initialize/',
       email ? { email } : undefined,
-      { timeout: 30000 }
+      {
+        timeout: 30000,
+        ...(accessToken ? { headers: { Authorization: `Bearer ${accessToken}` } } : {}),
+      }
     );
     return response.data;
   },

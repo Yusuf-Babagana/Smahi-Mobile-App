@@ -78,6 +78,10 @@ export default function RegisterScreen() {
   const [selectedState, setSelectedState] = useState('');
   const [selectedLga, setSelectedLga] = useState('');
 
+  // Access token from the registration response, kept in memory so the
+  // payment step can authenticate without depending on SecureStore timing.
+  const [regAccessToken, setRegAccessToken] = useState<string | null>(null);
+
   // --- DATA LOADING ---
   useEffect(() => {
     locationAPI.getCountries().then(data => {
@@ -166,7 +170,7 @@ export default function RegisterScreen() {
       const firstName = nameParts[0];
       const lastName = nameParts.slice(1).join(' ') || firstName;
 
-      await authAPI.register({
+      const regResponse = await authAPI.register({
         first_name: firstName,
         last_name: lastName,
         email,
@@ -179,6 +183,7 @@ export default function RegisterScreen() {
         state: selectedState,
         lga: selectedLga
       });
+      setRegAccessToken(regResponse?.tokens?.access || null);
 
       // ✅ Artisans advance to payment step (step 5)
       if (role === 'artisan') {
@@ -212,10 +217,9 @@ export default function RegisterScreen() {
   const handlePayNow = async () => {
     setLoading(true);
     try {
-      // Pass the email from the form state: the freshly stored JWT/user can
-      // race SecureStore on Android, and the backend accepts email as auth
-      // for this endpoint.
-      const payResult = await paymentAPI.initialize(email);
+      // Pass the form email AND the in-memory token from the registration
+      // response: no dependence on SecureStore timing or device state.
+      const payResult = await paymentAPI.initialize(email.trim(), regAccessToken || undefined);
       router.replace({
         pathname: '/payment',
         params: {
