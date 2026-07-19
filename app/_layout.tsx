@@ -14,7 +14,7 @@ import { Stack } from "expo-router";
 import * as SplashScreen from "expo-splash-screen";
 import { SystemBars } from "react-native-edge-to-edge";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
-import { KeyboardProvider } from "react-native-keyboard-controller";
+import { KeyboardProvider } from "@/src/components/Keyboard";
 import { useColorScheme, Alert, View } from "react-native";
 import { useNetworkState } from "expo-network";
 import {

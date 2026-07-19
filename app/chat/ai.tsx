@@ -3,10 +3,8 @@ import {
   View, Text, FlatList, TextInput, TouchableOpacity,
   StyleSheet, Alert, Pressable, ActivityIndicator,
 } from 'react-native';
-// The RN built-in KeyboardAvoidingView is unreliable on Android 15
-// edge-to-edge (adjustResize is ignored); this drop-in reads real
-// keyboard insets natively. Requires KeyboardProvider in app/_layout.tsx.
-import { KeyboardAvoidingView } from 'react-native-keyboard-controller';
+// Native-insets KeyboardAvoidingView in real builds, RN fallback in Expo Go.
+import { KeyboardAvoidingView } from '@/src/components/Keyboard';
 import { useRouter } from 'expo-router';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
