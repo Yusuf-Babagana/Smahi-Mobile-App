@@ -162,6 +162,12 @@ export default function RegisterScreen() {
   };
 
   const handleRegister = async () => {
+    // Already registered in this session (e.g. user went back from the
+    // payment step): don't create a duplicate, just return to payment.
+    if (role === 'artisan' && regAccessToken) {
+      setCurrentStep(5);
+      return;
+    }
     if (!validateStep(4)) return;
     setLoading(true);
     try {
@@ -263,21 +269,23 @@ export default function RegisterScreen() {
   const meta = STEP_META[currentStep - 1];
   const continueDisabled = loading || (currentStep === 1 && !acceptedTerms);
 
-  const isLastStep = currentStep === totalSteps;
   const isPaymentStep = role === 'artisan' && currentStep === 5;
-  const isRegisterStep = currentStep === 4 && !isPaymentStep;
 
   const buttonLabel = isPaymentStep
     ? t('Pay ₦2,500 & Activate')
     : currentStep === 1
       ? t('I agree & continue')
-      : isLastStep
+      : currentStep === 4
         ? t('Create account')
         : t('Continue');
 
+  // Step 4 ALWAYS creates the account. For artisans totalSteps is 5, so
+  // step 4 is not the "last" step — routing it through nextStep() used to
+  // skip registration entirely, sending artisans to the payment step with
+  // no account (hence 401 "Could not identify the user" when paying).
   const handleButtonPress = isPaymentStep
     ? handlePayNow
-    : isLastStep
+    : currentStep === 4
       ? handleRegister
       : nextStep;
 
