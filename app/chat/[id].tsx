@@ -1,8 +1,11 @@
 import React, { useState, useEffect, useRef } from 'react';
 import {
-    View, Text, FlatList, TextInput, TouchableOpacity, KeyboardAvoidingView,
+    View, Text, FlatList, TextInput, TouchableOpacity,
     Platform, StyleSheet, ActivityIndicator, Alert, Pressable,
 } from 'react-native';
+// Drop-in replacement: RN's KeyboardAvoidingView is unreliable on
+// Android 15 edge-to-edge. Requires KeyboardProvider in app/_layout.tsx.
+import { KeyboardAvoidingView } from 'react-native-keyboard-controller';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';

@@ -14,6 +14,7 @@ import { Stack } from "expo-router";
 import * as SplashScreen from "expo-splash-screen";
 import { SystemBars } from "react-native-edge-to-edge";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
+import { KeyboardProvider } from "react-native-keyboard-controller";
 import { useColorScheme, Alert, View } from "react-native";
 import { useNetworkState } from "expo-network";
 import {
@@ -105,6 +106,7 @@ export default function RootLayout() {
           <AuthProvider>
             <NotificationProvider>
               <GestureHandlerRootView style={{ flex: 1 }}>
+                <KeyboardProvider>
                 <StatusBar style={colorScheme === "dark" ? "light" : "dark"} />
 
                 <Stack screenOptions={{ contentStyle: { backgroundColor: theme.colors.background } }}>
@@ -143,6 +145,7 @@ export default function RootLayout() {
                 </Stack>
 
                 <SystemBars style="auto" />
+                </KeyboardProvider>
               </GestureHandlerRootView>
             </NotificationProvider>
           </AuthProvider>
