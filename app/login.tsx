@@ -70,10 +70,20 @@ export default function LoginScreen() {
             },
           });
         } catch (payErr: any) {
-          Alert.alert(
-            'Payment Required',
-            'You need to pay the registration fee to activate your account. Please try again.',
-          );
+          // 503 = payments not configured yet on the backend: the fee stays
+          // owed, but the artisan must not be locked out of the app.
+          if (payErr?.response?.status === 503) {
+            Alert.alert(
+              'Payment Pending',
+              'Payments are not available yet. You can use the app now and complete your registration fee later.',
+              [{ text: 'Continue', onPress: () => router.replace(getHomeRouteForRole(user.role)) }]
+            );
+          } else {
+            Alert.alert(
+              'Payment Required',
+              'You need to pay the registration fee to activate your account. Please try again.',
+            );
+          }
         }
         return;
       }

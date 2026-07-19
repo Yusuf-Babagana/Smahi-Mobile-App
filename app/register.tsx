@@ -212,7 +212,10 @@ export default function RegisterScreen() {
   const handlePayNow = async () => {
     setLoading(true);
     try {
-      const payResult = await paymentAPI.initialize();
+      // Pass the email from the form state: the freshly stored JWT/user can
+      // race SecureStore on Android, and the backend accepts email as auth
+      // for this endpoint.
+      const payResult = await paymentAPI.initialize(email);
       router.replace({
         pathname: '/payment',
         params: {
@@ -221,10 +224,22 @@ export default function RegisterScreen() {
         },
       });
     } catch (payErr: any) {
+      // Surface the real reason (server error / network) so failures are
+      // debuggable instead of hiding behind a generic message.
+      console.log('[PayNow] init failed:', payErr?.response?.status, payErr?.response?.data || payErr?.message);
+      const serverMsg =
+        payErr?.response?.data?.error ||
+        payErr?.response?.data?.detail ||
+        (payErr?.message === 'Network Error' || payErr?.code === 'ECONNABORTED'
+          ? 'Network problem — check your internet connection.'
+          : '');
       Alert.alert(
         'Payment Error',
-        'Could not initialize payment. You can complete payment later when you log in.',
-        [{ text: 'Go to Login', onPress: () => router.replace('/login') }]
+        `Could not initialize payment.${serverMsg ? `\n\nReason: ${serverMsg}` : ''}\n\nYou can retry now, or complete payment later when you log in.`,
+        [
+          { text: 'Retry', onPress: () => handlePayNow() },
+          { text: 'Go to Login', style: 'cancel', onPress: () => router.replace('/login') },
+        ]
       );
     } finally {
       setLoading(false);

@@ -84,6 +84,12 @@ export const authAPI = {
       await SecureStore.setItemAsync('accessToken', response.data.tokens.access);
       await SecureStore.setItemAsync('refreshToken', response.data.tokens.refresh);
     }
+    // Store the user like login does: paymentAPI.initialize and other calls
+    // rely on the cached user's email as a fallback when the JWT header
+    // fails to attach (SecureStore timing on Android).
+    if (response.data.user) {
+      await SecureStore.setItemAsync('user', JSON.stringify(response.data.user));
+    }
     return response.data;
   },
 
@@ -456,13 +462,34 @@ export const agentAPI = {
 
 // --- PAYMENTS (Paystack registration fee) ---
 export const paymentAPI = {
-  initialize: async () => {
-    const response = await apiClient.post('auth/payments/initialize/');
+  // Pass the email explicitly when you have it (e.g. the register screen);
+  // otherwise it falls back to the cached user. The backend accepts either
+  // the JWT or the email, so sending both makes the call timing-proof.
+  initialize: async (explicitEmail?: string) => {
+    let email = explicitEmail;
+    if (!email) {
+      try {
+        const stored = await SecureStore.getItemAsync('user');
+        if (stored) email = JSON.parse(stored).email;
+      } catch {}
+    }
+    // 30s: the backend's Paystack roundtrip on PythonAnywhere plus a mobile
+    // network can exceed the client's default 15s timeout.
+    const response = await apiClient.post(
+      'auth/payments/initialize/',
+      email ? { email } : undefined,
+      { timeout: 30000 }
+    );
     return response.data;
   },
 
   verify: async (reference: string) => {
-    const response = await apiClient.post(`auth/payments/verify/${reference}/`);
+    let email: string | undefined;
+    try {
+      const stored = await SecureStore.getItemAsync('user');
+      if (stored) email = JSON.parse(stored).email;
+    } catch {}
+    const response = await apiClient.post(`auth/payments/verify/${reference}/`, email ? { email } : undefined);
     return response.data;
   },
 };
