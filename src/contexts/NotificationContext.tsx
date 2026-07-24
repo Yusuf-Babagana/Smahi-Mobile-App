@@ -1,4 +1,5 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
+import { AppState } from 'react-native';
 import { Audio } from 'expo-av';
 import { chatAPI } from '@/src/api/client';
 import { storage } from '@/src/utils/storage';
@@ -23,7 +24,7 @@ export const NotificationProvider = ({ children }: { children: React.ReactNode }
     const playSound = async () => {
         try {
             const { sound } = await Audio.Sound.createAsync(
-                require('@/assets/sounds/received.mp3')
+                require('@/assets/sounds/received.wav')
             );
             await sound.playAsync();
         } catch (error) {
@@ -36,7 +37,7 @@ export const NotificationProvider = ({ children }: { children: React.ReactNode }
 
     useEffect(() => {
         const checkMessages = async () => {
-            if (!currentUserId) return;
+            if (!currentUserId || AppState.currentState !== 'active') return;
 
             try {
                 const conversations = await chatAPI.getConversations();

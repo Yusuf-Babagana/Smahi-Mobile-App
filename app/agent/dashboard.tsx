@@ -11,7 +11,7 @@ import * as SecureStore from 'expo-secure-store';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useTranslation } from 'react-i18next';
 
-import { dashboardAPI } from '@/src/api/client';
+import { agentAPI } from '@/src/api/client';
 import { useAuth } from '@/src/contexts/AuthContext';
 import { EmailVerificationBanner } from '@/src/components/EmailVerificationBanner';
 import { color, font, radius, shadow, space, type } from '@/constants/theme';
@@ -26,9 +26,8 @@ export default function AgentDashboard() {
   const [stats, setStats] = useState({
     total_artisans: 0,
     verified_artisans: 0,
-    pending_tickets: 0,
-    resolved_tickets: 0,
-    total_agents: 0
+    pending_verification: 0,
+    total_clients: 0,
   });
   const [refreshing, setRefreshing] = useState(false);
 
@@ -36,7 +35,7 @@ export default function AgentDashboard() {
 
   const fetchDashboardData = async () => {
     try {
-      const data = await dashboardAPI.getStats();
+      const data = await agentAPI.getDashboardStats();
       setStats(data);
     } catch (error) {
       console.log("Dashboard Error", error);
@@ -191,7 +190,7 @@ export default function AgentDashboard() {
           <View style={styles.verticalDivider} />
           <QuickStat value={stats.verified_artisans} label={t('Verified')} valueColor={color.accent600} />
           <View style={styles.verticalDivider} />
-          <QuickStat value={stats.pending_tickets} label={t('Pending')} valueColor={color.warn600} />
+          <QuickStat value={stats.pending_verification} label={t('Pending')} valueColor={color.warn600} />
         </View>
       </View>
 
@@ -217,28 +216,12 @@ export default function AgentDashboard() {
             onPress={() => router.push('/agent/register')}
           />
           <ActionCard
-            title={t('Verify identity')}
-            subtitle={t('Scan documents')}
-            icon="qr-code-scanner"
-            tileBg={color.accent100}
-            tileFg={color.accent600}
-            onPress={() => router.push('/agent/scan')}
-          />
-          <ActionCard
-            title={t('Complaints')}
-            subtitle={`${stats.pending_tickets} ${t('pending')}`}
-            icon="description"
-            tileBg={color.warn100}
-            tileFg={color.warn600}
-            onPress={() => router.push('/agent/tickets')}
-          />
-          <ActionCard
-            title={t('My wallet')}
-            subtitle="₦0.00"
-            icon="account-balance-wallet"
-            tileBg="#FDEAF0"
-            tileFg="#C22B63"
-            onPress={() => router.push('/agent/wallet')}
+            title={t('State clients')}
+            subtitle={t('View all')}
+            icon="groups"
+            tileBg={color.brand100}
+            tileFg={color.brand600}
+            onPress={() => router.push('/agent/clients')}
           />
         </View>
 
@@ -246,28 +229,19 @@ export default function AgentDashboard() {
         <Text style={styles.sectionTitle}>{t('Performance')}</Text>
         <View style={styles.statsCard}>
           <StatRow
-            title={t('Funds collected')}
-            value="₦0.00"
-            icon="payments"
-            tileBg={color.accent100}
-            tileFg={color.accent600}
-            trend="+0%"
-          />
-          <View style={styles.horizontalDivider} />
-          <StatRow
-            title={t('Resolved cases')}
-            value={stats.resolved_tickets}
-            icon="done-all"
+            title={t('State clients')}
+            value={stats.total_clients}
+            icon="groups"
             tileBg={color.brand100}
             tileFg={color.brand600}
           />
           <View style={styles.horizontalDivider} />
           <StatRow
-            title={t('Pending verifications')}
-            value="0"
-            icon="schedule"
-            tileBg={color.warn100}
-            tileFg={color.warn600}
+            title={t('Verified artisans')}
+            value={stats.verified_artisans}
+            icon="done-all"
+            tileBg={color.accent100}
+            tileFg={color.accent600}
           />
         </View>
 

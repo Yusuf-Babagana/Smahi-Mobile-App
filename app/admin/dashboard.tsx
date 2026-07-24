@@ -14,12 +14,14 @@ import { useTheme } from '@react-navigation/native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { IconSymbol } from '@/src/components/IconSymbol';
 import { storage } from '@/src/utils/storage';
-import { authAPI, adminAPI } from '@/src/api/client';
+import { adminAPI } from '@/src/api/client';
+import { useAuth } from '@/src/contexts/AuthContext';
 import { User } from '@/src/types';
 
 export default function AdminDashboard() {
   const router = useRouter();
   const theme = useTheme();
+  const { logout } = useAuth();
   const [loading, setLoading] = useState(true);
   const [user, setUser] = useState<User | null>(null);
   const [stats, setStats] = useState({
@@ -64,8 +66,7 @@ export default function AdminDashboard() {
         text: 'Logout',
         style: 'destructive',
         onPress: async () => {
-          await authAPI.logout();
-          router.replace('/login');
+          await logout();
         },
       },
     ]);

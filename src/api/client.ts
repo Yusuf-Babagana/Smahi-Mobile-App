@@ -1,5 +1,6 @@
 import apiClient from './config';
 import * as SecureStore from 'expo-secure-store';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { RegisterData } from '../types';
 
 // Helper to unwrap Django Pagination
@@ -19,7 +20,7 @@ export const authAPI = {
       await SecureStore.setItemAsync('refreshToken', response.data.tokens.refresh);
     }
     if (response.data.user) {
-      await SecureStore.setItemAsync('user', JSON.stringify(response.data.user));
+      await AsyncStorage.setItem('user', JSON.stringify(response.data.user));
     }
     return response.data;
   },
@@ -88,7 +89,7 @@ export const authAPI = {
     // rely on the cached user's email as a fallback when the JWT header
     // fails to attach (SecureStore timing on Android).
     if (response.data.user) {
-      await SecureStore.setItemAsync('user', JSON.stringify(response.data.user));
+      await AsyncStorage.setItem('user', JSON.stringify(response.data.user));
     }
     return response.data;
   },
@@ -133,7 +134,7 @@ export const authAPI = {
   logout: async () => {
     await SecureStore.deleteItemAsync('accessToken');
     await SecureStore.deleteItemAsync('refreshToken');
-    await SecureStore.deleteItemAsync('user');
+    await AsyncStorage.removeItem('user');
   },
 
   getCurrentUser: async () => {
@@ -143,6 +144,13 @@ export const authAPI = {
     } catch (e) {
       return null;
     }
+  },
+
+  // Deactivates the account (Play Store account-deletion requirement).
+  // Requires the current password as confirmation.
+  deleteAccount: async (password: string) => {
+    const response = await apiClient.post('/auth/account/delete/', { password });
+    return response.data;
   }
 };
 
@@ -314,10 +322,10 @@ export const artisanAPI = {
     return response.data;
   },
 
-  // Agent Verification
+  // Agent verification — takes the artisan's USER id, not the ArtisanProfile id.
   verifyArtisan: async (userId: number) => {
     try {
-      const response = await apiClient.post(`/core/agent/verify-artisan/${userId}/`);
+      const response = await apiClient.post(`/agent/verify-artisan/${userId}/`);
       return response.data;
     } catch (error) {
       console.error("Verification Error:", error);
@@ -354,24 +362,14 @@ export const chatAPI = {
   }
 };
 
-// --- DASHBOARD ---
-export const dashboardAPI = {
-  getStats: async () => {
-    try {
-      const response = await apiClient.get('/core/dashboard/stats/');
-      return response.data;
-    } catch (error) {
-      console.error('Dashboard Stats Error:', error);
-      throw error;
-    }
-  },
-};
+// Note: dashboard stats now live under agentAPI.getDashboardStats() (agent/
+// state-coordinator) and adminAPI.getStats() (admin) — both real endpoints.
 
 // --- ADMIN ---
 export const adminAPI = {
   getStats: async () => {
     try {
-      const response = await apiClient.get('/core/dashboard/stats/');
+      const response = await apiClient.get('/admin/stats/');
       return response.data;
     } catch (error) {
       console.error('Admin Stats Error:', error);
@@ -380,7 +378,7 @@ export const adminAPI = {
   },
   getAllUsers: async () => {
     try {
-      const response = await apiClient.get('/auth/users/');
+      const response = await apiClient.get('/admin/users/');
       return getData(response);
     } catch (error) {
       console.error('Admin All Users Error:', error);
@@ -453,11 +451,31 @@ export const ticketAPI = {
 // src/api/client.ts
 
 export const agentAPI = {
+  // Backend generates and returns a one-time password — never send one from the client.
   registerArtisan: async (data: any) => {
-    // We reuse the RegisterData type but send it to a different endpoint
-    const response = await apiClient.post('/auth/agent/register-artisan/', data);
+    const response = await apiClient.post('/agent/register-artisan/', data);
     return response.data;
-  }
+  },
+
+  // All artisans in the agent's own state, regardless of availability/verification —
+  // scoped server-side to request.user.state, so no location params needed here.
+  getStateArtisans: async (params?: { search?: string; category_id?: string | number }, page: number = 1) => {
+    const response = await apiClient.get('/agent/artisans/', { params: { page, ...params } });
+    return response.data;
+  },
+
+  // All clients registered in the agent's own state.
+  getStateClients: async (params?: { search?: string }, page: number = 1) => {
+    const response = await apiClient.get('/agent/clients/', { params: { page, ...params } });
+    return response.data;
+  },
+
+  // Summary counts (total_artisans, verified_artisans, pending_verification,
+  // total_clients) for the agent/state-coordinator dashboard.
+  getDashboardStats: async () => {
+    const response = await apiClient.get('/agent/dashboard-stats/');
+    return response.data;
+  },
 };
 
 // --- PAYMENTS (Paystack registration fee) ---
@@ -471,7 +489,7 @@ export const paymentAPI = {
     let email = explicitEmail;
     if (!email) {
       try {
-        const stored = await SecureStore.getItemAsync('user');
+        const stored = await AsyncStorage.getItem('user');
         if (stored) email = JSON.parse(stored).email;
       } catch {}
     }
@@ -492,7 +510,7 @@ export const paymentAPI = {
   verify: async (reference: string) => {
     let email: string | undefined;
     try {
-      const stored = await SecureStore.getItemAsync('user');
+      const stored = await AsyncStorage.getItem('user');
       if (stored) email = JSON.parse(stored).email;
     } catch {}
     const response = await apiClient.post(`auth/payments/verify/${reference}/`, email ? { email } : undefined);

@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import {
     View, Text, FlatList, TextInput, TouchableOpacity,
-    Platform, StyleSheet, ActivityIndicator, Alert, Pressable,
+    Platform, StyleSheet, ActivityIndicator, Alert, Pressable, AppState,
 } from 'react-native';
 // Native-insets KeyboardAvoidingView in real builds, RN fallback in Expo Go.
 import { KeyboardAvoidingView } from '@/src/components/Keyboard';
@@ -79,7 +79,7 @@ export default function ChatRoomScreen() {
     useEffect(() => {
         const fetchMessages = async () => {
             const convId = conversationIdRef.current;
-            if (!convId) return;
+            if (!convId || AppState.currentState !== 'active') return;
 
             try {
                 const response = await chatAPI.getMessages(convId);
@@ -110,8 +110,8 @@ export default function ChatRoomScreen() {
     const handleProfileClick = () => {
         let targetId = recipientId;
         if (!targetId && messages.length > 0) {
-            const otherMsg = messages.find(m => Number(m.sender_id) !== currentUserId);
-            if (otherMsg) targetId = otherMsg.sender_id;
+            const otherMsg = messages.find(m => Number(m.sender) !== currentUserId);
+            if (otherMsg) targetId = otherMsg.sender;
         }
 
         if (targetId) {

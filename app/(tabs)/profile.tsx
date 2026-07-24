@@ -6,8 +6,8 @@ import { useRouter } from "expo-router";
 import Animated, { FadeInDown, FadeInUp } from "react-native-reanimated";
 import { useTranslation } from "react-i18next";
 
-import { authAPI } from "@/src/api/client";
 import { storage } from "@/src/utils/storage";
+import { useAuth } from "@/src/contexts/AuthContext";
 import { EmailVerificationBanner } from "@/src/components/EmailVerificationBanner";
 import ContactList from "@/src/components/ContactList";
 import { color, font, radius, space, type } from "@/constants/theme";
@@ -53,6 +53,7 @@ const SettingsRow = ({
 
 export default function ProfileScreen() {
   const router = useRouter();
+  const { logout } = useAuth();
   const { t } = useTranslation();
   const [user, setUser] = React.useState<any>(null);
   const [showContacts, setShowContacts] = React.useState(false);
@@ -68,8 +69,7 @@ export default function ProfileScreen() {
         text: t('Log Out'),
         style: 'destructive',
         onPress: async () => {
-          await authAPI.logout();
-          router.replace('/login');
+          await logout();
         }
       },
     ]);

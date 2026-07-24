@@ -1,28 +1,24 @@
-import * as SecureStore from 'expo-secure-store';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
+// The cached user object lives in AsyncStorage only (same key AuthContext
+// uses) — SecureStore is reserved for tokens (accessToken/refreshToken).
+// A prior version kept a second copy in SecureStore, which drifted out of
+// sync with logout and let a stale session survive a cold restart.
 export const storage = {
   getCurrentUser: async () => {
     try {
-      const userJson = await SecureStore.getItemAsync('user');
+      const userJson = await AsyncStorage.getItem('user');
       return userJson ? JSON.parse(userJson) : null;
     } catch (e) {
       return null;
     }
   },
 
-  // Merges fields into BOTH cached copies of the user (SecureStore is read by
-  // storage.getCurrentUser / app/index.tsx, AsyncStorage by AuthContext).
   updateCurrentUser: async (partial: Record<string, any>) => {
     try {
-      const secureJson = await SecureStore.getItemAsync('user');
-      const merged = { ...(secureJson ? JSON.parse(secureJson) : {}), ...partial };
-      await SecureStore.setItemAsync('user', JSON.stringify(merged));
-
       const asyncJson = await AsyncStorage.getItem('user');
-      if (asyncJson) {
-        await AsyncStorage.setItem('user', JSON.stringify({ ...JSON.parse(asyncJson), ...partial }));
-      }
+      const merged = { ...(asyncJson ? JSON.parse(asyncJson) : {}), ...partial };
+      await AsyncStorage.setItem('user', JSON.stringify(merged));
       return merged;
     } catch (e) {
       return null;

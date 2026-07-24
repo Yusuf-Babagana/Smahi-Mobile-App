@@ -8,8 +8,9 @@ import Animated, { FadeInDown, FadeInUp } from "react-native-reanimated";
 import axios from 'axios';
 import * as SecureStore from 'expo-secure-store';
 
-import { artisanAPI, authAPI } from "@/src/api/client";
+import { artisanAPI } from "@/src/api/client";
 import { storage } from "@/src/utils/storage";
+import { useAuth } from "@/src/contexts/AuthContext";
 import ContactList from "@/src/components/ContactList";
 import { color, font, radius, shadow, space, type } from '@/constants/theme';
 import { useTranslation } from 'react-i18next';
@@ -18,6 +19,7 @@ import { API_URL as BASE_URL, CLOUDINARY_CLOUD_NAME as CLOUD_NAME } from '@/src/
 
 export default function ArtisanProfileScreen() {
     const router = useRouter();
+    const { logout } = useAuth();
     const { t, i18n } = useTranslation();
     const [loading, setLoading] = useState(true);
     const [uploadingProfile, setUploadingProfile] = useState(false);
@@ -117,8 +119,7 @@ export default function ArtisanProfileScreen() {
                 text: t('Logout'),
                 style: 'destructive',
                 onPress: async () => {
-                    await authAPI.logout();
-                    router.replace('/login');
+                    await logout();
                 },
             },
         ]);

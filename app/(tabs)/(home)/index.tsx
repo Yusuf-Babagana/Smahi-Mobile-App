@@ -133,6 +133,13 @@ export default function ClientHomeScreen() {
     categoryAPI.getCategories().then(setParentCategories).catch(() => {});
   }, []);
 
+  // Location permission is requested here, at the point of first real use
+  // (this screen needs it for "nearby artisans"), not unconditionally at
+  // app launch before the user has any context for why it's needed.
+  useEffect(() => {
+    requestLocationPermission();
+  }, []);
+
   // Save the client's GPS point on their profile (fire-and-forget) so
   // "use my saved address" search works even when GPS is off later.
   const coordsSynced = useRef(false);

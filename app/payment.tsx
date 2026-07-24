@@ -11,7 +11,8 @@ import { MaterialIcons } from '@expo/vector-icons';
 import { useTranslation } from 'react-i18next';
 import { useFocusEffect } from '@react-navigation/native';
 
-import { paymentAPI } from '@/src/api/client';
+import { authAPI, paymentAPI } from '@/src/api/client';
+import { useAuth } from '@/src/contexts/AuthContext';
 import { color, font, radius, shadow, space } from '@/constants/theme';
 
 export default function PaymentScreen() {
@@ -27,6 +28,7 @@ export default function PaymentScreen() {
   const [error, setError] = useState<string | null>(null);
   const webViewRef = useRef<WebView>(null);
   const hasVerified = useRef(false);
+  const { setAuthUser } = useAuth();
 
   // Block hardware back button during payment
   useFocusEffect(
@@ -45,6 +47,14 @@ export default function PaymentScreen() {
     try {
       const result = await paymentAPI.verify(ref);
       if (result.status === 'success') {
+        // The verify endpoint doesn't return the updated user — fetch it so
+        // AuthContext reflects the now-active, fee-paid account instead of
+        // leaving the dashboard to discover this on its own.
+        try {
+          const freshUser = await authAPI.getProfile();
+          if (freshUser) await setAuthUser(freshUser);
+        } catch { /* dashboard still self-fetches as a fallback */ }
+
         Alert.alert(
           'Payment Successful',
           'Your account is now active! Welcome to S-MAHII.',

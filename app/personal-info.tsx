@@ -11,6 +11,7 @@ import { useTranslation } from "react-i18next";
 
 import { authAPI } from "@/src/api/client";
 import { storage } from "@/src/utils/storage";
+import { useAuth } from "@/src/contexts/AuthContext";
 import { color, font, radius, shadow, space } from "@/constants/theme";
 
 // Editable account fields — matches the backend UserUpdateSerializer
@@ -18,6 +19,7 @@ import { color, font, radius, shadow, space } from "@/constants/theme";
 export default function PersonalInfoScreen() {
     const router = useRouter();
     const { t } = useTranslation();
+    const { logout } = useAuth();
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
     const [email, setEmail] = useState("");
@@ -25,6 +27,12 @@ export default function PersonalInfoScreen() {
     const [lastName, setLastName] = useState("");
     const [phone, setPhone] = useState("");
     const [address, setAddress] = useState("");
+
+    // --- Account deletion (Play Store data-safety requirement) ---
+    const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+    const [deletePassword, setDeletePassword] = useState("");
+    const [deleteError, setDeleteError] = useState("");
+    const [deleting, setDeleting] = useState(false);
 
     useEffect(() => {
         storage.getCurrentUser().then((user) => {
@@ -60,6 +68,27 @@ export default function PersonalInfoScreen() {
             Alert.alert(t('Error'), t('Failed to update your information. Please try again.'));
         } finally {
             setSaving(false);
+        }
+    };
+
+    const handleDeleteAccount = async () => {
+        if (!deletePassword) {
+            setDeleteError(t('Enter your password to confirm.'));
+            return;
+        }
+        setDeleting(true);
+        setDeleteError("");
+        try {
+            await authAPI.deleteAccount(deletePassword);
+            Alert.alert(
+                t('Account deleted'),
+                t('Your account has been deactivated. We\'re sorry to see you go.'),
+                [{ text: t('OK'), onPress: async () => { await logout(); router.replace('/welcome'); } }]
+            );
+        } catch (error: any) {
+            setDeleteError(error?.response?.data?.error || t('Failed to delete your account. Please try again.'));
+        } finally {
+            setDeleting(false);
         }
     };
 
@@ -122,6 +151,56 @@ export default function PersonalInfoScreen() {
                                 ? <ActivityIndicator color="#FFF" />
                                 : <Text style={styles.saveText}>{t('Save Changes')}</Text>}
                         </Pressable>
+
+                        <View style={styles.dangerZone}>
+                            <Text style={styles.dangerTitle}>{t('Danger zone')}</Text>
+
+                            {!showDeleteConfirm ? (
+                                <Pressable
+                                    onPress={() => setShowDeleteConfirm(true)}
+                                    accessibilityRole="button"
+                                    style={({ pressed }) => [styles.deleteBtn, pressed && { opacity: 0.8 }]}
+                                >
+                                    <MaterialIcons name="delete-outline" size={18} color={color.danger600} />
+                                    <Text style={styles.deleteBtnText}>{t('Delete my account')}</Text>
+                                </Pressable>
+                            ) : (
+                                <View>
+                                    <Text style={styles.dangerHint}>
+                                        {t('This deactivates your account permanently — you will be logged out and cannot sign in again. Enter your password to confirm.')}
+                                    </Text>
+                                    <TextInput
+                                        style={styles.input}
+                                        placeholder={t('Current password')}
+                                        value={deletePassword}
+                                        onChangeText={(v) => { setDeletePassword(v); setDeleteError(""); }}
+                                        secureTextEntry
+                                        placeholderTextColor={color.ink300}
+                                    />
+                                    {!!deleteError && <Text style={styles.dangerError}>{deleteError}</Text>}
+                                    <View style={styles.dangerActions}>
+                                        <Pressable
+                                            onPress={() => { setShowDeleteConfirm(false); setDeletePassword(""); setDeleteError(""); }}
+                                            disabled={deleting}
+                                            accessibilityRole="button"
+                                            style={({ pressed }) => [styles.cancelBtn, pressed && { opacity: 0.8 }]}
+                                        >
+                                            <Text style={styles.cancelBtnText}>{t('Cancel')}</Text>
+                                        </Pressable>
+                                        <Pressable
+                                            onPress={handleDeleteAccount}
+                                            disabled={deleting}
+                                            accessibilityRole="button"
+                                            style={({ pressed }) => [styles.confirmDeleteBtn, (pressed || deleting) && { opacity: 0.8 }]}
+                                        >
+                                            {deleting
+                                                ? <ActivityIndicator color="#FFF" />
+                                                : <Text style={styles.confirmDeleteBtnText}>{t('Confirm deletion')}</Text>}
+                                        </Pressable>
+                                    </View>
+                                </View>
+                            )}
+                        </View>
                     </Animated.View>
                 </ScrollView>
             </KeyboardAvoidingView>
@@ -160,4 +239,30 @@ const styles = StyleSheet.create({
         justifyContent: 'center', alignItems: 'center', marginTop: space.md, ...shadow.cta,
     },
     saveText: { fontFamily: font.extrabold, fontSize: 15, color: '#FFF' },
+
+    dangerZone: {
+        marginTop: space.xxl, paddingTop: space.lg, borderTopWidth: 1, borderTopColor: color.border,
+    },
+    dangerTitle: {
+        fontFamily: font.extrabold, fontSize: 11, letterSpacing: 0.5,
+        textTransform: 'uppercase', color: color.ink400, marginBottom: space.md,
+    },
+    deleteBtn: {
+        flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8,
+        height: 48, borderRadius: radius.lg, borderWidth: 1.5, borderColor: color.danger600,
+    },
+    deleteBtnText: { fontFamily: font.extrabold, fontSize: 14.5, color: color.danger600 },
+    dangerHint: { fontFamily: font.medium, fontSize: 13, color: color.ink400, marginBottom: space.md, lineHeight: 18 },
+    dangerError: { fontFamily: font.semibold, fontSize: 12.5, color: color.danger600, marginTop: space.sm },
+    dangerActions: { flexDirection: 'row', gap: space.sm, marginTop: space.md },
+    cancelBtn: {
+        flex: 1, height: 48, borderRadius: radius.lg, borderWidth: 1.5, borderColor: color.border,
+        justifyContent: 'center', alignItems: 'center',
+    },
+    cancelBtnText: { fontFamily: font.extrabold, fontSize: 14.5, color: color.ink600 },
+    confirmDeleteBtn: {
+        flex: 1, height: 48, borderRadius: radius.lg, backgroundColor: color.danger600,
+        justifyContent: 'center', alignItems: 'center',
+    },
+    confirmDeleteBtnText: { fontFamily: font.extrabold, fontSize: 14.5, color: '#FFF' },
 });

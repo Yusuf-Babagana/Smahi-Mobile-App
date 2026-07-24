@@ -24,7 +24,7 @@ import { Button, Input, StepHeader } from '@/src/components/ui';
 import '@/src/i18n'; // Ensure i18n is initialized
 
 // Define expanded roles locally for this screen
-type ExpandedRole = UserRole | 'lga_admin' | 'state_coordinator';
+type ExpandedRole = UserRole | 'state_coordinator';
 
 const STEP_META = [
   { title: 'Before we start', subtitle: 'A quick look at how S-MAHII works.' },
@@ -198,7 +198,7 @@ export default function RegisterScreen() {
       }
 
       // ✅ Non-artisans: check for locked roles
-      if (['agent', 'lga_admin', 'state_coordinator'].includes(role)) {
+      if (['agent', 'state_coordinator'].includes(role)) {
         Alert.alert(
           'Account Created',
           'Your account requires activation. Please log in to enter your Serial Number.',
@@ -424,10 +424,9 @@ export default function RegisterScreen() {
                 <RoleCard title={t('Hire artisans')} subtitle={t('Find verified professionals near you')} icon="search" selected={role === 'client'} onPress={() => setRole('client')} />
                 <RoleCard title={t('Work as an artisan')} subtitle={t('Offer services & earn')} icon="handyman" selected={role === 'artisan'} onPress={() => setRole('artisan')} />
                 <RoleCard title={t('Field agent')} subtitle={t('Register artisans (approval required)')} icon="badge" selected={role === 'agent'} onPress={() => setRole('agent')} />
-                <RoleCard title={t('LGA admin')} subtitle={t('Manage a Local Govt Area (approval required)')} icon="account-balance" selected={role === 'lga_admin'} onPress={() => setRole('lga_admin')} />
                 <RoleCard title={t('State coordinator')} subtitle={t('Manage state operations (approval required)')} icon="map" selected={role === 'state_coordinator'} onPress={() => setRole('state_coordinator')} />
 
-                {['agent', 'lga_admin', 'state_coordinator'].includes(role) && (
+                {['agent', 'state_coordinator'].includes(role) && (
                   <View style={styles.activationNote}>
                     <MaterialIcons name="info-outline" size={16} color={color.warn600} />
                     <Text style={styles.activationNoteText}>

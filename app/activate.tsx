@@ -17,6 +17,7 @@ import { StatusBar } from 'expo-status-bar';
 import { useTranslation } from 'react-i18next';
 
 import { storage } from '@/src/utils/storage';
+import { useAuth } from '@/src/contexts/AuthContext';
 import { getHomeRouteForRole } from '@/src/constants/roleRoutes';
 import { API_URL as BASE_URL } from '@/src/constants/env';
 import { color, font, space, type } from '@/constants/theme';
@@ -25,6 +26,7 @@ import { Button, Input } from '@/src/components/ui';
 export default function ActivationScreen() {
     const router = useRouter();
     const { t } = useTranslation();
+    const { logout } = useAuth();
     const [serial, setSerial] = useState('');
     const [loading, setLoading] = useState(false);
 
@@ -73,10 +75,7 @@ export default function ActivationScreen() {
     };
 
     const handleLogout = async () => {
-        await SecureStore.deleteItemAsync('accessToken');
-        await SecureStore.deleteItemAsync('refreshToken');
-        await SecureStore.deleteItemAsync('user');
-        router.replace('/login');
+        await logout();
     };
 
     return (

@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import {
-    View, Text, StyleSheet, TextInput, ScrollView,
+    View, Text, StyleSheet, ScrollView,
     Alert, KeyboardAvoidingView, Platform, Pressable,
 } from 'react-native';
 import { useRouter } from 'expo-router';
@@ -28,7 +28,6 @@ export default function AgentRegisterScreen() {
         last_name: '',
         email: '',
         phone: '',
-        password: 'Password@123', // Default password for Agent registrations
         service_category: '',
     });
 
@@ -56,25 +55,28 @@ export default function AgentRegisterScreen() {
 
         setLoading(true);
         try {
-            // Construct the payload
+            // Construct the payload — the backend generates the password
+            // server-side, so none is sent here.
             // Note: We use the Agent's location to lock the Artisan to the same area
             const payload = {
-                name: `${formData.first_name} ${formData.last_name}`,
+                first_name: formData.first_name,
+                last_name: formData.last_name,
                 email: formData.email || `${formData.phone}@smahi.com`, // Fallback email
-                phone: formData.phone,
-                password: formData.password,
-                role: 'artisan',
-                service_category: formData.service_category,
+                phone_number: formData.phone,
+                category_id: formData.service_category ? Number(formData.service_category) : undefined,
                 country: user?.country, // 🔒 Locked to Agent
                 state: user?.state,     // 🔒 Locked to Agent
                 lga: user?.lga          // 🔒 Locked to Agent
             };
 
-            await agentAPI.registerArtisan(payload);
+            const result = await agentAPI.registerArtisan(payload);
+            const generatedPassword = result?.generated_password;
 
             Alert.alert(
-                "Success",
-                "Artisan Registered & Verified!",
+                "Artisan Registered",
+                generatedPassword
+                    ? `Share this one-time password with them securely — it will not be shown again:\n\n${generatedPassword}`
+                    : "Artisan registered successfully.",
                 [
                     { text: "Register Another", onPress: () => resetForm() },
                     { text: "Done", onPress: () => router.back() }
@@ -168,17 +170,11 @@ export default function AgentRegisterScreen() {
 
                     <View style={styles.divider} />
 
-                    <View style={styles.field}>
-                        <Text style={styles.label}>{t('Default password')}</Text>
-                        <View style={styles.passwordBox}>
-                            <MaterialIcons name="lock-outline" size={18} color={color.ink300} />
-                            <TextInput
-                                style={styles.passwordInput}
-                                value={formData.password}
-                                editable={false}
-                            />
-                        </View>
-                        <Text style={styles.hint}>{t('Share this password with the artisan.')}</Text>
+                    <View style={styles.noteBanner}>
+                        <MaterialIcons name="lock-outline" size={16} color={color.brand600} />
+                        <Text style={styles.noteText}>
+                            {t("A one-time password will be generated and shown to you after registration — you'll need to share it with the artisan yourself.")}
+                        </Text>
                     </View>
 
                     <Button

@@ -11,6 +11,10 @@ interface AuthContextType {
     login: (credentials: LoginCredentials) => Promise<User>;
     logout: () => Promise<void>;
     updateUser: (userData: Partial<User>) => void;
+    // For flows that authenticate outside of login() (registration, post-
+    // payment activation) but already have tokens + a fresh user object —
+    // populates context/storage without re-hitting the login endpoint.
+    setAuthUser: (user: User) => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -70,6 +74,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         }
     };
 
+    const setAuthUser = async (nextUser: User) => {
+        setUser(nextUser);
+        await AsyncStorage.setItem('user', JSON.stringify(nextUser));
+    };
+
     const updateUser = (userData: Partial<User>) => {
         setUser(prev => {
             if (!prev) return null;
@@ -80,7 +89,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     };
 
     return (
-        <AuthContext.Provider value={{ user, loading, login, logout, updateUser }}>
+        <AuthContext.Provider value={{ user, loading, login, logout, updateUser, setAuthUser }}>
             {children}
         </AuthContext.Provider>
     );

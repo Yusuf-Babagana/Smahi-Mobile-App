@@ -74,7 +74,10 @@ export default function ArtisanDashboard() {
 
   // Keep the artisan's saved GPS point fresh — this is the position clients'
   // "X km away" search measures against. Synced once per dashboard visit.
-  const { location } = useLocation();
+  const { location, requestLocationPermission } = useLocation();
+  useEffect(() => {
+    requestLocationPermission();
+  }, []);
   const coordsSynced = useRef(false);
   useEffect(() => {
     if (location && !coordsSynced.current) {

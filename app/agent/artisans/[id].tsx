@@ -39,8 +39,9 @@ export default function ArtisanDetailScreen() {
     };
 
     const handleCall = () => {
-        if (artisan?.phone_number) {
-            Linking.openURL(`tel:${artisan.phone_number}`);
+        const phone = artisan?.user_details?.phone_number;
+        if (phone) {
+            Linking.openURL(`tel:${phone}`);
         }
     };
 
@@ -61,7 +62,9 @@ export default function ArtisanDetailScreen() {
     const processVerification = async () => {
         setVerifying(true);
         try {
-            await artisanAPI.verifyArtisan(Number(id));
+            // verify-artisan takes the artisan's USER id, not this screen's
+            // route param (which is the ArtisanProfile id).
+            await artisanAPI.verifyArtisan(Number(artisan.user));
             Alert.alert("Success", "Artisan verified successfully!");
             fetchDetails(); // Reload data to show "Verified" status
         } catch (error) {
@@ -81,13 +84,17 @@ export default function ArtisanDetailScreen() {
 
     if (!artisan) return null;
 
+    // ArtisanProfileSerializer nests all account fields under user_details —
+    // it never exposes them flat on the artisan object itself.
+    const person = artisan.user_details || {};
+
     return (
         <View style={styles.container}>
             <Stack.Screen options={{ headerShown: false }} />
             {/* 1. Header Image / Banner */}
             <View style={styles.imageContainer}>
-                {artisan.profile_picture ? (
-                    <Image source={{ uri: artisan.profile_picture }} style={styles.profileImage} />
+                {person.profile_picture ? (
+                    <Image source={{ uri: person.profile_picture }} style={styles.profileImage} />
                 ) : (
                     <LinearGradient
                         colors={[color.brand900, color.brand600]}
@@ -95,7 +102,7 @@ export default function ArtisanDetailScreen() {
                         style={styles.placeholderImage}
                     >
                         <Text style={styles.placeholderText}>
-                            {artisan.first_name?.[0]}{artisan.last_name?.[0]}
+                            {person.first_name?.[0]}{person.last_name?.[0]}
                         </Text>
                     </LinearGradient>
                 )}
@@ -111,18 +118,18 @@ export default function ArtisanDetailScreen() {
 
                 {/* 2. Basic Info */}
                 <View style={styles.headerInfo}>
-                    <Text style={styles.name}>{artisan.first_name} {artisan.last_name}</Text>
+                    <Text style={styles.name}>{person.first_name} {person.last_name}</Text>
                     <Text style={styles.category}>
                         {i18n.language === 'ha' && artisan.category_name_ha
                             ? artisan.category_name_ha
-                            : (artisan.service_category || t('General Services'))}
+                            : (artisan.profession_name || artisan.category_name || t('General Services'))}
                     </Text>
 
                     <View style={styles.statusRow}>
                         <Badge
-                            label={artisan.is_verified ? t('Verified') : t('Pending')}
-                            status={artisan.is_verified ? 'verified' : 'pending'}
-                            icon={artisan.is_verified ? 'verified' : 'schedule'}
+                            label={person.is_verified ? t('Verified') : t('Pending')}
+                            status={person.is_verified ? 'verified' : 'pending'}
+                            icon={person.is_verified ? 'verified' : 'schedule'}
                         />
                         <Badge label={`ID: ${id}`} bg={color.surfaceChip} fg={color.ink600} />
                     </View>
@@ -138,7 +145,7 @@ export default function ArtisanDetailScreen() {
                         </View>
                         <View style={{ flex: 1 }}>
                             <Text style={styles.contactLabel}>{t('Phone number')}</Text>
-                            <Text style={styles.contactValue}>{artisan.phone_number || 'N/A'}</Text>
+                            <Text style={styles.contactValue}>{person.phone_number || 'N/A'}</Text>
                         </View>
                         <MaterialIcons name="chevron-right" size={20} color={color.ink300} />
                     </Pressable>
@@ -150,14 +157,14 @@ export default function ArtisanDetailScreen() {
                         <View style={{ flex: 1 }}>
                             <Text style={styles.contactLabel}>{t('Location')}</Text>
                             <Text style={styles.contactValue}>
-                                {artisan.lga_details?.name || t('LGA')}, {artisan.state_details?.name || t('State')}
+                                {person.lga_details?.name || t('LGA')}, {person.state_details?.name || t('State')}
                             </Text>
                         </View>
                     </View>
                 </View>
 
                 {/* 4. Action Button */}
-                {!artisan.is_verified && (
+                {!person.is_verified && (
                     <View style={styles.footer}>
                         <Pressable
                             style={({ pressed }) => [styles.verifyButton, pressed && { opacity: 0.9 }]}

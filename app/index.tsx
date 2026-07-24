@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { View, ActivityIndicator, StyleSheet, Image } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useTheme } from '@react-navigation/native';
+import * as SecureStore from 'expo-secure-store';
 import { storage } from '@/src/utils/storage';
 import { authAPI } from '@/src/api/client';
 import { getHomeRouteForRole } from '@/src/constants/roleRoutes';
@@ -18,8 +19,11 @@ export default function Index() {
 
   const checkLoginStatus = async () => {
     try {
-      // 1. Check if we have a user saved in SecureStore
-      const user = await storage.getCurrentUser();
+      // A cached user with no access token is a stale session (e.g. logout
+      // didn't fully run, or storage got out of sync) — never trust the
+      // cached user object on its own.
+      const token = await SecureStore.getItemAsync('accessToken');
+      const user = token ? await storage.getCurrentUser() : null;
 
       if (user) {
         // Optional: Verify token with backend (checks if session is still valid)

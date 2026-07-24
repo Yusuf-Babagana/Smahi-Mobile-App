@@ -5,7 +5,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useTranslation } from 'react-i18next';
 
-import { artisanAPI } from '@/src/api/client';
+import { agentAPI } from '@/src/api/client';
 import { useAuth } from '@/src/contexts/AuthContext';
 import { color, font, radius, space, type } from '@/constants/theme';
 import { Avatar, Badge, EmptyState, SkeletonCard } from '@/src/components/ui';
@@ -34,14 +34,9 @@ export default function AgentArtisanList() {
             if (pageNumber === 1) setLoading(true);
             else setLoadingMore(true);
 
-            const lgaFilter = user?.lga;
-            const stateFilter = user?.state;
-
-            // Call API with Page Number
-            const data = await artisanAPI.getArtisans({
-                lga: lgaFilter,
-                state: stateFilter
-            }, pageNumber);
+            // Scoped server-side to the agent's own state — includes every
+            // artisan there regardless of availability/verification status.
+            const data = await agentAPI.getStateArtisans({}, pageNumber);
 
             const newResults = data.results || [];
 
@@ -70,10 +65,11 @@ export default function AgentArtisanList() {
     };
 
     const renderItem = ({ item }: any) => {
-        const name = `${item.first_name || ''} ${item.last_name || ''}`.trim();
+        const person = item.user_details || {};
+        const name = `${person.first_name || ''} ${person.last_name || ''}`.trim();
         const trade = i18n.language === 'ha' && item.category_name_ha
             ? item.category_name_ha
-            : (item.service_category || t('General Artisan'));
+            : (item.profession_name || item.category_name || t('General Artisan'));
         return (
             <Pressable
                 style={({ pressed }) => [styles.card, pressed && { opacity: 0.85 }]}
@@ -81,7 +77,7 @@ export default function AgentArtisanList() {
                 accessibilityRole="button"
                 accessibilityLabel={name}
             >
-                <Avatar name={name} uri={item.profile_picture} size={48} verified={!!item.is_verified} />
+                <Avatar name={name} uri={person.profile_picture} size={48} verified={!!person.is_verified} />
 
                 <View style={styles.info}>
                     <Text style={styles.name} numberOfLines={1}>{name}</Text>
@@ -89,14 +85,14 @@ export default function AgentArtisanList() {
                     <View style={styles.locRow}>
                         <MaterialIcons name="place" size={12} color={color.ink300} />
                         <Text style={styles.location} numberOfLines={1}>
-                            {item.lga_details?.name || t('Local')}, {item.state_details?.name}
+                            {person.lga_details?.name || t('Local')}, {person.state_details?.name}
                         </Text>
                     </View>
                 </View>
 
                 <Badge
-                    label={item.is_verified ? t('Verified') : t('Pending')}
-                    status={item.is_verified ? 'verified' : 'pending'}
+                    label={person.is_verified ? t('Verified') : t('Pending')}
+                    status={person.is_verified ? 'verified' : 'pending'}
                 />
             </Pressable>
         );
@@ -121,7 +117,7 @@ export default function AgentArtisanList() {
                     <Pressable onPress={() => router.back()} style={styles.backButton} accessibilityRole="button" accessibilityLabel={t('Back')}>
                         <MaterialIcons name="arrow-back" size={20} color={color.ink900} />
                     </Pressable>
-                    <Text style={styles.headerTitle}>{t('My LGA artisans')}</Text>
+                    <Text style={styles.headerTitle}>{t('My state artisans')}</Text>
                     <View style={{ width: 40 }} />
                 </View>
             </SafeAreaView>
@@ -129,8 +125,8 @@ export default function AgentArtisanList() {
             <View style={styles.subHeader}>
                 <MaterialIcons name="place" size={14} color={color.brand600} />
                 <Text style={styles.subHeaderText}>
-                    {t('Listing artisans in')}{' '}
-                    <Text style={styles.subHeaderStrong}>{user?.lga_details?.name || t('your area')}</Text>
+                    {t('Listing all artisans in')}{' '}
+                    <Text style={styles.subHeaderStrong}>{user?.state_details?.name || t('your state')}</Text>
                 </Text>
             </View>
 
@@ -155,8 +151,8 @@ export default function AgentArtisanList() {
                     ListEmptyComponent={
                         <EmptyState
                             icon="person-search"
-                            title={t('No artisans found in this LGA.')}
-                            message={t('Artisans you register will appear here.')}
+                            title={t('No artisans found in this state.')}
+                            message={t('Artisans registered in your state will appear here.')}
                         />
                     }
                 />

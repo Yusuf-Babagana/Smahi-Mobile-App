@@ -1,7 +1,7 @@
 import React, { useState, useCallback, useEffect, useRef } from 'react';
 import {
     View, Text, FlatList, TouchableOpacity, StyleSheet,
-    ActivityIndicator, RefreshControl, TextInput, Pressable,
+    ActivityIndicator, RefreshControl, TextInput, Pressable, AppState,
 } from 'react-native';
 import { useRouter, useFocusEffect } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -62,10 +62,12 @@ export default function ChatListScreen() {
         }, [currentUserId])
     );
 
-    // Polling (Only when not searching)
+    // Polling (Only when not searching, and only while the app is foregrounded)
     useEffect(() => {
         const interval = setInterval(() => {
-            if (searchQuery === '' && !loading) loadConversations(false);
+            if (searchQuery === '' && !loading && AppState.currentState === 'active') {
+                loadConversations(false);
+            }
         }, 5000);
         return () => clearInterval(interval);
     }, [searchQuery, loading, currentUserId]);

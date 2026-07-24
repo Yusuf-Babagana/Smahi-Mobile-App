@@ -1,5 +1,6 @@
 import axios from 'axios';
 import * as SecureStore from 'expo-secure-store';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { API_URL } from '../constants/env';
 
 // Server host comes from src/constants/env.ts (EXPO_PUBLIC_BACKEND_URL).
@@ -66,7 +67,7 @@ apiClient.interceptors.response.use(
             // next auth guard sends the user to login instead of spamming 401s.
             await SecureStore.deleteItemAsync('accessToken');
             await SecureStore.deleteItemAsync('refreshToken');
-            await SecureStore.deleteItemAsync('user');
+            await AsyncStorage.removeItem('user');
         }
         return Promise.reject(error);
     }

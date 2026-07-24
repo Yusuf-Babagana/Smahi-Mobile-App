@@ -50,11 +50,12 @@ export const LocationProvider = ({ children }: { children: React.ReactNode }) =>
     }
   };
 
-  // Automatically request location when the app loads
+  // Permission is requested on demand (e.g. the home screen calls
+  // requestLocationPermission() right before its first location-based
+  // search) rather than unconditionally at cold launch, before login and
+  // before the user has any context for why the app wants their GPS.
   useEffect(() => {
-    requestLocationPermission().then(() => {
-      console.log("GPS CHECK COMPLETE.");
-    });
+    setIsLoading(false);
   }, []);
 
   if (errorMsg) console.log("CURRENT GPS ERROR:", errorMsg);

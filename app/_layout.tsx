@@ -61,7 +61,7 @@ export default function RootLayout() {
     ) {
       Alert.alert(
         "🔌 You are offline",
-        "You can keep using the app! Your changes will be saved locally."
+        "Some features may not work until you reconnect."
       );
     }
   }, [networkState.isConnected]);
