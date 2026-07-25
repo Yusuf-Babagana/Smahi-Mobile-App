@@ -190,13 +190,16 @@ export default function ClientHomeScreen() {
         setSearchQuery(transcript);
         setActiveSearch(transcript);
       } else {
-        let message = 'No speech detected. Please try again.';
-        if (transcript === '___NO_API_KEY___') {
-          message = 'Voice transcription requires an OpenAI API key. Set it in src/constants/config.ts.';
-        } else if (transcript === '___QUOTA_ERROR___') {
-          message = 'Voice transcription is temporarily unavailable. Please try again later or type your search.';
+        // ___NO_API_KEY___/___QUOTA_ERROR___ are internal sentinels from
+        // stopSpeechRecognition() — neither is meaningful to a user, both
+        // just mean "voice search isn't available right now." The old
+        // no-key message literally said "Set it in src/constants/config.ts,"
+        // a developer instruction with no user able to act on it.
+        let message = t('No speech detected. Please try again.');
+        if (transcript === '___NO_API_KEY___' || transcript === '___QUOTA_ERROR___') {
+          message = t('Voice search is temporarily unavailable. Please try again later or type your search.');
         }
-        Alert.alert('No Result', message);
+        Alert.alert(t('No Result'), message);
       }
       return;
     }

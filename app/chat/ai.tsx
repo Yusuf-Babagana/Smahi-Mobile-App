@@ -76,13 +76,14 @@ export default function AIChatScreen() {
       if (transcript) {
         setInputText(transcript);
       } else {
-        let message = 'No speech detected. Please try again.';
-        if (transcript === '___NO_API_KEY___') {
-          message = 'Voice transcription requires an OpenAI API key.';
-        } else if (transcript === '___QUOTA_ERROR___') {
-          message = 'Voice transcription is temporarily unavailable. Please try again later.';
+        // ___NO_API_KEY___/___QUOTA_ERROR___ are internal sentinels from
+        // stopSpeechRecognition() — neither is meaningful to a user, both
+        // just mean "voice input isn't available right now."
+        let message = t('No speech detected. Please try again.');
+        if (transcript === '___NO_API_KEY___' || transcript === '___QUOTA_ERROR___') {
+          message = t('Voice input is temporarily unavailable. Please try again later.');
         }
-        Alert.alert('Voice Input', message);
+        Alert.alert(t('Voice Input'), message);
       }
       return;
     }
