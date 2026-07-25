@@ -1,278 +1,323 @@
-
-import React, { useEffect, useState } from 'react';
-import {
-  View,
-  Text,
-  StyleSheet,
-  ScrollView,
-  TouchableOpacity,
-  Alert,
-  ActivityIndicator,
-} from 'react-native';
-import { useRouter } from 'expo-router';
-import { useTheme } from '@react-navigation/native';
+import React, { useCallback, useState } from 'react';
+import { View, Text, StyleSheet, ScrollView, RefreshControl, Pressable, Alert } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { IconSymbol } from '@/src/components/IconSymbol';
-import { storage } from '@/src/utils/storage';
+import { useFocusEffect } from 'expo-router';
+import { MaterialIcons } from '@expo/vector-icons';
+import { StatusBar } from 'expo-status-bar';
+import { useTranslation } from 'react-i18next';
+import Animated, { FadeInDown, FadeInUp } from 'react-native-reanimated';
+
 import { adminAPI } from '@/src/api/client';
 import { useAuth } from '@/src/contexts/AuthContext';
-import { User } from '@/src/types';
+import { color, font, radius, shadow, space } from '@/constants/theme';
+import { StatTile, EmptyState, SkeletonCard } from '@/src/components/ui';
 
+// This screen is read-only monitoring, on purpose — every privileged
+// action (suspend a user, approve a verification, moderate a review,
+// resolve a dispute) lives in Django Admin, session-authenticated and
+// entirely separate from the mobile JWT surface. A lost or unlocked
+// phone can never be used to take a destructive action, because this
+// screen has no write path to take one with.
 export default function AdminDashboard() {
-  const router = useRouter();
-  const theme = useTheme();
-  const { logout } = useAuth();
+  const { t } = useTranslation();
+  const { user, logout } = useAuth();
+
+  const [stats, setStats] = useState<any>(null);
   const [loading, setLoading] = useState(true);
-  const [user, setUser] = useState<User | null>(null);
-  const [stats, setStats] = useState({
-    totalUsers: 0,
-    totalArtisans: 0,
-    totalBookings: 0,
-    pendingVerifications: 0,
-  });
-  const [users, setUsers] = useState<User[]>([]);
+  const [refreshing, setRefreshing] = useState(false);
 
-  useEffect(() => {
-    loadData();
-  }, []);
-
-  const loadData = async () => {
+  const load = useCallback(async () => {
     try {
-      const currentUser = await storage.getCurrentUser();
-      if (!currentUser) {
-        router.replace('/login');
-        return;
-      }
-
-      setUser(currentUser);
-
-      const statsData = await adminAPI.getStats();
-      setStats(statsData);
-
-      const allUsers = await adminAPI.getAllUsers();
-      setUsers(allUsers);
+      const data = await adminAPI.getStats();
+      setStats(data);
     } catch (error) {
-      console.error('Error loading admin data:', error);
-      Alert.alert('Error', 'Failed to load dashboard data');
+      console.log('Admin stats error:', error);
     } finally {
       setLoading(false);
+      setRefreshing(false);
     }
+  }, []);
+
+  useFocusEffect(
+    useCallback(() => {
+      load();
+    }, [load])
+  );
+
+  const onRefresh = () => {
+    setRefreshing(true);
+    load();
   };
 
-  const handleLogout = async () => {
-    Alert.alert('Logout', 'Are you sure you want to logout?', [
-      { text: 'Cancel', style: 'cancel' },
-      {
-        text: 'Logout',
-        style: 'destructive',
-        onPress: async () => {
-          await logout();
-        },
-      },
-    ]);
-  };
-
-  if (loading) {
-    return (
-      <View style={[styles.loadingContainer, { backgroundColor: theme.colors.background }]}>
-        <ActivityIndicator size="large" color={theme.colors.primary} />
-      </View>
+  const handleLogout = () => {
+    Alert.alert(
+      t('Log Out'),
+      t('Are you sure you want to exit?'),
+      [
+        { text: t('Cancel'), style: 'cancel' },
+        { text: t('Log Out'), style: 'destructive', onPress: () => logout() },
+      ]
     );
-  }
+  };
+
+  const displayName = `${user?.first_name || t('Admin')} ${user?.last_name || ''}`.trim();
+
+  const healthColor = (score: number) => {
+    if (score >= 70) return color.accent600;
+    if (score >= 40) return color.warn600;
+    return color.danger600;
+  };
 
   return (
-    <SafeAreaView style={[styles.safeArea, { backgroundColor: theme.colors.background }]}>
+    <View style={styles.container}>
+      <StatusBar style="light" />
+
       <View style={styles.header}>
-        <Text style={[styles.headerTitle, { color: theme.colors.text }]}>Admin Dashboard</Text>
-        <TouchableOpacity onPress={handleLogout} style={styles.logoutButton}>
-          <IconSymbol name="rectangle.portrait.and.arrow.right" size={24} color={theme.colors.primary} />
-        </TouchableOpacity>
+        <SafeAreaView edges={['top', 'left', 'right']}>
+          <View style={styles.topBar}>
+            <View>
+              <Text style={styles.brandName}>{t('S-MAHII Admin')}</Text>
+              <Text style={styles.subGreeting}>{displayName}</Text>
+            </View>
+            <Pressable style={styles.logoutButton} onPress={handleLogout} accessibilityRole="button" accessibilityLabel={t('Log Out')}>
+              <MaterialIcons name="logout" size={16} color="#FECACA" />
+              <Text style={styles.logoutText}>{t('Exit')}</Text>
+            </Pressable>
+          </View>
+
+          <View style={styles.readOnlyBanner}>
+            <MaterialIcons name="visibility" size={14} color="rgba(255,255,255,0.85)" />
+            <Text style={styles.readOnlyText}>
+              {t('Monitoring only — suspend, verify, and moderate from Django Admin')}
+            </Text>
+          </View>
+        </SafeAreaView>
       </View>
 
-      <ScrollView style={styles.container} contentContainerStyle={styles.content}>
-        <View style={[styles.card, { backgroundColor: theme.dark ? '#1C1C1E' : '#fff' }]}>
-          <Text style={[styles.cardTitle, { color: theme.colors.text }]}>Welcome Back!</Text>
-          <Text style={[styles.cardText, { color: theme.dark ? '#98989D' : '#666' }]}>
-            {user?.name}
-          </Text>
-          <Text style={[styles.cardText, { color: theme.dark ? '#98989D' : '#666' }]}>
-            {user?.email}
-          </Text>
-        </View>
-
-        <View style={[styles.card, { backgroundColor: theme.dark ? '#1C1C1E' : '#fff' }]}>
-          <Text style={[styles.cardTitle, { color: theme.colors.text }]}>Platform Statistics</Text>
-          <View style={styles.statsGrid}>
-            <View style={styles.statItem}>
-              <Text style={[styles.statValue, { color: theme.colors.primary }]}>
-                {stats.totalUsers}
-              </Text>
-              <Text style={[styles.statLabel, { color: theme.dark ? '#98989D' : '#666' }]}>
-                Total Users
-              </Text>
-            </View>
-            <View style={styles.statItem}>
-              <Text style={[styles.statValue, { color: theme.colors.primary }]}>
-                {stats.totalArtisans}
-              </Text>
-              <Text style={[styles.statLabel, { color: theme.dark ? '#98989D' : '#666' }]}>
-                Artisans
-              </Text>
-            </View>
-            <View style={styles.statItem}>
-              <Text style={[styles.statValue, { color: theme.colors.primary }]}>
-                {stats.totalBookings}
-              </Text>
-              <Text style={[styles.statLabel, { color: theme.dark ? '#98989D' : '#666' }]}>
-                Bookings
-              </Text>
-            </View>
-            <View style={styles.statItem}>
-              <Text style={[styles.statValue, { color: '#FF9500' }]}>
-                {stats.pendingVerifications}
-              </Text>
-              <Text style={[styles.statLabel, { color: theme.dark ? '#98989D' : '#666' }]}>
-                Pending
-              </Text>
-            </View>
+      <ScrollView
+        style={styles.content}
+        contentContainerStyle={{ paddingTop: space.xl, paddingBottom: 60 }}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={color.brand600} />}
+        showsVerticalScrollIndicator={false}
+      >
+        {loading ? (
+          <View style={{ gap: space.md }}>
+            <SkeletonCard />
+            <SkeletonCard />
           </View>
-        </View>
+        ) : !stats ? (
+          <EmptyState
+            icon="error-outline"
+            title={t('Could not load dashboard')}
+            message={t('Pull down to try again.')}
+          />
+        ) : (
+          <>
+            {/* Marketplace health */}
+            <Animated.View entering={FadeInUp.duration(350)} style={styles.healthCard}>
+              <View style={styles.healthRow}>
+                <View>
+                  <Text style={styles.healthLabel}>{t('Marketplace health')}</Text>
+                  <Text style={[styles.healthScore, { color: healthColor(stats.marketplace_health) }]}>
+                    {stats.marketplace_health}
+                  </Text>
+                </View>
+                <View style={[styles.healthTile, { backgroundColor: healthColor(stats.marketplace_health) + '1A' }]}>
+                  <MaterialIcons name="insights" size={26} color={healthColor(stats.marketplace_health)} />
+                </View>
+              </View>
+              <Text style={styles.healthHint}>
+                {t('Based on verification rate and booking completion vs. cancellation.')}
+              </Text>
+            </Animated.View>
 
-        <View style={[styles.card, { backgroundColor: theme.dark ? '#1C1C1E' : '#fff' }]}>
-          <Text style={[styles.cardTitle, { color: theme.colors.text }]}>
-            All Users ({users.length})
-          </Text>
-          {users.map((u) => (
-            <View
-              key={u.id}
-              style={[styles.userItem, { borderBottomColor: theme.colors.border }]}
-            >
-              <View style={styles.userInfo}>
-                <Text style={[styles.userName, { color: theme.colors.text }]}>{u.name}</Text>
-                <Text style={[styles.userEmail, { color: theme.dark ? '#98989D' : '#666' }]}>
-                  {u.email}
-                </Text>
+            {/* People */}
+            <Animated.View entering={FadeInDown.delay(60).duration(350)}>
+              <Text style={styles.sectionTitle}>{t('People')}</Text>
+              <View style={styles.statsGrid}>
+                <StatTile icon="people-outline" value={stats.total_users} label={t('Total users')} />
+                <StatTile icon="handyman" value={stats.total_artisans} label={t('Artisans')} />
+                <StatTile icon="groups" value={stats.total_clients} label={t('Clients')} />
+                <StatTile icon="badge" value={stats.total_agents} label={t('Agents')} />
               </View>
-              <View
-                style={[
-                  styles.roleBadge,
-                  {
-                    backgroundColor:
-                      u.role === 'super_admin'
-                        ? '#FF3B30'
-                        : u.role === 'agent'
-                          ? '#FF9500'
-                          : u.role === 'artisan'
-                            ? '#34C759'
-                            : '#007AFF',
-                  },
-                ]}
-              >
-                <Text style={styles.roleText}>{u.role.toUpperCase()}</Text>
+            </Animated.View>
+
+            {/* Verification */}
+            <Animated.View entering={FadeInDown.delay(100).duration(350)}>
+              <Text style={styles.sectionTitle}>{t('Verification')}</Text>
+              <View style={styles.statsGrid}>
+                <StatTile
+                  icon="verified"
+                  value={stats.verified_artisans}
+                  label={t('Verified')}
+                  tileBg={color.accent100}
+                  tileFg={color.accent600}
+                />
+                <StatTile
+                  icon="schedule"
+                  value={stats.pending_verification}
+                  label={t('Pending review')}
+                  tileBg={color.warn100}
+                  tileFg={color.warn600}
+                />
               </View>
-            </View>
-          ))}
-        </View>
+            </Animated.View>
+
+            {/* Bookings */}
+            <Animated.View entering={FadeInDown.delay(140).duration(350)}>
+              <Text style={styles.sectionTitle}>{t('Bookings')}</Text>
+              <View style={styles.card}>
+                <View style={styles.bookingRow}>
+                  <Text style={styles.bookingLabel}>{t('Total bookings')}</Text>
+                  <Text style={styles.bookingValue}>{stats.total_bookings}</Text>
+                </View>
+                <View style={styles.horizontalDivider} />
+                <View style={styles.bookingRow}>
+                  <Text style={styles.bookingLabel}>{t('Completion rate')}</Text>
+                  <Text style={[styles.bookingValue, { color: color.accent600 }]}>
+                    {stats.booking_analytics?.completion_rate}%
+                  </Text>
+                </View>
+                <View style={styles.bookingRow}>
+                  <Text style={styles.bookingLabel}>{t('Cancellation rate')}</Text>
+                  <Text style={[styles.bookingValue, { color: color.danger600 }]}>
+                    {stats.booking_analytics?.cancellation_rate}%
+                  </Text>
+                </View>
+              </View>
+            </Animated.View>
+
+            {/* Revenue */}
+            <Animated.View entering={FadeInDown.delay(180).duration(350)}>
+              <Text style={styles.sectionTitle}>{t('Revenue')}</Text>
+              <View style={styles.card}>
+                <View style={styles.bookingRow}>
+                  <Text style={styles.bookingLabel}>{t('Registration fees collected')}</Text>
+                  <Text style={styles.bookingValue}>
+                    ₦{Number(stats.revenue?.registration_fees_naira || 0).toLocaleString()}
+                  </Text>
+                </View>
+                <View style={styles.bookingRow}>
+                  <Text style={styles.bookingLabel}>{t('Payments')}</Text>
+                  <Text style={styles.bookingValue}>{stats.revenue?.registration_fees_count}</Text>
+                </View>
+              </View>
+            </Animated.View>
+
+            {/* Recent registrations */}
+            <Animated.View entering={FadeInDown.delay(220).duration(350)}>
+              <Text style={styles.sectionTitle}>{t('Recent registrations')}</Text>
+              <View style={styles.card}>
+                {(stats.recent_registrations || []).length === 0 ? (
+                  <Text style={styles.emptyText}>{t('No registrations yet.')}</Text>
+                ) : (
+                  stats.recent_registrations.map((u: any, i: number) => (
+                    <View key={u.id} style={[styles.userRow, i > 0 && styles.horizontalDivider]}>
+                      <View style={{ flex: 1 }}>
+                        <Text style={styles.userName} numberOfLines={1}>
+                          {`${u.first_name || ''} ${u.last_name || ''}`.trim() || u.email}
+                        </Text>
+                        <Text style={styles.userEmail} numberOfLines={1}>{u.email}</Text>
+                      </View>
+                      <View style={styles.roleBadge}>
+                        <Text style={styles.roleText}>{t(u.role)}</Text>
+                      </View>
+                    </View>
+                  ))
+                )}
+              </View>
+            </Animated.View>
+          </>
+        )}
       </ScrollView>
-    </SafeAreaView>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  safeArea: {
-    flex: 1,
-  },
-  loadingContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
+  container: { flex: 1, backgroundColor: color.surfaceSunken },
+
   header: {
+    backgroundColor: color.brand900,
+    paddingBottom: space.lg,
+    borderBottomLeftRadius: radius.xxl,
+    borderBottomRightRadius: radius.xxl,
+  },
+  topBar: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingHorizontal: 20,
-    paddingVertical: 16,
+    paddingHorizontal: space.xl,
+    marginTop: space.md,
   },
-  headerTitle: {
-    fontSize: 24,
-    fontWeight: '700',
-  },
+  brandName: { color: '#FFF', fontFamily: font.extrabold, fontSize: 17, letterSpacing: 0.3 },
+  subGreeting: { color: 'rgba(255,255,255,0.72)', fontFamily: font.bold, fontSize: 12.5, marginTop: 2 },
   logoutButton: {
-    padding: 8,
-  },
-  container: {
-    flex: 1,
-  },
-  content: {
-    padding: 20,
-  },
-  card: {
-    padding: 20,
-    borderRadius: 16,
-    marginBottom: 16,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 8,
-    elevation: 3,
-  },
-  cardTitle: {
-    fontSize: 20,
-    fontWeight: '600',
-    marginBottom: 12,
-  },
-  cardText: {
-    fontSize: 16,
-    marginBottom: 4,
-  },
-  statsGrid: {
     flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 16,
-  },
-  statItem: {
-    flex: 1,
-    minWidth: '45%',
     alignItems: 'center',
-    padding: 16,
-    backgroundColor: 'rgba(0, 122, 255, 0.1)',
-    borderRadius: 12,
-  },
-  statValue: {
-    fontSize: 32,
-    fontWeight: '700',
-    marginBottom: 4,
-  },
-  statLabel: {
-    fontSize: 14,
-  },
-  userItem: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingVertical: 12,
-    borderBottomWidth: 1,
-  },
-  userInfo: {
-    flex: 1,
-  },
-  userName: {
-    fontSize: 16,
-    fontWeight: '600',
-    marginBottom: 2,
-  },
-  userEmail: {
-    fontSize: 14,
-  },
-  roleBadge: {
+    gap: 6,
+    backgroundColor: 'rgba(239, 68, 68, 0.18)',
+    paddingVertical: 7,
     paddingHorizontal: 12,
-    paddingVertical: 4,
-    borderRadius: 12,
+    borderRadius: radius.full,
   },
-  roleText: {
-    color: '#fff',
-    fontSize: 10,
-    fontWeight: '700',
+  logoutText: { color: '#FECACA', fontFamily: font.extrabold, fontSize: 12 },
+
+  readOnlyBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginHorizontal: space.xl,
+    marginTop: space.lg,
+    backgroundColor: 'rgba(255,255,255,0.10)',
+    borderRadius: radius.md,
+    paddingVertical: 8,
+    paddingHorizontal: 12,
   },
+  readOnlyText: { color: 'rgba(255,255,255,0.85)', fontFamily: font.bold, fontSize: 11.5, flex: 1 },
+
+  content: { flex: 1, paddingHorizontal: space.xl },
+
+  healthCard: {
+    backgroundColor: color.surface,
+    borderRadius: radius.xl,
+    padding: space.lg,
+    borderWidth: 1,
+    borderColor: '#EEF2F8',
+    marginBottom: space.xl,
+    ...shadow.e1,
+  },
+  healthRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  healthLabel: { fontFamily: font.bold, fontSize: 12.5, color: color.ink400 },
+  healthScore: { fontFamily: font.extrabold, fontSize: 32, marginTop: 4 },
+  healthTile: {
+    width: 52, height: 52, borderRadius: radius.lg,
+    alignItems: 'center', justifyContent: 'center',
+  },
+  healthHint: { fontFamily: font.medium, fontSize: 11.5, color: color.ink300, marginTop: space.sm },
+
+  sectionTitle: { fontFamily: font.extrabold, fontSize: 14, color: color.ink900, marginBottom: space.md, marginTop: space.sm },
+
+  statsGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: space.md, marginBottom: space.xl },
+
+  card: {
+    backgroundColor: color.surface,
+    borderRadius: radius.xl,
+    padding: space.lg,
+    borderWidth: 1,
+    borderColor: '#EEF2F8',
+    marginBottom: space.xl,
+  },
+  bookingRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: space.sm },
+  bookingLabel: { fontFamily: font.bold, fontSize: 13, color: color.ink400 },
+  bookingValue: { fontFamily: font.extrabold, fontSize: 15, color: color.ink900 },
+  horizontalDivider: { borderTopWidth: 1, borderTopColor: color.border },
+
+  emptyText: { fontFamily: font.medium, fontSize: 13, color: color.ink300, textAlign: 'center', paddingVertical: space.sm },
+
+  userRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: space.sm, gap: space.sm },
+  userName: { fontFamily: font.extrabold, fontSize: 13.5, color: color.ink900 },
+  userEmail: { fontFamily: font.medium, fontSize: 11.5, color: color.ink300, marginTop: 1 },
+  roleBadge: { backgroundColor: color.brand100, borderRadius: radius.full, paddingHorizontal: 10, paddingVertical: 4 },
+  roleText: { fontFamily: font.extrabold, fontSize: 10, color: color.brand600, textTransform: 'uppercase' },
 });
