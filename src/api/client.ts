@@ -567,6 +567,14 @@ export const favoriteAPI = {
   },
 };
 
+// --- PRESENCE (drives the "online now" badge on artisan cards/profiles) ---
+export const presenceAPI = {
+  heartbeat: async () => {
+    const response = await apiClient.post('v1/presence/heartbeat/');
+    return response.data;
+  },
+};
+
 // --- PAYMENTS (Paystack registration fee) ---
 export const paymentAPI = {
   // Pass the email explicitly when you have it (e.g. the register screen);

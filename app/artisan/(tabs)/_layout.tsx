@@ -1,14 +1,30 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { Tabs } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import { Platform } from 'react-native';
+import { AppState, Platform } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import { color } from '@/constants/theme';
+import { presenceAPI } from '@/src/api/client';
 
 // Artisan bottom navigation (prototype: Dashboard / Jobs / Chat / Portfolio).
 // Same floating pill style as the client (tabs) group for consistency.
 export default function ArtisanTabLayout() {
   const { t } = useTranslation();
+
+  // Drives the "online now" badge clients see on this artisan's card/profile.
+  // Lives here (not a single screen) so it covers all artisan tabs, and only
+  // actually pings while the app is foregrounded — matches the polling-guard
+  // pattern already used in NotificationContext.
+  useEffect(() => {
+    const sendHeartbeat = () => {
+      if (AppState.currentState === 'active') {
+        presenceAPI.heartbeat().catch(() => {});
+      }
+    };
+    sendHeartbeat();
+    const interval = setInterval(sendHeartbeat, 3 * 60 * 1000);
+    return () => clearInterval(interval);
+  }, []);
 
   return (
     <Tabs

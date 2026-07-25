@@ -40,6 +40,19 @@ const resolveMediaUrl = (raw: any): string | null => {
   return url.startsWith('http') ? url : `${BACKEND_URL}${url}`;
 };
 
+// Rounds up to the nearest "friendly" bucket rather than showing an exact
+// average (e.g. "responds within 47 min" reads oddly precise for a stat
+// that shifts with every new booking).
+function formatResponseTime(minutes: number | null | undefined): string | null {
+  if (minutes == null) return null;
+  if (minutes <= 15) return 'within 15 min';
+  if (minutes <= 30) return 'within 30 min';
+  if (minutes <= 60) return 'within an hour';
+  if (minutes <= 180) return 'within 3 hours';
+  if (minutes <= 720) return 'within 12 hours';
+  return 'within a day';
+}
+
 export default function ArtisanProfileRoom() {
   const { t, i18n } = useTranslation();
   const { id } = useLocalSearchParams();
@@ -212,7 +225,7 @@ export default function ArtisanProfileRoom() {
         {/* Overlapping head card */}
         <View style={styles.headCard}>
           <View style={styles.headTop}>
-            <Avatar name={displayName} uri={profilePic} size={72} borderRadius={22} verified={isVerified} />
+            <Avatar name={displayName} uri={profilePic} size={72} borderRadius={22} verified={isVerified} online={!!artisan.is_online} />
             <View style={styles.headInfo}>
               <Text style={styles.name} numberOfLines={1}>{displayName}</Text>
               <Text style={styles.trade} numberOfLines={1}>{professionName}</Text>
@@ -220,10 +233,21 @@ export default function ArtisanProfileRoom() {
                 {isVerified && (
                   <Badge label={t('ID verified')} status="verified" icon="verified" />
                 )}
+                {artisan.is_online && (
+                  <Badge label={t('Online now')} bg={color.accent100} fg="#0F766E" icon="circle" />
+                )}
                 {distance && (
                   <Badge label={`${distance} ${t('km away')}`} bg={color.brand100} fg={color.brand600} icon="near-me" />
                 )}
               </View>
+              {formatResponseTime(artisan.avg_response_minutes) && (
+                <View style={styles.responseRow}>
+                  <MaterialIcons name="bolt" size={13} color={color.ink400} />
+                  <Text style={styles.responseText}>
+                    {t('Usually responds {{time}}', { time: t(formatResponseTime(artisan.avg_response_minutes)!) })}
+                  </Text>
+                </View>
+              )}
             </View>
           </View>
 
@@ -385,6 +409,8 @@ const styles = StyleSheet.create({
   name: { ...type.titleMd },
   trade: { fontFamily: font.bold, fontSize: 13, color: color.ink400, marginTop: 2 },
   headBadges: { flexDirection: 'row', gap: 6, marginTop: 8, flexWrap: 'wrap' },
+  responseRow: { flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 8 },
+  responseText: { fontFamily: font.bold, fontSize: 12, color: color.ink400 },
 
   statsGrid: {
     flexDirection: 'row',
