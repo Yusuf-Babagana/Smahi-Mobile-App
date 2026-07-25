@@ -50,6 +50,10 @@ export default function BookingDetailScreen() {
   const [reviewComment, setReviewComment] = useState('');
   const [submittingReview, setSubmittingReview] = useState(false);
 
+  const [cancelReasonModalVisible, setCancelReasonModalVisible] = useState(false);
+  const [cancelReason, setCancelReason] = useState('');
+  const [submittingCancel, setSubmittingCancel] = useState(false);
+
   const load = useCallback(async () => {
     if (!id) return;
     try {
@@ -81,13 +85,38 @@ export default function BookingDetailScreen() {
             try {
               await bookingAPI.updateBooking(Number(id), { status: 'cancelled' });
               load();
-            } catch {
-              Alert.alert(t('Error'), t('Failed to cancel booking.'));
+            } catch (err: any) {
+              // The backend requires a reason for a cancellation made close
+              // to scheduled_date (PlatformSettings.cancellation_window_hours) —
+              // it reports this as a validation error on cancellation_reason.
+              if (err?.response?.data?.cancellation_reason) {
+                setCancelReasonModalVisible(true);
+              } else {
+                Alert.alert(t('Error'), t('Failed to cancel booking.'));
+              }
             }
           },
         },
       ],
     );
+  };
+
+  const submitLateCancellation = async () => {
+    if (!cancelReason.trim()) {
+      Alert.alert(t('Reason required'), t('Please tell us why you need to cancel.'));
+      return;
+    }
+    setSubmittingCancel(true);
+    try {
+      await bookingAPI.updateBooking(Number(id), { status: 'cancelled', cancellation_reason: cancelReason.trim() });
+      setCancelReasonModalVisible(false);
+      setCancelReason('');
+      load();
+    } catch {
+      Alert.alert(t('Error'), t('Failed to cancel booking.'));
+    } finally {
+      setSubmittingCancel(false);
+    }
   };
 
   const openChat = () => {
@@ -267,7 +296,12 @@ export default function BookingDetailScreen() {
         {/* Cancellation reason if present */}
         {isCancelled && booking.cancellation_reason && (
           <View style={styles.card}>
-            <Text style={styles.sectionTitle}>{t('Cancellation reason')}</Text>
+            <View style={styles.reasonTitleRow}>
+              <Text style={[styles.sectionTitle, { marginBottom: 0 }]}>{t('Cancellation reason')}</Text>
+              {booking.is_late_cancellation && (
+                <Badge label={t('Late cancellation')} status="cancelled" />
+              )}
+            </View>
             <Text style={styles.reasonText}>{booking.cancellation_reason}</Text>
           </View>
         )}
@@ -382,6 +416,50 @@ export default function BookingDetailScreen() {
           </View>
         </View>
       </Modal>
+
+      {/* Late cancellation — a reason is required this close to scheduled_date */}
+      <Modal
+        visible={cancelReasonModalVisible}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setCancelReasonModalVisible(false)}
+      >
+        <View style={styles.modalBackdrop}>
+          <View style={styles.modalCard}>
+            <Text style={styles.sectionTitle}>{t('Why are you cancelling?')}</Text>
+            <Text style={styles.reasonText}>
+              {t("This is close to the scheduled time, so we'll need a reason.")}
+            </Text>
+
+            <TextInput
+              style={[styles.reviewInput, { marginTop: space.md }]}
+              placeholder={t('e.g. Emergency came up, no longer needed...')}
+              placeholderTextColor={color.ink300}
+              value={cancelReason}
+              onChangeText={setCancelReason}
+              multiline
+              numberOfLines={4}
+              textAlignVertical="top"
+            />
+
+            <View style={styles.modalActions}>
+              <Button
+                title={t('Back')}
+                variant="secondary"
+                onPress={() => setCancelReasonModalVisible(false)}
+                disabled={submittingCancel}
+                style={{ flex: 1 }}
+              />
+              <Button
+                title={t('Confirm cancel')}
+                onPress={submitLateCancellation}
+                loading={submittingCancel}
+                style={{ flex: 1 }}
+              />
+            </View>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -462,6 +540,7 @@ const styles = StyleSheet.create({
   photoRow: { flexDirection: 'row', flexWrap: 'wrap', gap: space.sm },
   photoThumb: { width: 76, height: 76, borderRadius: radius.md, backgroundColor: color.surfaceSunken },
 
+  reasonTitleRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: space.md },
   reasonText: { ...type.body },
 
   footer: {

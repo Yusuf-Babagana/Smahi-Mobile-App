@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useCallback, useRef } from 'react';
 import {
   View, Text, StyleSheet, ScrollView, TouchableOpacity,
-  RefreshControl, Alert, ActivityIndicator, StatusBar, Pressable,
+  RefreshControl, Alert, ActivityIndicator, StatusBar, Pressable, Modal, TextInput,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
@@ -15,7 +15,7 @@ import { useLocation } from '@/src/contexts/LocationContext';
 import { EmailVerificationBanner } from '@/src/components/EmailVerificationBanner';
 import { CLOUDINARY_CLOUD_NAME as CLOUD_NAME } from '@/src/constants/env';
 import { color, font, radius, shadow, space, type } from '@/constants/theme';
-import { Avatar, Badge, StatTile } from '@/src/components/ui';
+import { Avatar, Badge, Button, StatTile } from '@/src/components/ui';
 
 export default function ArtisanDashboard() {
   const router = useRouter();
@@ -29,6 +29,10 @@ export default function ArtisanDashboard() {
   const [refreshing, setRefreshing] = useState(false);
   const [isAvailable, setIsAvailable] = useState(true);
   const [togglingAvailability, setTogglingAvailability] = useState(false);
+
+  const [lateCancelId, setLateCancelId] = useState<number | null>(null);
+  const [cancelReason, setCancelReason] = useState('');
+  const [submittingCancel, setSubmittingCancel] = useState(false);
 
   // --- DATA LOADING ---
   const loadData = useCallback(async () => {
@@ -116,9 +120,34 @@ export default function ArtisanDashboard() {
     try {
       await bookingAPI.updateBooking(bookingId, { status: newStatus });
       await loadData();
-    } catch (error) {
-      console.log('Booking update error:', error);
+    } catch (error: any) {
+      // Declining/cancelling close to scheduled_date requires a reason
+      // (PlatformSettings.cancellation_window_hours) — the backend reports
+      // this as a validation error on cancellation_reason.
+      if (newStatus === 'cancelled' && error?.response?.data?.cancellation_reason) {
+        setLateCancelId(bookingId);
+      } else {
+        console.log('Booking update error:', error);
+        Alert.alert(t('Error'), t('Could not update the booking. Please try again.'));
+      }
+    }
+  };
+
+  const submitLateCancel = async () => {
+    if (!cancelReason.trim() || lateCancelId == null) {
+      Alert.alert(t('Reason required'), t('Please tell us why you need to decline.'));
+      return;
+    }
+    setSubmittingCancel(true);
+    try {
+      await bookingAPI.updateBooking(lateCancelId, { status: 'cancelled', cancellation_reason: cancelReason.trim() });
+      setLateCancelId(null);
+      setCancelReason('');
+      await loadData();
+    } catch {
       Alert.alert(t('Error'), t('Could not update the booking. Please try again.'));
+    } finally {
+      setSubmittingCancel(false);
     }
   };
 
@@ -465,6 +494,50 @@ export default function ArtisanDashboard() {
         {/* Bottom clearance for the floating tab bar */}
         <View style={{ height: 100 }} />
       </ScrollView>
+
+      {/* Late cancellation/decline — a reason is required this close to scheduled_date */}
+      <Modal
+        visible={lateCancelId !== null}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setLateCancelId(null)}
+      >
+        <View style={styles.modalBackdrop}>
+          <View style={styles.modalCard}>
+            <Text style={styles.modalTitle}>{t('Why are you declining?')}</Text>
+            <Text style={styles.modalSubtitle}>
+              {t("This is close to the scheduled time, so we'll need a reason.")}
+            </Text>
+
+            <TextInput
+              style={styles.reasonInput}
+              placeholder={t('e.g. Emergency came up, double-booked...')}
+              placeholderTextColor={color.ink300}
+              value={cancelReason}
+              onChangeText={setCancelReason}
+              multiline
+              numberOfLines={4}
+              textAlignVertical="top"
+            />
+
+            <View style={styles.modalActions}>
+              <Button
+                title={t('Back')}
+                variant="secondary"
+                onPress={() => setLateCancelId(null)}
+                disabled={submittingCancel}
+                style={{ flex: 1 }}
+              />
+              <Button
+                title={t('Confirm decline')}
+                onPress={submitLateCancel}
+                loading={submittingCancel}
+                style={{ flex: 1 }}
+              />
+            </View>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -639,4 +712,30 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   tonalPillText: { fontFamily: font.extrabold, fontSize: 12, color: color.brand600 },
+
+  modalBackdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(15,23,42,0.5)',
+    justifyContent: 'flex-end',
+  },
+  modalCard: {
+    backgroundColor: color.surface,
+    borderTopLeftRadius: radius.xxl,
+    borderTopRightRadius: radius.xxl,
+    padding: space.xl,
+    paddingBottom: space.xxl,
+  },
+  modalTitle: { ...type.heading, marginBottom: space.sm },
+  modalSubtitle: { ...type.body, marginBottom: space.md },
+  reasonInput: {
+    borderWidth: 1,
+    borderColor: color.border,
+    borderRadius: radius.md,
+    padding: space.md,
+    fontFamily: font.medium,
+    fontSize: 14,
+    color: color.ink900,
+    minHeight: 90,
+  },
+  modalActions: { flexDirection: 'row', gap: space.md, marginTop: space.lg },
 });
