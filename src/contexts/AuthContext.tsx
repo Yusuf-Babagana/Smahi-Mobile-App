@@ -4,6 +4,7 @@ import * as SecureStore from 'expo-secure-store';
 import { User, LoginCredentials } from '../types';
 import { authAPI } from '../api/client';
 import { useRouter } from 'expo-router';
+import { unregisterCurrentDevice } from '../utils/pushNotifications';
 
 interface AuthContextType {
     user: User | null;
@@ -62,6 +63,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     const logout = async () => {
         try {
+            // Best-effort — stop this device from receiving pushes for the
+            // account that's about to log out. Must run before the tokens
+            // below are cleared, since it's an authenticated call.
+            await unregisterCurrentDevice().catch(() => {});
+
             setUser(null);
             await AsyncStorage.removeItem('user');
             await SecureStore.deleteItemAsync('accessToken');

@@ -575,6 +575,19 @@ export const presenceAPI = {
   },
 };
 
+// --- DEVICE TOKENS (push notifications) ---
+export const deviceAPI = {
+  register: async (token: string, platform: string) => {
+    const response = await apiClient.post('v1/devices/register/', { token, platform });
+    return response.data;
+  },
+
+  unregister: async (token: string) => {
+    const response = await apiClient.post('v1/devices/unregister/', { token });
+    return response.data;
+  },
+};
+
 // --- PAYMENTS (Paystack registration fee) ---
 export const paymentAPI = {
   // Pass the email explicitly when you have it (e.g. the register screen);

@@ -29,6 +29,7 @@ import { WidgetProvider } from "@/src/contexts/WidgetContext";
 // ✅ 1. Import the Notification Provider
 import { NotificationProvider } from '@/src/contexts/NotificationContext';
 import { AuthProvider } from '@/src/contexts/AuthContext';
+import { PushNotificationManager } from '@/src/components/PushNotificationManager';
 import { LocationProvider } from '@/src/contexts/LocationContext';
 import '@/src/locales/i18n';
 
@@ -104,6 +105,7 @@ export default function RootLayout() {
         <LocationProvider>
           {/* ✅ Wrap App in AuthProvider & NotificationProvider */}
           <AuthProvider>
+            <PushNotificationManager />
             <NotificationProvider>
               <GestureHandlerRootView style={{ flex: 1 }}>
                 <KeyboardProvider>
