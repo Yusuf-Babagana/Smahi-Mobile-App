@@ -94,18 +94,30 @@ export default function BookingFlow() {
   const handleSubmit = async () => {
     setSubmitting(true);
     try {
-      // NOTE: photos are collected for design parity but the bookings endpoint
-      // has no attachment field yet — only text fields are sent.
       // The route param is the ArtisanProfile id; the bookings endpoint keys
       // artisans by USER id, which lives on the fetched profile ('user').
       const artisanUserId = artisan?.user ?? artisan?.user_details?.id ?? Number(artisanId);
-      await bookingAPI.createBooking({
+      const booking = await bookingAPI.createBooking({
         artisan: Number(artisanUserId),
         date: selectedDate,
         time: selectedTime,
         description,
         location: address,
       });
+
+      // Photos upload one at a time, after the booking exists. Best-effort:
+      // the booking itself already succeeded, so a photo failure shouldn't
+      // block the success screen -- just log it and move on.
+      if (photos.length > 0 && booking?.id) {
+        for (const uri of photos) {
+          try {
+            await bookingAPI.uploadPhoto(booking.id, uri);
+          } catch (photoError) {
+            console.log('Photo upload failed:', photoError);
+          }
+        }
+      }
+
       setSubmitted(true);
     } catch (error: any) {
       console.log('BOOKING ERROR:', error?.response?.data || error);

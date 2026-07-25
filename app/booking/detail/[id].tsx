@@ -1,6 +1,6 @@
 import React, { useCallback, useState } from 'react';
 import {
-  ActivityIndicator, Alert, Linking, Modal, Pressable, ScrollView,
+  ActivityIndicator, Alert, Image, Linking, Modal, Pressable, ScrollView,
   StyleSheet, Text, TextInput, View,
 } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
@@ -12,8 +12,11 @@ import { useTranslation } from 'react-i18next';
 
 import { bookingAPI, reviewAPI } from '@/src/api/client';
 import { useAuth } from '@/src/contexts/AuthContext';
+import { BACKEND_URL } from '@/src/constants/env';
 import { color, font, radius, shadow, space, type } from '@/constants/theme';
 import { Avatar, Badge, BookingTimeline, Button } from '@/src/components/ui';
+
+const resolvePhotoUrl = (raw: string) => (raw?.startsWith('http') ? raw : `${BACKEND_URL}${raw}`);
 
 function timelineStep(status: string) {
   switch (status) {
@@ -245,6 +248,22 @@ export default function BookingDetailScreen() {
           </View>
         </View>
 
+        {/* Photos attached at booking time */}
+        {Array.isArray(booking.photos) && booking.photos.length > 0 && (
+          <View style={styles.card}>
+            <Text style={styles.sectionTitle}>{t('Photos')}</Text>
+            <View style={styles.photoRow}>
+              {booking.photos.map((photo: any) => (
+                <Image
+                  key={photo.id}
+                  source={{ uri: resolvePhotoUrl(photo.image) }}
+                  style={styles.photoThumb}
+                />
+              ))}
+            </View>
+          </View>
+        )}
+
         {/* Cancellation reason if present */}
         {isCancelled && booking.cancellation_reason && (
           <View style={styles.card}>
@@ -439,6 +458,9 @@ const styles = StyleSheet.create({
     marginBottom: space.md,
   },
   detailText: { fontFamily: font.bold, fontSize: 14, color: color.ink600, flex: 1, lineHeight: 21 },
+
+  photoRow: { flexDirection: 'row', flexWrap: 'wrap', gap: space.sm },
+  photoThumb: { width: 76, height: 76, borderRadius: radius.md, backgroundColor: color.surfaceSunken },
 
   reasonText: { ...type.body },
 

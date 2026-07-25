@@ -211,6 +211,23 @@ export const bookingAPI = {
     const response = await apiClient.patch(`bookings/${bookingId}/`, data);
     return response.data;
   },
+
+  // uri is a local file:// URI from expo-image-picker. Uploads one photo
+  // per call — the booking flow calls this once per selected photo right
+  // after the booking itself is created.
+  uploadPhoto: async (bookingId: number, uri: string) => {
+    const filename = uri.split('/').pop() || 'photo.jpg';
+    const match = /\.(\w+)$/.exec(filename);
+    const type = match ? `image/${match[1] === 'jpg' ? 'jpeg' : match[1]}` : 'image/jpeg';
+
+    const formData = new FormData();
+    formData.append('image', { uri, name: filename, type } as any);
+
+    const response = await apiClient.post(`bookings/${bookingId}/add_photo/`, formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    });
+    return response.data;
+  },
 };
 
 // --- CATEGORIES (Hierarchical) ---
