@@ -93,6 +93,24 @@ export default function HelpCenterScreen() {
                     </View>
                 </Animated.View>
 
+                {/* Report a problem */}
+                <Animated.View entering={FadeInDown.delay(150).duration(400)}>
+                    <Pressable
+                        onPress={() => router.push('/report-problem')}
+                        accessibilityRole="button"
+                        style={({ pressed }) => [styles.reportCard, pressed && { opacity: 0.85 }]}
+                    >
+                        <View style={styles.reportIcon}>
+                            <MaterialIcons name="flag" size={20} color={color.danger600} />
+                        </View>
+                        <View style={{ flex: 1 }}>
+                            <Text style={styles.reportTitle}>{t('Report a problem')}</Text>
+                            <Text style={styles.reportSub}>{t('Had a bad experience? Let us know and we\'ll look into it')}</Text>
+                        </View>
+                        <MaterialIcons name="chevron-right" size={20} color={color.ink300} />
+                    </Pressable>
+                </Animated.View>
+
                 {/* Contact support */}
                 <Animated.View entering={FadeInDown.delay(200).duration(400)}>
                     <Text style={styles.sectionTitle}>{t('Contact Us')}</Text>
@@ -132,6 +150,20 @@ const styles = StyleSheet.create({
     },
     aiTitle: { fontFamily: font.extrabold, fontSize: 15, color: '#FFF' },
     aiSub: { fontFamily: font.medium, fontSize: 12, color: 'rgba(255,255,255,0.75)', marginTop: 2 },
+
+    reportCard: {
+        flexDirection: 'row', alignItems: 'center', gap: space.md,
+        backgroundColor: color.surface, borderRadius: radius.xl,
+        borderWidth: 1, borderColor: '#EEF2F8',
+        padding: space.lg, marginBottom: space.xxl,
+    },
+    reportIcon: {
+        width: 42, height: 42, borderRadius: radius.md,
+        backgroundColor: '#FDECEC',
+        justifyContent: 'center', alignItems: 'center',
+    },
+    reportTitle: { fontFamily: font.extrabold, fontSize: 14.5, color: color.ink900 },
+    reportSub: { fontFamily: font.medium, fontSize: 12, color: color.ink400, marginTop: 2 },
 
     sectionTitle: {
         fontFamily: font.extrabold, fontSize: 11, letterSpacing: 0.5,

@@ -355,6 +355,25 @@ export const reviewAPI = {
   },
 };
 
+// --- DISPUTES ---
+// Lives under /api/v1/ — a genuinely new resource, not an extension of an
+// existing one, per this project's API versioning decision. apiClient's
+// baseURL already ends in '/api/', so a relative 'v1/disputes/' path
+// resolves correctly without any special-casing.
+export const disputeAPI = {
+  submitDispute: async (category: string, description: string, bookingId?: number) => {
+    const payload: Record<string, any> = { category, description };
+    if (bookingId) payload.booking = bookingId;
+    const response = await apiClient.post('v1/disputes/', payload);
+    return response.data;
+  },
+
+  getMyDisputes: async (page: number = 1) => {
+    const response = await apiClient.get('v1/disputes/', { params: { page } });
+    return response.data;
+  },
+};
+
 // --- CHAT ---
 export const chatAPI = {
   getConversations: async () => {

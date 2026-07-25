@@ -276,6 +276,16 @@ export default function BookingDetailScreen() {
             )}
           </View>
         )}
+
+        {/* Report a problem — available regardless of status */}
+        <Pressable
+          onPress={() => router.push({ pathname: '/report-problem', params: { bookingId: String(id) } })}
+          style={styles.reportLink}
+          accessibilityRole="button"
+        >
+          <MaterialIcons name="flag" size={16} color={color.ink300} />
+          <Text style={styles.reportLinkText}>{t('Report a problem with this booking')}</Text>
+        </Pressable>
       </ScrollView>
 
       {/* Footer actions */}
@@ -472,6 +482,12 @@ const styles = StyleSheet.create({
 
   reviewDoneRow: { flexDirection: 'row', alignItems: 'center', gap: space.sm },
   reviewDoneText: { fontFamily: font.bold, fontSize: 13.5, color: color.ink600, flex: 1 },
+
+  reportLink: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6,
+    paddingVertical: space.lg,
+  },
+  reportLinkText: { fontFamily: font.bold, fontSize: 12.5, color: color.ink300 },
 
   modalBackdrop: {
     flex: 1,
