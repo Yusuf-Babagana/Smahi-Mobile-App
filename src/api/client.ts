@@ -550,6 +550,23 @@ export const coordinatorAPI = {
   },
 };
 
+// --- FAVORITES (saved artisans) ---
+// Lives under /api/v1/ — a genuinely new resource, same versioning
+// decision as disputeAPI/coordinatorAPI above.
+export const favoriteAPI = {
+  getFavorites: async (page: number = 1) => {
+    const response = await apiClient.get('v1/favorites/', { params: { page } });
+    return response.data;
+  },
+
+  // Adds if not already favorited, removes if it is — the caller only
+  // ever needs the artisan's id, never a separate favorite-object id.
+  toggle: async (artisanId: number | string) => {
+    const response = await apiClient.post('v1/favorites/toggle/', { artisan: artisanId });
+    return response.data;
+  },
+};
+
 // --- PAYMENTS (Paystack registration fee) ---
 export const paymentAPI = {
   // Pass the email explicitly when you have it (e.g. the register screen);

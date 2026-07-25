@@ -12,7 +12,7 @@ import { MaterialIcons } from '@expo/vector-icons';
 import { useTranslation } from 'react-i18next';
 import axios from 'axios'; // Import Axios directly for the location fetch
 
-import { artisanAPI, authAPI, categoryAPI } from '@/src/api/client';
+import { artisanAPI, authAPI, categoryAPI, favoriteAPI } from '@/src/api/client';
 import { useLocation } from '@/src/contexts/LocationContext';
 import { CategoryGroup } from '@/src/types';
 import {
@@ -445,6 +445,19 @@ export default function ClientHomeScreen() {
     setPage(1);
     setHasMore(true);
     fetchArtisans(1, true);
+  };
+
+  const handleToggleFavorite = async (artisanId: number | string) => {
+    // Optimistic — flip immediately, then reconcile with the server's
+    // actual result (handles the rare case of a stale double-tap).
+    setArtisans(prev => prev.map(a => (a.id === artisanId ? { ...a, is_favorited: !a.is_favorited } : a)));
+    try {
+      const result = await favoriteAPI.toggle(artisanId);
+      setArtisans(prev => prev.map(a => (a.id === artisanId ? { ...a, is_favorited: result.favorited } : a)));
+    } catch (error) {
+      console.log('Toggle favorite error:', error);
+      setArtisans(prev => prev.map(a => (a.id === artisanId ? { ...a, is_favorited: !a.is_favorited } : a)));
+    }
   };
 
   const openProfile = useCallback((id: number | string) => {
@@ -883,6 +896,8 @@ export default function ClientHomeScreen() {
                   artisan={item}
                   onPress={() => openProfile(item.id)}
                   onBook={() => openProfile(item.id)}
+                  onToggleFavorite={() => handleToggleFavorite(item.id)}
+                  isFavorited={!!item.is_favorited}
                 />
               )}
               contentContainerStyle={styles.listContent}

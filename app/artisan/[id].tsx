@@ -9,7 +9,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useTranslation } from 'react-i18next';
 
-import { artisanAPI } from '@/src/api/client';
+import { artisanAPI, favoriteAPI } from '@/src/api/client';
 import { useLocation } from '@/src/contexts/LocationContext';
 import { BACKEND_URL } from '@/src/constants/env';
 import { color, font, radius, shadow, space, type } from '@/constants/theme';
@@ -49,6 +49,8 @@ export default function ArtisanProfileRoom() {
   const [artisan, setArtisan] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [reviews, setReviews] = useState<any[]>([]);
+  const [favorited, setFavorited] = useState(false);
+  const [togglingFavorite, setTogglingFavorite] = useState(false);
 
   useEffect(() => {
     if (!id) return;
@@ -56,6 +58,7 @@ export default function ArtisanProfileRoom() {
       try {
         const data = await artisanAPI.getArtisanById(id as string);
         setArtisan(data);
+        setFavorited(!!data.is_favorited);
       } catch (error) {
         console.error("Failed to load profile.", error);
       } finally {
@@ -102,6 +105,22 @@ export default function ArtisanProfileRoom() {
 
   const handleBook = () => {
     router.push({ pathname: '/booking/[artisanId]', params: { artisanId: String(id) } });
+  };
+
+  const handleToggleFavorite = async () => {
+    if (togglingFavorite) return;
+    const previous = favorited;
+    setFavorited(!previous);
+    setTogglingFavorite(true);
+    try {
+      const result = await favoriteAPI.toggle(id as string);
+      setFavorited(result.favorited);
+    } catch (error) {
+      console.log('Toggle favorite error:', error);
+      setFavorited(previous);
+    } finally {
+      setTogglingFavorite(false);
+    }
   };
 
   if (loading) return (
@@ -174,9 +193,19 @@ export default function ArtisanProfileRoom() {
             <Pressable onPress={() => router.back()} style={styles.navBtn} accessibilityRole="button" accessibilityLabel={t('Back')}>
               <MaterialIcons name="arrow-back" size={22} color="#FFF" />
             </Pressable>
-            <Pressable onPress={handleShare} style={styles.navBtn} accessibilityRole="button" accessibilityLabel={t('Share')}>
-              <MaterialIcons name="share" size={20} color="#FFF" />
-            </Pressable>
+            <View style={{ flexDirection: 'row', gap: 8 }}>
+              <Pressable
+                onPress={handleToggleFavorite}
+                style={styles.navBtn}
+                accessibilityRole="button"
+                accessibilityLabel={favorited ? t('Remove from favorites') : t('Save to favorites')}
+              >
+                <MaterialIcons name={favorited ? 'favorite' : 'favorite-outline'} size={20} color={favorited ? '#FF6B6B' : '#FFF'} />
+              </Pressable>
+              <Pressable onPress={handleShare} style={styles.navBtn} accessibilityRole="button" accessibilityLabel={t('Share')}>
+                <MaterialIcons name="share" size={20} color="#FFF" />
+              </Pressable>
+            </View>
           </SafeAreaView>
         </View>
 

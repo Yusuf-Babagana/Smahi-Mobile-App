@@ -137,6 +137,7 @@ export default function RootLayout() {
                   {/* Profile settings screens */}
                   <Stack.Screen name="personal-info" options={{ headerShown: false }} />
                   <Stack.Screen name="notification-settings" options={{ headerShown: false }} />
+                  <Stack.Screen name="favorites" options={{ headerShown: false }} />
                   <Stack.Screen name="help-center" options={{ headerShown: false }} />
                   <Stack.Screen name="report-problem" options={{ headerShown: false, presentation: 'modal' }} />
 

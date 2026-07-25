@@ -12,6 +12,10 @@ interface ArtisanCardProps {
   onPress: () => void;
   /** Book pill press (separate target from the card). Hidden when omitted. */
   onBook?: () => void;
+  /** Heart icon press. Hidden entirely when omitted — callers that don't
+   * support favoriting (e.g. an agent's own state artisan list) see no change. */
+  onToggleFavorite?: () => void;
+  isFavorited?: boolean;
   formattedLocation?: string;
   style?: StyleProp<ViewStyle>;
 }
@@ -33,6 +37,8 @@ export const ArtisanCard = React.memo(function ArtisanCard({
   artisan,
   onPress,
   onBook,
+  onToggleFavorite,
+  isFavorited,
   formattedLocation,
   style,
 }: ArtisanCardProps) {
@@ -97,6 +103,21 @@ export const ArtisanCard = React.memo(function ArtisanCard({
             </Text>
           </View>
         </View>
+        {onToggleFavorite && (
+          <Pressable
+            onPress={onToggleFavorite}
+            hitSlop={8}
+            accessibilityRole="button"
+            accessibilityLabel={isFavorited ? t('Remove from favorites') : t('Save to favorites')}
+            style={styles.favoriteBtn}
+          >
+            <MaterialIcons
+              name={isFavorited ? 'favorite' : 'favorite-outline'}
+              size={20}
+              color={isFavorited ? color.danger600 : color.ink300}
+            />
+          </Pressable>
+        )}
       </View>
 
       <View style={styles.metaRow}>
@@ -153,6 +174,7 @@ const styles = StyleSheet.create({
   },
   cardPressed: { transform: [{ scale: 0.985 }] },
   topRow: { flexDirection: 'row', alignItems: 'center' },
+  favoriteBtn: { padding: 4, marginLeft: space.sm },
   info: { flex: 1, marginLeft: space.md },
   name: {
     fontFamily: font.extrabold,
