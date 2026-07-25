@@ -107,15 +107,26 @@ export default function BookingFlow() {
 
       // Photos upload one at a time, after the booking exists. Best-effort:
       // the booking itself already succeeded, so a photo failure shouldn't
-      // block the success screen -- just log it and move on.
+      // block the success screen -- but the user still needs to know if
+      // their photo(s) didn't actually make it, rather than assuming the
+      // artisan can see something that was never uploaded.
+      let failedPhotoCount = 0;
       if (photos.length > 0 && booking?.id) {
         for (const uri of photos) {
           try {
             await bookingAPI.uploadPhoto(booking.id, uri);
           } catch (photoError) {
             console.log('Photo upload failed:', photoError);
+            failedPhotoCount++;
           }
         }
+      }
+
+      if (failedPhotoCount > 0) {
+        Alert.alert(
+          t('Booking sent'),
+          t('Your booking request was sent, but {{count}} photo(s) could not be attached.', { count: failedPhotoCount })
+        );
       }
 
       setSubmitted(true);

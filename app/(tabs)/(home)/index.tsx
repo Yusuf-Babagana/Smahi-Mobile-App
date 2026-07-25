@@ -447,9 +447,17 @@ export default function ClientHomeScreen() {
     fetchArtisans(1, true);
   };
 
+  const togglingFavoriteIdsRef = useRef<Set<number | string>>(new Set());
+
   const handleToggleFavorite = async (artisanId: number | string) => {
+    // Guards against a rapid double-tap firing two overlapping requests,
+    // whose responses could land out of order and disagree with the
+    // actual server-side state.
+    if (togglingFavoriteIdsRef.current.has(artisanId)) return;
+    togglingFavoriteIdsRef.current.add(artisanId);
+
     // Optimistic — flip immediately, then reconcile with the server's
-    // actual result (handles the rare case of a stale double-tap).
+    // actual result.
     setArtisans(prev => prev.map(a => (a.id === artisanId ? { ...a, is_favorited: !a.is_favorited } : a)));
     try {
       const result = await favoriteAPI.toggle(artisanId);
@@ -457,6 +465,8 @@ export default function ClientHomeScreen() {
     } catch (error) {
       console.log('Toggle favorite error:', error);
       setArtisans(prev => prev.map(a => (a.id === artisanId ? { ...a, is_favorited: !a.is_favorited } : a)));
+    } finally {
+      togglingFavoriteIdsRef.current.delete(artisanId);
     }
   };
 

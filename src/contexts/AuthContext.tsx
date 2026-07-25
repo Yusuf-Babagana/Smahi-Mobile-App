@@ -63,10 +63,16 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     const logout = async () => {
         try {
-            // Best-effort — stop this device from receiving pushes for the
-            // account that's about to log out. Must run before the tokens
-            // below are cleared, since it's an authenticated call.
-            await unregisterCurrentDevice().catch(() => {});
+            // Best-effort, bounded to 2s — stop this device from receiving
+            // pushes for the account that's about to log out. Must run
+            // before the tokens below are cleared, since it's an
+            // authenticated call, but a slow/unreachable network (this app's
+            // actual operating environment) shouldn't freeze the logout
+            // button for up to apiClient's full 15s default timeout.
+            await Promise.race([
+                unregisterCurrentDevice().catch(() => {}),
+                new Promise((resolve) => setTimeout(resolve, 2000)),
+            ]);
 
             setUser(null);
             await AsyncStorage.removeItem('user');
