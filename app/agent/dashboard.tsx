@@ -223,6 +223,14 @@ export default function AgentDashboard() {
             tileFg={color.brand600}
             onPress={() => router.push('/agent/clients')}
           />
+          <ActionCard
+            title={t('My wallet')}
+            subtitle={t('Commission & payouts')}
+            icon="account-balance-wallet"
+            tileBg="#FDEAF0"
+            tileFg="#C22B63"
+            onPress={() => router.push('/wallet')}
+          />
         </View>
 
         {/* PERFORMANCE OVERVIEW */}

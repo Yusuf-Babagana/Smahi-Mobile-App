@@ -374,6 +374,27 @@ export const disputeAPI = {
   },
 };
 
+// --- WALLET ---
+// One shared wallet, whoever the logged-in user is (agent commission,
+// artisan earnings once Phase 6/7 wire those in). No role-specific
+// endpoint — the backend scopes everything to request.user.
+export const walletAPI = {
+  getWallet: async () => {
+    const response = await apiClient.get('v1/wallet/');
+    return response.data;
+  },
+
+  getTransactions: async (page: number = 1) => {
+    const response = await apiClient.get('v1/wallet/transactions/', { params: { page } });
+    return response.data;
+  },
+
+  requestWithdrawal: async (amount: number) => {
+    const response = await apiClient.post('v1/wallet/withdraw/', { amount });
+    return response.data;
+  },
+};
+
 // --- CHAT ---
 export const chatAPI = {
   getConversations: async () => {
