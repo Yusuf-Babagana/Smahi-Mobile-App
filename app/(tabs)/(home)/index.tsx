@@ -441,6 +441,12 @@ export default function ClientHomeScreen() {
     fetchArtisans(1, true);
   };
 
+  const handleRetry = () => {
+    setPage(1);
+    setHasMore(true);
+    fetchArtisans(1, true);
+  };
+
   const openProfile = useCallback((id: number | string) => {
     router.push(`/artisan/${id}`);
   }, [router]);
@@ -888,7 +894,16 @@ export default function ClientHomeScreen() {
                 <View style={styles.footer}>
                   {isFetchingMore && <ActivityIndicator color={color.brand600} />}
                   {!hasMore && artisans.length > 0 && <Text style={styles.footerMsg}>{t('No more artisans nearby')}</Text>}
-                  {artisans.length === 0 && !isLoading && (
+                  {artisans.length === 0 && !isLoading && error && (
+                    <EmptyState
+                      icon="cloud-off"
+                      title={t('Could not load artisans')}
+                      message={t('Check your connection and try again.')}
+                      actionLabel={t('Try again')}
+                      onAction={handleRetry}
+                    />
+                  )}
+                  {artisans.length === 0 && !isLoading && !error && (
                     <EmptyState
                       icon="search-off"
                       title={t('No artisans found in this area.')}
