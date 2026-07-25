@@ -332,6 +332,27 @@ export const artisanAPI = {
       throw error;
     }
   },
+
+  // Public reviews for this artisan (ArtisanProfile id). No auth required —
+  // uses the privacy-safe PublicReviewSerializer (first name only, never
+  // the reviewing client's email/phone).
+  getArtisanReviews: async (artisanId: string | number, page: number = 1) => {
+    try {
+      const response = await apiClient.get(`artisans/${artisanId}/reviews/`, { params: { page } });
+      return response.data;
+    } catch (error) {
+      console.error(`Error fetching reviews for artisan ${artisanId}:`, error);
+      throw error;
+    }
+  },
+};
+
+// --- REVIEWS ---
+export const reviewAPI = {
+  submitReview: async (bookingId: number, rating: number, comment: string) => {
+    const response = await apiClient.post('reviews/', { booking: bookingId, rating, comment });
+    return response.data;
+  },
 };
 
 // --- CHAT ---

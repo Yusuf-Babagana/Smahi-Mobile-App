@@ -1,7 +1,7 @@
 import React, { useCallback, useState } from 'react';
 import {
-  ActivityIndicator, Alert, Linking, Pressable, ScrollView,
-  StyleSheet, Text, View,
+  ActivityIndicator, Alert, Linking, Modal, Pressable, ScrollView,
+  StyleSheet, Text, TextInput, View,
 } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -10,9 +10,10 @@ import { MaterialIcons } from '@expo/vector-icons';
 import { useFocusEffect } from 'expo-router';
 import { useTranslation } from 'react-i18next';
 
-import { bookingAPI } from '@/src/api/client';
+import { bookingAPI, reviewAPI } from '@/src/api/client';
+import { useAuth } from '@/src/contexts/AuthContext';
 import { color, font, radius, shadow, space, type } from '@/constants/theme';
-import { Avatar, Badge, BookingTimeline } from '@/src/components/ui';
+import { Avatar, Badge, BookingTimeline, Button } from '@/src/components/ui';
 
 function timelineStep(status: string) {
   switch (status) {
@@ -36,9 +37,15 @@ export default function BookingDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
   const { t } = useTranslation();
+  const { user } = useAuth();
 
   const [booking, setBooking] = useState<any>(null);
   const [loading, setLoading] = useState(true);
+
+  const [reviewModalVisible, setReviewModalVisible] = useState(false);
+  const [reviewRating, setReviewRating] = useState(0);
+  const [reviewComment, setReviewComment] = useState('');
+  const [submittingReview, setSubmittingReview] = useState(false);
 
   const load = useCallback(async () => {
     if (!id) return;
@@ -92,6 +99,33 @@ export default function BookingDetailScreen() {
   const callArtisan = () => {
     const phone = booking?.artisan_details?.phone_number || booking?.artisan?.phone_number;
     if (phone) Linking.openURL(`tel:${phone}`);
+  };
+
+  const submitReview = async () => {
+    if (reviewRating < 1) {
+      Alert.alert(t('Choose a rating'), t('Tap a star to rate this job before submitting.'));
+      return;
+    }
+    setSubmittingReview(true);
+    try {
+      await reviewAPI.submitReview(Number(id), reviewRating, reviewComment.trim());
+      setReviewModalVisible(false);
+      setReviewRating(0);
+      setReviewComment('');
+      await load();
+      Alert.alert(t('Thank you!'), t('Your review has been submitted.'));
+    } catch (err: any) {
+      // ReviewViewSet raises a bare-string ValidationError, which DRF
+      // serializes as a plain JSON array (["message"]), not {detail: ...}.
+      const data = err?.response?.data;
+      const message = (Array.isArray(data) && data[0])
+        || data?.non_field_errors?.[0]
+        || data?.detail
+        || t('Failed to submit your review. Please try again.');
+      Alert.alert(t('Error'), message);
+    } finally {
+      setSubmittingReview(false);
+    }
   };
 
   const viewArtisanProfile = () => {
@@ -218,6 +252,30 @@ export default function BookingDetailScreen() {
             <Text style={styles.reasonText}>{booking.cancellation_reason}</Text>
           </View>
         )}
+
+        {/* Rate this job — only the client, only once, only after completion */}
+        {booking.status === 'completed' && user?.role === 'client' && (
+          <View style={styles.card}>
+            {booking.has_review ? (
+              <View style={styles.reviewDoneRow}>
+                <MaterialIcons name="check-circle" size={20} color={color.accent600} />
+                <Text style={styles.reviewDoneText}>{t("You've already reviewed this job.")}</Text>
+              </View>
+            ) : (
+              <>
+                <Text style={styles.sectionTitle}>{t('How did it go?')}</Text>
+                <Text style={styles.reasonText}>{t('Let other clients know what to expect from this artisan.')}</Text>
+                <Button
+                  title={t('Rate this job')}
+                  variant="secondary"
+                  icon="star-outline"
+                  onPress={() => setReviewModalVisible(true)}
+                  style={{ marginTop: space.md }}
+                />
+              </>
+            )}
+          </View>
+        )}
       </ScrollView>
 
       {/* Footer actions */}
@@ -236,6 +294,65 @@ export default function BookingDetailScreen() {
           </Pressable>
         </SafeAreaView>
       )}
+
+      {/* Rate this job modal */}
+      <Modal
+        visible={reviewModalVisible}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setReviewModalVisible(false)}
+      >
+        <View style={styles.modalBackdrop}>
+          <View style={styles.modalCard}>
+            <Text style={styles.sectionTitle}>{t('Rate this job')}</Text>
+
+            <View style={styles.starsRow}>
+              {[1, 2, 3, 4, 5].map((star) => (
+                <Pressable
+                  key={star}
+                  onPress={() => setReviewRating(star)}
+                  accessibilityRole="button"
+                  accessibilityLabel={t('{{star}} stars', { star })}
+                  hitSlop={6}
+                >
+                  <MaterialIcons
+                    name={star <= reviewRating ? 'star' : 'star-outline'}
+                    size={36}
+                    color={star <= reviewRating ? '#F5A623' : color.ink300}
+                  />
+                </Pressable>
+              ))}
+            </View>
+
+            <TextInput
+              style={styles.reviewInput}
+              placeholder={t('Optional: share a few words about the job (e.g. quality, punctuality)')}
+              placeholderTextColor={color.ink300}
+              value={reviewComment}
+              onChangeText={setReviewComment}
+              multiline
+              numberOfLines={4}
+              textAlignVertical="top"
+            />
+
+            <View style={styles.modalActions}>
+              <Button
+                title={t('Cancel')}
+                variant="secondary"
+                onPress={() => setReviewModalVisible(false)}
+                disabled={submittingReview}
+                style={{ flex: 1 }}
+              />
+              <Button
+                title={t('Submit')}
+                onPress={submitReview}
+                loading={submittingReview}
+                style={{ flex: 1 }}
+              />
+            </View>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -352,4 +469,39 @@ const styles = StyleSheet.create({
 
   notFoundText: { fontFamily: font.bold, fontSize: 15, color: color.ink400 },
   backLink: { marginTop: space.lg, fontFamily: font.extrabold, color: color.brand600 },
+
+  reviewDoneRow: { flexDirection: 'row', alignItems: 'center', gap: space.sm },
+  reviewDoneText: { fontFamily: font.bold, fontSize: 13.5, color: color.ink600, flex: 1 },
+
+  modalBackdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(15,23,42,0.5)',
+    justifyContent: 'flex-end',
+  },
+  modalCard: {
+    backgroundColor: color.surface,
+    borderTopLeftRadius: radius.xxl,
+    borderTopRightRadius: radius.xxl,
+    padding: space.xl,
+    paddingBottom: space.xxl,
+  },
+  starsRow: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    gap: space.md,
+    marginVertical: space.lg,
+  },
+  reviewInput: {
+    backgroundColor: color.surfaceSunken,
+    borderRadius: radius.lg,
+    borderWidth: 1,
+    borderColor: color.border,
+    padding: space.md,
+    minHeight: 90,
+    fontFamily: font.medium,
+    fontSize: 14,
+    color: color.ink900,
+    marginBottom: space.lg,
+  },
+  modalActions: { flexDirection: 'row', gap: space.sm },
 });

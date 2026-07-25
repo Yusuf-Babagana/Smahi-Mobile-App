@@ -48,6 +48,7 @@ export default function ArtisanProfileRoom() {
 
   const [artisan, setArtisan] = useState<any>(null);
   const [loading, setLoading] = useState(true);
+  const [reviews, setReviews] = useState<any[]>([]);
 
   useEffect(() => {
     if (!id) return;
@@ -62,6 +63,16 @@ export default function ArtisanProfileRoom() {
       }
     };
     fetchProfile();
+
+    const fetchReviews = async () => {
+      try {
+        const data = await artisanAPI.getArtisanReviews(id as string);
+        setReviews(data.results || data || []);
+      } catch (error) {
+        console.log("Failed to load reviews.", error);
+      }
+    };
+    fetchReviews();
   }, [id]);
 
   const handleCall = () => {
@@ -146,7 +157,6 @@ export default function ArtisanProfileRoom() {
     .map(resolveMediaUrl)
     .filter(Boolean) as string[];
 
-  const reviews: any[] = Array.isArray(artisan.reviews) ? artisan.reviews : [];
   const priceFrom = artisan.call_out_fee ?? artisan.price_from ?? artisan.hourly_rate ?? null;
 
   return (
@@ -192,10 +202,10 @@ export default function ArtisanProfileRoom() {
             <View style={styles.stat}>
               <View style={styles.statValueRow}>
                 <MaterialIcons name="star" size={14} color={color.star} />
-                <Text style={styles.statVal}>{artisan.rating || '5.0'}</Text>
+                <Text style={styles.statVal}>{artisan.total_reviews ? artisan.rating : t('New')}</Text>
               </View>
               <Text style={styles.statLabel}>
-                {(artisan.review_count || reviews.length || 0)} {t('reviews')}
+                {(artisan.total_reviews || reviews.length || 0)} {t('reviews')}
               </Text>
             </View>
             <View style={styles.statDivider} />
@@ -262,7 +272,7 @@ export default function ArtisanProfileRoom() {
             <View style={styles.card}>
               <Text style={styles.sectionTitle}>{t('Reviews')}</Text>
               {reviews.map((review, i) => {
-                const reviewer = review.client_name || review.user_name || review.client?.first_name || t('Client');
+                const reviewer = review.client_first_name || review.client_name || review.user_name || review.client?.first_name || t('Client');
                 return (
                   <View key={review.id ?? i} style={[styles.reviewRow, i > 0 && styles.reviewDivider]}>
                     <Avatar name={String(reviewer)} size={36} />
