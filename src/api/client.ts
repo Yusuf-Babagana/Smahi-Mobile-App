@@ -535,6 +535,21 @@ export const agentAPI = {
   },
 };
 
+// --- COORDINATOR (oversight of the agents in their own state) ---
+// Lives under /api/v1/ — a genuinely new resource, same versioning
+// decision as disputeAPI above.
+export const coordinatorAPI = {
+  getAgents: async (page: number = 1) => {
+    const response = await apiClient.get('v1/coordinator/agents/', { params: { page } });
+    return response.data;
+  },
+
+  setAgentStatus: async (agentId: number, status: 'active' | 'suspended') => {
+    const response = await apiClient.post(`v1/coordinator/agents/${agentId}/status/`, { status });
+    return response.data;
+  },
+};
+
 // --- PAYMENTS (Paystack registration fee) ---
 export const paymentAPI = {
   // Pass the email explicitly when you have it (e.g. the register screen);

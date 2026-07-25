@@ -223,6 +223,16 @@ export default function AgentDashboard() {
             tileFg={color.brand600}
             onPress={() => router.push('/agent/clients')}
           />
+          {user?.role === 'state_coordinator' && (
+            <ActionCard
+              title={t('My agents')}
+              subtitle={t('Oversee & manage')}
+              icon="supervisor-account"
+              tileBg={color.accent100}
+              tileFg={color.accent600}
+              onPress={() => router.push('/coordinator/agents')}
+            />
+          )}
         </View>
 
         {/* PERFORMANCE OVERVIEW */}
