@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import {
     View, Text, StyleSheet, TextInput, TouchableOpacity, ActivityIndicator,
-    Alert, KeyboardAvoidingView, Platform, ScrollView, Pressable,
+    KeyboardAvoidingView, Platform, ScrollView, Pressable,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -13,7 +13,7 @@ import { authAPI } from '@/src/api/client';
 import { storage } from '@/src/utils/storage';
 import { useAuth } from '@/src/contexts/AuthContext';
 import { color, font, radius, space, type } from '@/constants/theme';
-import { Button } from '@/src/components/ui';
+import { Button, useToast } from '@/src/components/ui';
 
 const CODE_LENGTH = 6;
 const RESEND_COOLDOWN = 60; // seconds — matches the backend's 429 window
@@ -22,6 +22,7 @@ export default function VerifyEmailScreen() {
     const router = useRouter();
     const { t } = useTranslation();
     const { updateUser } = useAuth();
+    const { show: showToast } = useToast();
 
     const [email, setEmail] = useState('');
     const [code, setCode] = useState('');
@@ -47,9 +48,8 @@ export default function VerifyEmailScreen() {
         const partial = freshUser || { email_verified: true };
         await storage.updateCurrentUser(partial);
         updateUser(partial);
-        Alert.alert('✅ Email Verified', 'Your email address has been confirmed.', [
-            { text: 'Done', onPress: () => router.back() }
-        ]);
+        showToast('Your email address has been confirmed.', { type: 'success' });
+        router.back();
     };
 
     const handleConfirm = async () => {

@@ -1,7 +1,7 @@
 import React, { useState, useRef, useCallback } from 'react';
 import {
   View, Text, StyleSheet, ActivityIndicator, TouchableOpacity,
-  Alert, BackHandler,
+  BackHandler,
 } from 'react-native';
 import { WebView } from 'react-native-webview';
 import { useRouter, useLocalSearchParams } from 'expo-router';
@@ -14,10 +14,13 @@ import { useFocusEffect } from '@react-navigation/native';
 import { authAPI, paymentAPI } from '@/src/api/client';
 import { useAuth } from '@/src/contexts/AuthContext';
 import { color, font, radius, shadow, space } from '@/constants/theme';
+import { useToast, useConfirm } from '@/src/components/ui';
 
 export default function PaymentScreen() {
   const router = useRouter();
   const { t } = useTranslation();
+  const { show: showToast } = useToast();
+  const confirm = useConfirm();
   const { authorizationUrl, reference } = useLocalSearchParams<{
     authorizationUrl: string;
     reference: string;
@@ -55,21 +58,16 @@ export default function PaymentScreen() {
           if (freshUser) await setAuthUser(freshUser);
         } catch { /* dashboard still self-fetches as a fallback */ }
 
-        Alert.alert(
-          'Payment Successful',
-          'Your account is now active! Welcome to S-MAHII.',
-          [{ text: 'Continue', onPress: () => router.replace('/artisan/(tabs)/dashboard') }]
-        );
+        showToast('Your account is now active! Welcome to S-MAHII.', { type: 'success' });
+        router.replace('/artisan/(tabs)/dashboard');
       } else {
-        Alert.alert('Payment Failed', 'Payment was not successful. Please try again.', [
-          { text: 'Retry', onPress: () => router.replace('/login') },
-        ]);
+        showToast('Payment was not successful. Please try again.', { type: 'error' });
+        router.replace('/login');
       }
     } catch (err: any) {
       const msg = err.response?.data?.error || 'Verification failed. Please contact support.';
-      Alert.alert('Error', msg, [
-        { text: 'Go to Login', onPress: () => router.replace('/login') },
-      ]);
+      showToast(msg, { type: 'error' });
+      router.replace('/login');
     } finally {
       setVerifying(false);
     }
@@ -101,15 +99,15 @@ export default function PaymentScreen() {
     webViewRef.current?.reload();
   };
 
-  const handleCancel = () => {
-    Alert.alert(
-      'Cancel Payment',
-      'Are you sure you want to cancel? You can complete payment later from your profile.',
-      [
-        { text: 'Continue Payment', style: 'cancel' },
-        { text: 'Cancel', onPress: () => router.replace('/login'), style: 'destructive' },
-      ]
-    );
+  const handleCancel = async () => {
+    const ok = await confirm({
+      title: 'Cancel Payment',
+      message: 'Are you sure you want to cancel? You can complete payment later from your profile.',
+      confirmLabel: 'Cancel',
+      cancelLabel: 'Continue Payment',
+      destructive: true,
+    });
+    if (ok) router.replace('/login');
   };
 
   if (!authorizationUrl) {

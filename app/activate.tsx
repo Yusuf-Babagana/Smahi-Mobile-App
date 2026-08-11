@@ -4,7 +4,6 @@ import {
     Text,
     TouchableOpacity,
     StyleSheet,
-    Alert,
     KeyboardAvoidingView,
     Platform,
 } from 'react-native';
@@ -21,7 +20,7 @@ import { useAuth } from '@/src/contexts/AuthContext';
 import { getHomeRouteForRole } from '@/src/constants/roleRoutes';
 import { API_URL as BASE_URL } from '@/src/constants/env';
 import { color, font, space, type } from '@/constants/theme';
-import { Button, Input } from '@/src/components/ui';
+import { Button, Input, useToast } from '@/src/components/ui';
 
 export default function ActivationScreen() {
     const router = useRouter();
@@ -29,10 +28,11 @@ export default function ActivationScreen() {
     const { logout } = useAuth();
     const [serial, setSerial] = useState('');
     const [loading, setLoading] = useState(false);
+    const { show: showToast } = useToast();
 
     const handleActivation = async () => {
         if (!serial.trim()) {
-            Alert.alert("Error", "Please enter your serial number");
+            showToast("Please enter your serial number", { type: 'error' });
             return;
         }
 
@@ -41,7 +41,7 @@ export default function ActivationScreen() {
             // 1. Get the current user's token
             const token = await SecureStore.getItemAsync('accessToken');
             if (!token) {
-                Alert.alert("Session Expired", "Please login again.");
+                showToast("Session expired — please login again.", { type: 'error' });
                 router.replace('/login');
                 return;
             }
@@ -58,17 +58,13 @@ export default function ActivationScreen() {
             const updatedUser = await storage.updateCurrentUser(
                 response.data?.user || { account_status: 'active' }
             );
-            Alert.alert("🎉 Success", "Account activated successfully!", [
-                {
-                    text: "Go to Dashboard",
-                    onPress: () => router.replace(getHomeRouteForRole(updatedUser?.role))
-                }
-            ]);
+            showToast("Account activated successfully!", { type: 'success' });
+            router.replace(getHomeRouteForRole(updatedUser?.role));
 
         } catch (error: any) {
             console.log("Activation Error:", error.response?.data);
             const msg = error.response?.data?.error || "Invalid Serial Number. Please contact your administrator.";
-            Alert.alert("Activation Failed", msg);
+            showToast(msg, { type: 'error' });
         } finally {
             setLoading(false);
         }
@@ -126,7 +122,7 @@ export default function ActivationScreen() {
                     </TouchableOpacity>
 
                     <TouchableOpacity
-                        onPress={() => Alert.alert(t("Support"), t("Contact your Admin for your code."))}
+                        onPress={() => showToast(t("Contact your Admin for your code."), { type: 'info' })}
                         accessibilityRole="button"
                     >
                         <Text style={styles.helpText}>{t('Need help?')}</Text>

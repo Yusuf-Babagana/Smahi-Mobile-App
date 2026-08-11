@@ -1,5 +1,5 @@
 import React, { useCallback, useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, RefreshControl, Pressable, Alert } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, RefreshControl, Pressable } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect } from 'expo-router';
 import { MaterialIcons } from '@expo/vector-icons';
@@ -10,7 +10,7 @@ import Animated, { FadeInDown, FadeInUp } from 'react-native-reanimated';
 import { adminAPI } from '@/src/api/client';
 import { useAuth } from '@/src/contexts/AuthContext';
 import { color, font, radius, shadow, space } from '@/constants/theme';
-import { StatTile, EmptyState, SkeletonCard } from '@/src/components/ui';
+import { StatTile, EmptyState, SkeletonCard, useConfirm } from '@/src/components/ui';
 
 // This screen is read-only monitoring, on purpose — every privileged
 // action (suspend a user, approve a verification, moderate a review,
@@ -21,6 +21,7 @@ import { StatTile, EmptyState, SkeletonCard } from '@/src/components/ui';
 export default function AdminDashboard() {
   const { t } = useTranslation();
   const { user, logout } = useAuth();
+  const confirm = useConfirm();
 
   const [stats, setStats] = useState<any>(null);
   const [loading, setLoading] = useState(true);
@@ -49,15 +50,15 @@ export default function AdminDashboard() {
     load();
   };
 
-  const handleLogout = () => {
-    Alert.alert(
-      t('Log Out'),
-      t('Are you sure you want to exit?'),
-      [
-        { text: t('Cancel'), style: 'cancel' },
-        { text: t('Log Out'), style: 'destructive', onPress: () => logout() },
-      ]
-    );
+  const handleLogout = async () => {
+    const ok = await confirm({
+      title: t('Log Out'),
+      message: t('Are you sure you want to exit?'),
+      confirmLabel: t('Log Out'),
+      cancelLabel: t('Cancel'),
+      destructive: true,
+    });
+    if (ok) logout();
   };
 
   const displayName = `${user?.first_name || t('Admin')} ${user?.last_name || ''}`.trim();

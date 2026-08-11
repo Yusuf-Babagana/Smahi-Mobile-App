@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import {
-    View, Text, StyleSheet, ScrollView, Image, TouchableOpacity, ActivityIndicator, Alert
+    View, Text, StyleSheet, ScrollView, Image, TouchableOpacity, ActivityIndicator
 } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -9,6 +9,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { artisanAPI } from '@/src/api/client';
 import { color, font, radius, shadow, space, type } from '@/constants/theme';
 import { useTranslation } from 'react-i18next';
+import { useToast } from '@/src/components/ui';
 
 import { CLOUDINARY_CLOUD_NAME as CLOUD_NAME } from '@/src/constants/env';
 
@@ -16,6 +17,7 @@ export default function PublicArtisanProfile() {
     const { i18n } = useTranslation();
     const { id } = useLocalSearchParams();
     const router = useRouter();
+    const { show: showToast } = useToast();
 
     const [artisan, setArtisan] = useState<any>(null);
     const [loading, setLoading] = useState(true);
@@ -32,7 +34,7 @@ export default function PublicArtisanProfile() {
             setArtisan(data);
         } catch (error) {
             console.log("Error loading artisan", error);
-            Alert.alert("Error", "Could not load artisan details.");
+            showToast("Could not load artisan details.", { type: 'error' });
         } finally {
             setLoading(false);
         }

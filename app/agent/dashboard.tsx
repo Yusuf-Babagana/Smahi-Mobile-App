@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import {
   View, Text, StyleSheet, ScrollView, TouchableOpacity, RefreshControl,
-  Alert, Pressable,
+  Pressable,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
@@ -15,11 +15,12 @@ import { agentAPI } from '@/src/api/client';
 import { useAuth } from '@/src/contexts/AuthContext';
 import { EmailVerificationBanner } from '@/src/components/EmailVerificationBanner';
 import { color, font, radius, shadow, space, type } from '@/constants/theme';
-import { Avatar } from '@/src/components/ui';
+import { Avatar, useConfirm } from '@/src/components/ui';
 
 export default function AgentDashboard() {
   const router = useRouter();
   const { t } = useTranslation();
+  const confirm = useConfirm();
 
   const { user, logout } = useAuth();
 
@@ -45,27 +46,23 @@ export default function AgentDashboard() {
   };
 
   const handleLogout = async () => {
-    Alert.alert(
-      t("Log Out"),
-      t("Are you sure you want to exit?"),
-      [
-        { text: t("Cancel"), style: "cancel" },
-        {
-          text: t("Log Out"),
-          style: 'destructive',
-          onPress: async () => {
-            if (logout) {
-              await logout();
-            } else {
-              await SecureStore.deleteItemAsync('accessToken');
-              await SecureStore.deleteItemAsync('refreshToken');
-              await AsyncStorage.removeItem('user');
-            }
-            router.replace('/login');
-          }
-        }
-      ]
-    );
+    const ok = await confirm({
+      title: t("Log Out"),
+      message: t("Are you sure you want to exit?"),
+      confirmLabel: t("Log Out"),
+      cancelLabel: t("Cancel"),
+      destructive: true,
+    });
+    if (ok) {
+      if (logout) {
+        await logout();
+      } else {
+        await SecureStore.deleteItemAsync('accessToken');
+        await SecureStore.deleteItemAsync('refreshToken');
+        await AsyncStorage.removeItem('user');
+      }
+      router.replace('/login');
+    }
   };
 
   useEffect(() => {

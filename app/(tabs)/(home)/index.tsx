@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import {
-  View, Text, StyleSheet, FlatList, TextInput, Alert,
+  View, Text, StyleSheet, FlatList, TextInput,
   TouchableOpacity, ActivityIndicator, ScrollView, RefreshControl, Pressable
 } from 'react-native';
 import MapView, { Marker, PROVIDER_GOOGLE, Callout } from 'react-native-maps';
@@ -22,7 +22,7 @@ import {
 import { BACKEND_URL, CLOUDINARY_CLOUD_NAME as CLOUD_NAME } from '@/src/constants/env';
 import { color, font, radius, shadow, space, type } from '@/constants/theme';
 import {
-  ArtisanCard, Avatar, Chip, EmptyState, SegmentedControl, SkeletonCard,
+  ArtisanCard, Avatar, Chip, EmptyState, SegmentedControl, SkeletonCard, useToast,
 } from '@/src/components/ui';
 import { recordSearch } from '@/src/utils/recommendations';
 
@@ -61,6 +61,7 @@ function filterByDistance(artisans: any[], clientLat: number, clientLon: number,
 export default function ClientHomeScreen() {
   const router = useRouter();
   const { t, i18n } = useTranslation();
+  const { show: showToast } = useToast();
   const { location, isLoading: locationLoading, errorMsg: locationError, requestLocationPermission } = useLocation();
   const aiParams = useLocalSearchParams<{ aiSearch?: string; aiCategoryId?: string; aiCategoryName?: string }>();
 
@@ -199,14 +200,14 @@ export default function ClientHomeScreen() {
         if (transcript === '___NO_API_KEY___' || transcript === '___QUOTA_ERROR___') {
           message = t('Voice search is temporarily unavailable. Please try again later or type your search.');
         }
-        Alert.alert(t('No Result'), message);
+        showToast(message, { type: 'info' });
       }
       return;
     }
 
     const granted = await requestSpeechPermissions();
     if (!granted) {
-      Alert.alert('Permission Required', 'Microphone permission is needed for voice search.');
+      showToast('Microphone permission is needed for voice search.', { type: 'error' });
       return;
     }
 
@@ -216,7 +217,7 @@ export default function ClientHomeScreen() {
     } catch (err) {
       console.error('[HomeScreen] Failed to start:', err);
       setIsVoiceSearching(false);
-      Alert.alert('Error', 'Failed to start voice recording. Please try again.');
+      showToast('Failed to start voice recording. Please try again.', { type: 'error' });
     }
   };
 

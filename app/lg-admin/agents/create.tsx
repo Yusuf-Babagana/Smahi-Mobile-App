@@ -1,19 +1,28 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, TextInput, ScrollView, Alert, Pressable } from 'react-native';
+import { View, Text, StyleSheet, TextInput, ScrollView, Pressable } from 'react-native';
 import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useTranslation } from 'react-i18next';
 
-import { adminAPI } from '@/src/api/client';
+import apiClient from '@/src/api/config';
 import { useAuth } from '@/src/contexts/AuthContext';
 import { color, font, radius, space } from '@/constants/theme';
-import { Button, Input } from '@/src/components/ui';
+import { Button, Input, useToast } from '@/src/components/ui';
+
+// Unique per agent so the same credential isn't shared account-to-account.
+function generateTempPassword(length = 12) {
+    const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789';
+    let pw = '';
+    for (let i = 0; i < length; i++) pw += chars[Math.floor(Math.random() * chars.length)];
+    return pw;
+}
 
 export default function CreateAgentScreen() {
     const router = useRouter();
     const { t } = useTranslation();
     const { user } = useAuth(); // LG Admin's user object
+    const { show: showToast } = useToast();
     const [loading, setLoading] = useState(false);
 
     const [formData, setFormData] = useState({
@@ -21,23 +30,29 @@ export default function CreateAgentScreen() {
         last_name: '',
         email: '',
         phone: '',
-        password: 'AgentPassword123', // Default
+        password: generateTempPassword(),
     });
 
     const handleCreate = async () => {
         if (!formData.first_name || !formData.last_name || !formData.email || !formData.phone) {
-            Alert.alert("Error", "Please fill all fields.");
+            showToast("Please fill all fields.", { type: 'warn' });
             return;
         }
 
         setLoading(true);
         try {
-            // Auto-assign LGA/State from the logged-in LG Admin
+            // No dedicated "create agent" endpoint exists — this reuses the
+            // same auth/register/ endpoint the public registration screen
+            // uses (it accepts an explicit role), via the raw client so the
+            // new agent's tokens never get written over the LG Admin's own
+            // session in SecureStore.
             const payload = {
-                name: `${formData.first_name} ${formData.last_name}`,
+                first_name: formData.first_name,
+                last_name: formData.last_name,
                 email: formData.email,
                 password: formData.password,
-                phone: formData.phone,
+                password_confirm: formData.password,
+                phone_number: formData.phone,
                 role: 'agent', // Force role
 
                 // 🔒 LOCK LOCATION to Admin's Location
@@ -46,15 +61,13 @@ export default function CreateAgentScreen() {
                 lga: user?.lga
             };
 
-            // @ts-ignore
-            await adminAPI.createAgent(payload);
+            await apiClient.post('auth/register/', payload);
 
-            Alert.alert("Success", "Agent created successfully!", [
-                { text: "OK", onPress: () => router.back() }
-            ]);
+            showToast("Agent created successfully!", { type: 'success' });
+            router.back();
         } catch (error: any) {
             const msg = error.response?.data ? JSON.stringify(error.response.data) : "Failed to create agent.";
-            Alert.alert("Error", msg);
+            showToast(msg, { type: 'error' });
         } finally {
             setLoading(false);
         }

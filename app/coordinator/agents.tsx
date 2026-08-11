@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useCallback } from 'react';
-import { View, Text, StyleSheet, FlatList, ActivityIndicator, Pressable, Alert } from 'react-native';
+import { View, Text, StyleSheet, FlatList, ActivityIndicator, Pressable } from 'react-native';
 import { useRouter, Stack } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
@@ -8,12 +8,14 @@ import { useTranslation } from 'react-i18next';
 import { coordinatorAPI } from '@/src/api/client';
 import { useAuth } from '@/src/contexts/AuthContext';
 import { color, font, radius, space } from '@/constants/theme';
-import { Avatar, Badge, EmptyState, SkeletonCard } from '@/src/components/ui';
+import { Avatar, Badge, EmptyState, SkeletonCard, useToast, useConfirm } from '@/src/components/ui';
 
 export default function CoordinatorAgentList() {
     const router = useRouter();
     const { user } = useAuth();
     const { t } = useTranslation();
+    const { show: showToast } = useToast();
+    const confirm = useConfirm();
 
     const [agents, setAgents] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
@@ -49,35 +51,30 @@ export default function CoordinatorAgentList() {
         if (!loadingMore && hasMore) fetchAgents(page + 1);
     };
 
-    const toggleStatus = (agent: any) => {
+    const toggleStatus = async (agent: any) => {
         const nextStatus = agent.account_status === 'suspended' ? 'active' : 'suspended';
         const verb = nextStatus === 'suspended' ? t('Suspend') : t('Reactivate');
 
-        Alert.alert(
-            `${verb} ${agent.first_name}?`,
-            nextStatus === 'suspended'
+        const ok = await confirm({
+            title: `${verb} ${agent.first_name}?`,
+            message: nextStatus === 'suspended'
                 ? t('They will not be able to log in until reactivated.')
                 : t('They will regain access immediately.'),
-            [
-                { text: t('Cancel'), style: 'cancel' },
-                {
-                    text: verb,
-                    style: nextStatus === 'suspended' ? 'destructive' : 'default',
-                    onPress: async () => {
-                        setUpdatingId(agent.id);
-                        try {
-                            await coordinatorAPI.setAgentStatus(agent.id, nextStatus);
-                            setAgents(prev => prev.map(a => (a.id === agent.id ? { ...a, account_status: nextStatus } : a)));
-                        } catch (error) {
-                            console.log('Error updating agent status:', error);
-                            Alert.alert(t('Something went wrong'), t('Could not update this agent. Please try again.'));
-                        } finally {
-                            setUpdatingId(null);
-                        }
-                    },
-                },
-            ]
-        );
+            confirmLabel: verb,
+            destructive: nextStatus === 'suspended',
+        });
+        if (!ok) return;
+
+        setUpdatingId(agent.id);
+        try {
+            await coordinatorAPI.setAgentStatus(agent.id, nextStatus);
+            setAgents(prev => prev.map(a => (a.id === agent.id ? { ...a, account_status: nextStatus } : a)));
+        } catch (error) {
+            console.log('Error updating agent status:', error);
+            showToast(t('Could not update this agent. Please try again.'), { type: 'error' });
+        } finally {
+            setUpdatingId(null);
+        }
     };
 
     const renderItem = ({ item }: any) => {

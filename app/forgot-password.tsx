@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import {
     View, Text, StyleSheet, TextInput, TouchableOpacity, ActivityIndicator,
-    Alert, KeyboardAvoidingView, Platform, ScrollView, Pressable,
+    KeyboardAvoidingView, Platform, ScrollView, Pressable,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -11,7 +11,7 @@ import { useTranslation } from 'react-i18next';
 
 import { authAPI } from '@/src/api/client';
 import { color, font, radius, space, type } from '@/constants/theme';
-import { Button, Input } from '@/src/components/ui';
+import { Button, Input, useToast } from '@/src/components/ui';
 
 const CODE_LENGTH = 6;
 const RESEND_COOLDOWN = 60; // seconds
@@ -19,6 +19,7 @@ const RESEND_COOLDOWN = 60; // seconds
 export default function ForgotPasswordScreen() {
     const router = useRouter();
     const { t } = useTranslation();
+    const { show: showToast } = useToast();
 
     // Step 1 = enter email, Step 2 = enter code + new password
     const [step, setStep] = useState<1 | 2>(1);
@@ -99,11 +100,8 @@ export default function ForgotPasswordScreen() {
         setInfo(null);
         try {
             await authAPI.confirmPasswordReset(cleanEmail, code, newPassword);
-            Alert.alert(
-                '✅ Password Reset',
-                'Your password has been changed. Please sign in with your new password.',
-                [{ text: 'Sign In', onPress: () => router.back() }]
-            );
+            showToast('Password reset — please sign in with your new password.', { type: 'success' });
+            router.back();
         } catch (e: any) {
             const status = e.response?.status;
             const msg = e.response?.data?.error;

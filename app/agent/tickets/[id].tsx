@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, ActivityIndicator, Image, Alert, Pressable } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, ActivityIndicator, Image, Pressable } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
@@ -7,7 +7,7 @@ import { useTranslation } from 'react-i18next';
 
 import { ticketAPI } from '@/src/api/client';
 import { color, font, radius, space, type } from '@/constants/theme';
-import { Avatar, Badge } from '@/src/components/ui';
+import { Avatar, Badge, useToast } from '@/src/components/ui';
 import type { BadgeStatus } from '@/src/components/ui';
 
 function ticketBadge(status: string): BadgeStatus {
@@ -23,6 +23,7 @@ export default function TicketDetailScreen() {
     const { id } = useLocalSearchParams(); // This gets the ID from the URL
     const router = useRouter();
     const { t } = useTranslation();
+    const { show: showToast } = useToast();
     const [ticket, setTicket] = useState<any>(null);
     const [loading, setLoading] = useState(true);
 
@@ -39,7 +40,7 @@ export default function TicketDetailScreen() {
             setTicket(data);
         } catch (error) {
             console.log('Error fetching ticket:', error);
-            Alert.alert("Error", "Could not load ticket details.");
+            showToast("Could not load ticket details.", { type: 'error' });
         } finally {
             setLoading(false);
         }

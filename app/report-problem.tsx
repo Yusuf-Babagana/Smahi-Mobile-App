@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, Pressable, TextInput, Alert } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, Pressable, TextInput } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { MaterialIcons } from '@expo/vector-icons';
@@ -7,7 +7,7 @@ import { useTranslation } from 'react-i18next';
 
 import { disputeAPI } from '@/src/api/client';
 import { color, font, radius, shadow, space } from '@/constants/theme';
-import { Button, Chip } from '@/src/components/ui';
+import { Button, Chip, useToast } from '@/src/components/ui';
 
 const CATEGORIES: { value: string; label: string; icon: keyof typeof MaterialIcons.glyphMap }[] = [
   { value: 'payment', label: 'Payment issue', icon: 'payments' },
@@ -26,31 +26,29 @@ export default function ReportProblemScreen() {
   const [category, setCategory] = useState<string | null>(null);
   const [description, setDescription] = useState('');
   const [submitting, setSubmitting] = useState(false);
+  const { show: showToast } = useToast();
 
   const handleSubmit = async () => {
     if (!category) {
-      Alert.alert(t('Choose a category'), t('Select what kind of problem this is.'));
+      showToast(t('Select what kind of problem this is.'), { type: 'error' });
       return;
     }
     if (description.trim().length < 10) {
-      Alert.alert(t('Tell us more'), t('Please describe the problem in a bit more detail.'));
+      showToast(t('Please describe the problem in a bit more detail.'), { type: 'error' });
       return;
     }
     setSubmitting(true);
     try {
       await disputeAPI.submitDispute(category, description.trim(), bookingId ? Number(bookingId) : undefined);
-      Alert.alert(
-        t('Report submitted'),
-        t("We've received your report and will look into it. Thank you for letting us know."),
-        [{ text: t('OK'), onPress: () => router.back() }]
-      );
+      showToast(t("We've received your report and will look into it. Thank you for letting us know."), { type: 'success' });
+      router.back();
     } catch (err: any) {
       const data = err?.response?.data;
       const message = (Array.isArray(data) && data[0])
         || data?.detail
         || (data && typeof data === 'object' && Object.values(data)[0])
         || t('Failed to submit your report. Please try again.');
-      Alert.alert(t('Error'), String(message));
+      showToast(String(message), { type: 'error' });
     } finally {
       setSubmitting(false);
     }

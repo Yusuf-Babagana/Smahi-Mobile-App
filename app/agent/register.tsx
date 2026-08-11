@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import {
     View, Text, StyleSheet, ScrollView,
-    Alert, KeyboardAvoidingView, Platform, Pressable,
+    KeyboardAvoidingView, Platform, Pressable,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -12,12 +12,14 @@ import { useTranslation } from 'react-i18next';
 import { useAuth } from '@/src/contexts/AuthContext';
 import { agentAPI, categoryAPI } from '@/src/api/client';
 import { color, font, radius, space } from '@/constants/theme';
-import { Button, Input } from '@/src/components/ui';
+import { Button, Input, useToast, useConfirm } from '@/src/components/ui';
 
 export default function AgentRegisterScreen() {
     const router = useRouter();
     const { t } = useTranslation();
     const { user } = useAuth(); // Get Agent's details
+    const { show: showToast } = useToast();
+    const confirm = useConfirm();
 
     const [loading, setLoading] = useState(false);
     const [services, setServices] = useState<any[]>([]);
@@ -49,7 +51,7 @@ export default function AgentRegisterScreen() {
 
     const handleRegister = async () => {
         if (!formData.first_name || !formData.last_name || !formData.phone || !formData.service_category) {
-            Alert.alert("Missing Fields", "Please fill all required fields.");
+            showToast("Please fill all required fields.", { type: 'warn' });
             return;
         }
 
@@ -72,19 +74,24 @@ export default function AgentRegisterScreen() {
             const result = await agentAPI.registerArtisan(payload);
             const generatedPassword = result?.generated_password;
 
-            Alert.alert(
-                "Artisan Registered",
-                generatedPassword
+            // Neither path here is a "cancel" — both are real next steps, so
+            // confirm()'s two buttons are repurposed: confirm = Done, cancel = Register Another.
+            const done = await confirm({
+                title: "Artisan Registered",
+                message: generatedPassword
                     ? `Share this one-time password with them securely — it will not be shown again:\n\n${generatedPassword}`
                     : "Artisan registered successfully.",
-                [
-                    { text: "Register Another", onPress: () => resetForm() },
-                    { text: "Done", onPress: () => router.back() }
-                ]
-            );
+                confirmLabel: "Done",
+                cancelLabel: "Register Another",
+            });
+            if (done) {
+                router.back();
+            } else {
+                resetForm();
+            }
         } catch (error: any) {
             const msg = error.response?.data ? JSON.stringify(error.response.data) : "Registration failed.";
-            Alert.alert("Error", msg);
+            showToast(msg, { type: 'error' });
         } finally {
             setLoading(false);
         }

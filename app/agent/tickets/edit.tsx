@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, StyleSheet, TextInput, Alert, ActivityIndicator, ScrollView, Pressable } from 'react-native';
+import { View, Text, StyleSheet, TextInput, ActivityIndicator, ScrollView, Pressable } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
@@ -7,11 +7,12 @@ import { useTranslation } from 'react-i18next';
 
 import { ticketAPI } from '@/src/api/client';
 import { color, font, radius, space } from '@/constants/theme';
-import { Button, Input } from '@/src/components/ui';
+import { Button, Input, useToast } from '@/src/components/ui';
 
 export default function EditTicketScreen() {
   const router = useRouter();
   const { t } = useTranslation();
+  const { show: showToast } = useToast();
   const { id } = useLocalSearchParams(); // Get Ticket ID
 
   const [loading, setLoading] = useState(true);
@@ -32,7 +33,7 @@ export default function EditTicketScreen() {
       setDescription(data.description);
       setPriority(data.priority);
     } catch (error) {
-      Alert.alert("Error", "Could not load ticket details");
+      showToast("Could not load ticket details", { type: 'error' });
       router.back();
     } finally {
       setLoading(false);
@@ -41,18 +42,17 @@ export default function EditTicketScreen() {
 
   const handleUpdate = async () => {
     if (!subject || !description) {
-      Alert.alert('Error', 'Please fill in all fields');
+      showToast('Please fill in all fields', { type: 'error' });
       return;
     }
 
     setSubmitting(true);
     try {
       await ticketAPI.updateTicket(id as string, { subject, description, priority });
-      Alert.alert('Success', 'Complaint updated successfully', [
-        { text: 'OK', onPress: () => router.push('/agent/tickets') } // Go back to list
-      ]);
+      showToast('Complaint updated successfully', { type: 'success' });
+      router.push('/agent/tickets'); // Go back to list
     } catch (error) {
-      Alert.alert('Error', 'Failed to update complaint');
+      showToast('Failed to update complaint', { type: 'error' });
     } finally {
       setSubmitting(false);
     }

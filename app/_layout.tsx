@@ -15,7 +15,7 @@ import * as SplashScreen from "expo-splash-screen";
 import { SystemBars } from "react-native-edge-to-edge";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { KeyboardProvider } from "@/src/components/Keyboard";
-import { useColorScheme, Alert, View } from "react-native";
+import { useColorScheme, View } from "react-native";
 import { useNetworkState } from "expo-network";
 import {
   DarkTheme,
@@ -31,14 +31,34 @@ import { NotificationProvider } from '@/src/contexts/NotificationContext';
 import { AuthProvider } from '@/src/contexts/AuthContext';
 import { PushNotificationManager } from '@/src/components/PushNotificationManager';
 import { LocationProvider } from '@/src/contexts/LocationContext';
+import { ToastProvider, useToast } from '@/src/components/ui/Toast';
+import { ConfirmProvider } from '@/src/components/ui/Dialog';
 import '@/src/locales/i18n';
 
 
 SplashScreen.preventAutoHideAsync();
 
+// useToast() only works below <ToastProvider>, which RootLayout itself
+// renders — so the offline notice lives in its own child component instead
+// of RootLayout's body.
+function OfflineNotice() {
+  const { show } = useToast();
+  const networkState = useNetworkState();
+
+  useEffect(() => {
+    if (!networkState.isConnected && networkState.isInternetReachable === false) {
+      show("You're offline — some features may not work until you reconnect.", {
+        type: 'warn',
+        duration: 4000,
+      });
+    }
+  }, [networkState.isConnected, networkState.isInternetReachable, show]);
+
+  return null;
+}
+
 export default function RootLayout() {
   const colorScheme = useColorScheme();
-  const networkState = useNetworkState();
   const [loaded] = useFonts({
     SpaceMono: require("../assets/fonts/SpaceMono-Regular.ttf"),
     Manrope_400Regular,
@@ -53,19 +73,6 @@ export default function RootLayout() {
       SplashScreen.hideAsync();
     }
   }, [loaded]);
-
-  // Network check
-  useEffect(() => {
-    if (
-      !networkState.isConnected &&
-      networkState.isInternetReachable === false
-    ) {
-      Alert.alert(
-        "🔌 You are offline",
-        "Some features may not work until you reconnect."
-      );
-    }
-  }, [networkState.isConnected]);
 
   if (!loaded) {
     return null;
@@ -109,6 +116,9 @@ export default function RootLayout() {
             <NotificationProvider>
               <GestureHandlerRootView style={{ flex: 1 }}>
                 <KeyboardProvider>
+                <ToastProvider>
+                <ConfirmProvider>
+                <OfflineNotice />
                 <StatusBar style={colorScheme === "dark" ? "light" : "dark"} />
 
                 <Stack screenOptions={{ contentStyle: { backgroundColor: theme.colors.background } }}>
@@ -150,6 +160,8 @@ export default function RootLayout() {
                 </Stack>
 
                 <SystemBars style="auto" />
+                </ConfirmProvider>
+                </ToastProvider>
                 </KeyboardProvider>
               </GestureHandlerRootView>
             </NotificationProvider>

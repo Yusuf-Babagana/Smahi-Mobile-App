@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useCallback, useRef } from 'react';
 import {
   View, Text, StyleSheet, ScrollView, TouchableOpacity,
-  RefreshControl, Alert, ActivityIndicator, StatusBar, Pressable, Modal, TextInput,
+  RefreshControl, ActivityIndicator, StatusBar, Pressable, Modal, TextInput,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
@@ -15,11 +15,13 @@ import { useLocation } from '@/src/contexts/LocationContext';
 import { EmailVerificationBanner } from '@/src/components/EmailVerificationBanner';
 import { CLOUDINARY_CLOUD_NAME as CLOUD_NAME } from '@/src/constants/env';
 import { color, font, radius, shadow, space, type } from '@/constants/theme';
-import { Avatar, Badge, Button, StatTile } from '@/src/components/ui';
+import { Avatar, Badge, Button, StatTile, useToast, useConfirm } from '@/src/components/ui';
 
 export default function ArtisanDashboard() {
   const router = useRouter();
   const { t, i18n } = useTranslation();
+  const { show: showToast } = useToast();
+  const confirm = useConfirm();
 
   // STATE
   const [user, setUser] = useState<any>(null);
@@ -105,7 +107,7 @@ export default function ArtisanDashboard() {
       await artisanAPI.updateArtisan(artisan.id, { is_available: newValue });
     } catch {
       setIsAvailable(!newValue);
-      Alert.alert(t('Error'), t('Failed to update availability.'));
+      showToast(t('Failed to update availability.'), { type: 'error' });
     } finally {
       setTogglingAvailability(false);
     }
@@ -128,14 +130,14 @@ export default function ArtisanDashboard() {
         setLateCancelId(bookingId);
       } else {
         console.log('Booking update error:', error);
-        Alert.alert(t('Error'), t('Could not update the booking. Please try again.'));
+        showToast(t('Could not update the booking. Please try again.'), { type: 'error' });
       }
     }
   };
 
   const submitLateCancel = async () => {
     if (!cancelReason.trim() || lateCancelId == null) {
-      Alert.alert(t('Reason required'), t('Please tell us why you need to decline.'));
+      showToast(t('Please tell us why you need to decline.'), { type: 'warn' });
       return;
     }
     setSubmittingCancel(true);
@@ -145,36 +147,35 @@ export default function ArtisanDashboard() {
       setCancelReason('');
       await loadData();
     } catch {
-      Alert.alert(t('Error'), t('Could not update the booking. Please try again.'));
+      showToast(t('Could not update the booking. Please try again.'), { type: 'error' });
     } finally {
       setSubmittingCancel(false);
     }
   };
 
-  const handleDecline = (bookingId: number) => {
-    Alert.alert(
-      t('Decline request'),
-      t('Are you sure you want to decline this booking request?'),
-      [
-        { text: t('Cancel'), style: 'cancel' },
-        {
-          text: t('Decline'),
-          style: 'destructive',
-          onPress: () => updateBookingStatus(bookingId, 'cancelled'),
-        },
-      ]
-    );
+  const handleDecline = async (bookingId: number) => {
+    const ok = await confirm({
+      title: t('Decline request'),
+      message: t('Are you sure you want to decline this booking request?'),
+      confirmLabel: t('Decline'),
+      cancelLabel: t('Cancel'),
+      destructive: true,
+    });
+    if (ok) {
+      updateBookingStatus(bookingId, 'cancelled');
+    }
   };
 
-  const handleMarkDone = (bookingId: number) => {
-    Alert.alert(
-      t('Mark job as done'),
-      t('This completes the booking and adds it to your jobs done. Continue?'),
-      [
-        { text: t('Not yet'), style: 'cancel' },
-        { text: t('Mark done'), onPress: () => updateBookingStatus(bookingId, 'completed') },
-      ]
-    );
+  const handleMarkDone = async (bookingId: number) => {
+    const ok = await confirm({
+      title: t('Mark job as done'),
+      message: t('This completes the booking and adds it to your jobs done. Continue?'),
+      confirmLabel: t('Mark done'),
+      cancelLabel: t('Not yet'),
+    });
+    if (ok) {
+      updateBookingStatus(bookingId, 'completed');
+    }
   };
 
   const openClientChat = (booking: any) => {

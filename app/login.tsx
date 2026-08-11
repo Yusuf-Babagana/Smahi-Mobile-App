@@ -1,6 +1,5 @@
 import React, { useState } from 'react';
 import {
-  Alert,
   Image,
   KeyboardAvoidingView,
   Platform,
@@ -21,7 +20,7 @@ import { useTranslation } from 'react-i18next';
 import { useAuth } from '@/src/contexts/AuthContext';
 import { getHomeRouteForRole } from '@/src/constants/roleRoutes';
 import { color, font, radius, shadow, space, type } from '@/constants/theme';
-import { Button, Input } from '@/src/components/ui';
+import { Button, Input, useToast } from '@/src/components/ui';
 import { paymentAPI } from '@/src/api/client';
 
 export default function LoginScreen() {
@@ -31,12 +30,13 @@ export default function LoginScreen() {
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
+  const { show: showToast } = useToast();
 
   const { login } = useAuth();
 
   const handleLogin = async () => {
     if (!email || !password) {
-      Alert.alert(t('Missing Fields'), t('Please enter both email and password.'));
+      showToast(t('Please enter both email and password.'), { type: 'error' });
       return;
     }
 
@@ -45,16 +45,13 @@ export default function LoginScreen() {
       const user = await login({ email: email.toLowerCase().trim(), password });
 
       if (user.account_status === 'locked') {
-        Alert.alert(
-          'Activation Required',
-          'Your dashboard is locked. Please enter your Serial Number to activate.',
-          [{ text: 'Activate Now', onPress: () => router.replace('/activate') }]
-        );
+        showToast('Activation Required: Your dashboard is locked. Please enter your Serial Number to activate.', { type: 'warn' });
+        router.replace('/activate');
         return;
       }
 
       if (user.account_status === 'suspended') {
-        Alert.alert('Access Denied', 'Your account has been suspended. Please contact Admin.');
+        showToast('Your account has been suspended. Please contact Admin.', { type: 'error' });
         return;
       }
 
@@ -78,16 +75,10 @@ export default function LoginScreen() {
           // 503 = payments not configured yet on the backend: the fee stays
           // owed, but the artisan must not be locked out of the app.
           if (payErr?.response?.status === 503) {
-            Alert.alert(
-              'Payment Pending',
-              'Payments are not available yet. You can use the app now and complete your registration fee later.',
-              [{ text: 'Continue', onPress: () => router.replace(getHomeRouteForRole(user.role)) }]
-            );
+            showToast('Payments are not available yet. You can use the app now and complete your registration fee later.', { type: 'info' });
+            router.replace(getHomeRouteForRole(user.role));
           } else {
-            Alert.alert(
-              'Payment Required',
-              'You need to pay the registration fee to activate your account. Please try again.',
-            );
+            showToast('You need to pay the registration fee to activate your account. Please try again.', { type: 'error' });
           }
         }
         return;
@@ -96,7 +87,7 @@ export default function LoginScreen() {
       router.replace(getHomeRouteForRole(user.role));
     } catch (error: any) {
       const msg = error.message || 'Invalid credentials';
-      Alert.alert('Login Failed', msg);
+      showToast(msg, { type: 'error' });
     } finally {
       setLoading(false);
     }

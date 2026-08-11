@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from "react";
 import {
     View, Text, StyleSheet, ScrollView, Pressable, TextInput,
-    Alert, ActivityIndicator, KeyboardAvoidingView, Platform,
+    ActivityIndicator, KeyboardAvoidingView, Platform,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { MaterialIcons } from "@expo/vector-icons";
@@ -13,6 +13,7 @@ import { authAPI } from "@/src/api/client";
 import { storage } from "@/src/utils/storage";
 import { useAuth } from "@/src/contexts/AuthContext";
 import { color, font, radius, shadow, space } from "@/constants/theme";
+import { useToast } from "@/src/components/ui";
 
 // Editable account fields — matches the backend UserUpdateSerializer
 // (auth/profile/ PATCH accepts first_name, last_name, phone_number, address).
@@ -20,6 +21,7 @@ export default function PersonalInfoScreen() {
     const router = useRouter();
     const { t } = useTranslation();
     const { logout } = useAuth();
+    const { show: showToast } = useToast();
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
     const [email, setEmail] = useState("");
@@ -49,7 +51,7 @@ export default function PersonalInfoScreen() {
 
     const handleSave = async () => {
         if (!firstName.trim()) {
-            Alert.alert(t('Error'), t('First name cannot be empty.'));
+            showToast(t('First name cannot be empty.'), { type: 'error' });
             return;
         }
         setSaving(true);
@@ -62,10 +64,10 @@ export default function PersonalInfoScreen() {
             };
             await authAPI.updateProfile(payload);
             await storage.updateCurrentUser(payload);
-            Alert.alert(t('Success'), t('Your information has been updated.'));
+            showToast(t('Your information has been updated.'), { type: 'success' });
             router.back();
         } catch (error) {
-            Alert.alert(t('Error'), t('Failed to update your information. Please try again.'));
+            showToast(t('Failed to update your information. Please try again.'), { type: 'error' });
         } finally {
             setSaving(false);
         }
@@ -80,11 +82,9 @@ export default function PersonalInfoScreen() {
         setDeleteError("");
         try {
             await authAPI.deleteAccount(deletePassword);
-            Alert.alert(
-                t('Account deleted'),
-                t('Your account has been deactivated. We\'re sorry to see you go.'),
-                [{ text: t('OK'), onPress: async () => { await logout(); router.replace('/welcome'); } }]
-            );
+            showToast(t('Your account has been deactivated. We\'re sorry to see you go.'), { type: 'success' });
+            await logout();
+            router.replace('/welcome');
         } catch (error: any) {
             setDeleteError(error?.response?.data?.error || t('Failed to delete your account. Please try again.'));
         } finally {

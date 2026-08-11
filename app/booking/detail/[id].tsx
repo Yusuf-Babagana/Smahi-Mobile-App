@@ -1,6 +1,6 @@
 import React, { useCallback, useState } from 'react';
 import {
-  ActivityIndicator, Alert, Image, Linking, Modal, Pressable, ScrollView,
+  ActivityIndicator, Image, Linking, Modal, Pressable, ScrollView,
   StyleSheet, Text, TextInput, View,
 } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
@@ -14,7 +14,7 @@ import { bookingAPI, reviewAPI } from '@/src/api/client';
 import { useAuth } from '@/src/contexts/AuthContext';
 import { BACKEND_URL } from '@/src/constants/env';
 import { color, font, radius, shadow, space, type } from '@/constants/theme';
-import { Avatar, Badge, BookingTimeline, Button } from '@/src/components/ui';
+import { Avatar, Badge, BookingTimeline, Button, useToast, useConfirm } from '@/src/components/ui';
 
 const resolvePhotoUrl = (raw: string) => (raw?.startsWith('http') ? raw : `${BACKEND_URL}${raw}`);
 
@@ -41,6 +41,8 @@ export default function BookingDetailScreen() {
   const router = useRouter();
   const { t } = useTranslation();
   const { user } = useAuth();
+  const { show: showToast } = useToast();
+  const confirm = useConfirm();
 
   const [booking, setBooking] = useState<any>(null);
   const [loading, setLoading] = useState(true);
@@ -72,38 +74,33 @@ export default function BookingDetailScreen() {
     }, [load])
   );
 
-  const handleCancel = () => {
-    Alert.alert(
-      t('Cancel booking'),
-      t('Are you sure you want to cancel this booking?'),
-      [
-        { text: t('No'), style: 'cancel' },
-        {
-          text: t('Yes, cancel'),
-          style: 'destructive',
-          onPress: async () => {
-            try {
-              await bookingAPI.updateBooking(Number(id), { status: 'cancelled' });
-              load();
-            } catch (err: any) {
-              // The backend requires a reason for a cancellation made close
-              // to scheduled_date (PlatformSettings.cancellation_window_hours) —
-              // it reports this as a validation error on cancellation_reason.
-              if (err?.response?.data?.cancellation_reason) {
-                setCancelReasonModalVisible(true);
-              } else {
-                Alert.alert(t('Error'), t('Failed to cancel booking.'));
-              }
-            }
-          },
-        },
-      ],
-    );
+  const handleCancel = async () => {
+    const ok = await confirm({
+      title: t('Cancel booking'),
+      message: t('Are you sure you want to cancel this booking?'),
+      confirmLabel: t('Yes, cancel'),
+      cancelLabel: t('No'),
+      destructive: true,
+    });
+    if (!ok) return;
+    try {
+      await bookingAPI.updateBooking(Number(id), { status: 'cancelled' });
+      load();
+    } catch (err: any) {
+      // The backend requires a reason for a cancellation made close
+      // to scheduled_date (PlatformSettings.cancellation_window_hours) —
+      // it reports this as a validation error on cancellation_reason.
+      if (err?.response?.data?.cancellation_reason) {
+        setCancelReasonModalVisible(true);
+      } else {
+        showToast(t('Failed to cancel booking.'), { type: 'error' });
+      }
+    }
   };
 
   const submitLateCancellation = async () => {
     if (!cancelReason.trim()) {
-      Alert.alert(t('Reason required'), t('Please tell us why you need to cancel.'));
+      showToast(t('Please tell us why you need to cancel.'), { type: 'error' });
       return;
     }
     setSubmittingCancel(true);
@@ -113,7 +110,7 @@ export default function BookingDetailScreen() {
       setCancelReason('');
       load();
     } catch {
-      Alert.alert(t('Error'), t('Failed to cancel booking.'));
+      showToast(t('Failed to cancel booking.'), { type: 'error' });
     } finally {
       setSubmittingCancel(false);
     }
@@ -135,7 +132,7 @@ export default function BookingDetailScreen() {
 
   const submitReview = async () => {
     if (reviewRating < 1) {
-      Alert.alert(t('Choose a rating'), t('Tap a star to rate this job before submitting.'));
+      showToast(t('Tap a star to rate this job before submitting.'), { type: 'error' });
       return;
     }
     setSubmittingReview(true);
@@ -145,7 +142,7 @@ export default function BookingDetailScreen() {
       setReviewRating(0);
       setReviewComment('');
       await load();
-      Alert.alert(t('Thank you!'), t('Your review has been submitted.'));
+      showToast(t('Your review has been submitted.'), { type: 'success' });
     } catch (err: any) {
       // ReviewViewSet raises a bare-string ValidationError, which DRF
       // serializes as a plain JSON array (["message"]), not {detail: ...}.
@@ -154,7 +151,7 @@ export default function BookingDetailScreen() {
         || data?.non_field_errors?.[0]
         || data?.detail
         || t('Failed to submit your review. Please try again.');
-      Alert.alert(t('Error'), message);
+      showToast(message, { type: 'error' });
     } finally {
       setSubmittingReview(false);
     }

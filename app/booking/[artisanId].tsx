@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import {
-  ActivityIndicator, Alert, Image, KeyboardAvoidingView, Platform, Pressable,
+  ActivityIndicator, Image, KeyboardAvoidingView, Platform, Pressable,
   ScrollView, StyleSheet, Text, TextInput, View,
 } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
@@ -14,7 +14,7 @@ import { useTranslation } from 'react-i18next';
 import { artisanAPI, bookingAPI } from '@/src/api/client';
 import { storage } from '@/src/utils/storage';
 import { color, font, radius, shadow, space, type } from '@/constants/theme';
-import { Avatar, Button, StepHeader } from '@/src/components/ui';
+import { Avatar, Button, StepHeader, useToast } from '@/src/components/ui';
 
 const TIME_SLOTS = ['08:00', '09:30', '11:00', '13:00', '15:00', '16:30'];
 
@@ -38,6 +38,7 @@ export default function BookingFlow() {
   const { artisanId } = useLocalSearchParams();
   const router = useRouter();
   const { t } = useTranslation();
+  const { show: showToast } = useToast();
 
   const [step, setStep] = useState(1);
   const [submitted, setSubmitted] = useState(false);
@@ -123,9 +124,9 @@ export default function BookingFlow() {
       }
 
       if (failedPhotoCount > 0) {
-        Alert.alert(
-          t('Booking sent'),
-          t('Your booking request was sent, but {{count}} photo(s) could not be attached.', { count: failedPhotoCount })
+        showToast(
+          t('Your booking request was sent, but {{count}} photo(s) could not be attached.', { count: failedPhotoCount }),
+          { type: 'warn' }
         );
       }
 
@@ -136,7 +137,7 @@ export default function BookingFlow() {
       const serverMessage = data && typeof data === 'object'
         ? Object.values(data).flat().find((v) => typeof v === 'string') as string | undefined
         : undefined;
-      Alert.alert(t('Error'), serverMessage || t('Failed to send booking request.'));
+      showToast(serverMessage || t('Failed to send booking request.'), { type: 'error' });
     } finally {
       setSubmitting(false);
     }

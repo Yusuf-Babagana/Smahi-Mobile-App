@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import {
   View, Text, FlatList, TextInput, TouchableOpacity,
-  StyleSheet, Alert, Pressable, ActivityIndicator,
+  StyleSheet, Pressable, ActivityIndicator, Platform,
 } from 'react-native';
 // Native-insets KeyboardAvoidingView in real builds, RN fallback in Expo Go.
 import { KeyboardAvoidingView } from '@/src/components/Keyboard';
@@ -22,6 +22,7 @@ import { color, font, radius, shadow, space } from '@/constants/theme';
 import { translateText } from '@/src/utils/translation';
 import { AIAction } from '@/src/types';
 import AIActionCard from '@/src/components/AIActionCard';
+import { useToast } from '@/src/components/ui';
 
 const MESSAGES_KEY = '@smaahi_ai_chat_messages';
 
@@ -41,6 +42,7 @@ const WELCOME_MESSAGE: Message = {
 export default function AIChatScreen() {
   const router = useRouter();
   const { t } = useTranslation();
+  const { show: showToast } = useToast();
   const insets = useSafeAreaInsets();
   const [messages, setMessages] = useState<Message[]>([WELCOME_MESSAGE]);
   const [inputText, setInputText] = useState('');
@@ -83,14 +85,14 @@ export default function AIChatScreen() {
         if (transcript === '___NO_API_KEY___' || transcript === '___QUOTA_ERROR___') {
           message = t('Voice input is temporarily unavailable. Please try again later.');
         }
-        Alert.alert(t('Voice Input'), message);
+        showToast(message, { type: 'info' });
       }
       return;
     }
 
     const granted = await requestSpeechPermissions();
     if (!granted) {
-      Alert.alert('Permission Required', 'Microphone permission is needed to use voice input.');
+      showToast('Microphone permission is needed to use voice input.', { type: 'error' });
       return;
     }
 
@@ -108,7 +110,7 @@ export default function AIChatScreen() {
     } catch (err) {
       console.error('[AIChat] Failed to start:', err);
       setIsRecording(false);
-      Alert.alert('Error', 'Failed to start voice recording. Please try again.');
+      showToast('Failed to start voice recording. Please try again.', { type: 'error' });
     }
   };
 
@@ -293,9 +295,12 @@ export default function AIChatScreen() {
 
       {/* Android runs edge-to-edge (app.json edgeToEdgeEnabled), where the
           window does NOT resize for the keyboard and the "height" behavior is
-          a no-op — "padding" is the only mode that works on both platforms. */}
+          a no-op — "padding" is the only mode that works on both platforms.
+          keyboardVerticalOffset compensates for the header rendered above
+          this view, which "padding" doesn't otherwise account for on iOS. */}
       <KeyboardAvoidingView
         behavior="padding"
+        keyboardVerticalOffset={Platform.OS === 'ios' ? 100 : 0}
         style={styles.flex}
       >
         <FlatList

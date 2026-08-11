@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import {
     View, Text, FlatList, TextInput, TouchableOpacity,
-    Platform, StyleSheet, ActivityIndicator, Alert, Pressable, AppState,
+    Platform, StyleSheet, ActivityIndicator, Pressable, AppState,
 } from 'react-native';
 // Native-insets KeyboardAvoidingView in real builds, RN fallback in Expo Go.
 import { KeyboardAvoidingView } from '@/src/components/Keyboard';
@@ -14,12 +14,13 @@ import { useTranslation } from 'react-i18next';
 import { chatAPI } from '@/src/api/client';
 import { storage } from '@/src/utils/storage';
 import { color, font, radius, shadow, space } from '@/constants/theme';
-import { Avatar, MessageBubble } from '@/src/components/ui';
+import { Avatar, MessageBubble, useToast } from '@/src/components/ui';
 
 export default function ChatRoomScreen() {
     const { id: initialId, name, recipientId } = useLocalSearchParams();
     const router = useRouter();
     const { t } = useTranslation();
+    const { show: showToast } = useToast();
 
     // --- STATE ---
     const [conversationId, setConversationId] = useState<number | null>(
@@ -120,7 +121,7 @@ export default function ChatRoomScreen() {
                 params: { id: targetId }
             });
         } else {
-            Alert.alert("Info", "Profile details not available right now.");
+            showToast("Profile details not available right now.", { type: 'info' });
         }
     };
 
@@ -134,7 +135,7 @@ export default function ChatRoomScreen() {
 
         try {
             if (!conversationId) {
-                Alert.alert("Please wait", "Initializing conversation...");
+                showToast("Please wait — initializing conversation...", { type: 'info' });
                 return;
             }
 
@@ -154,7 +155,7 @@ export default function ChatRoomScreen() {
             setMessages(prev => [newMsg, ...prev.filter(m => m.id !== tempId)]);
 
         } catch (error: any) {
-            Alert.alert("Failed", "Message not sent.");
+            showToast("Message not sent.", { type: 'error' });
             setInputText(textToSend);
         } finally {
             setSending(false);

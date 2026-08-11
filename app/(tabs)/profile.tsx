@@ -1,5 +1,5 @@
 import React from "react";
-import { View, Text, StyleSheet, ScrollView, Pressable, Alert } from "react-native";
+import { View, Text, StyleSheet, ScrollView, Pressable } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { MaterialIcons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
@@ -11,7 +11,7 @@ import { useAuth } from "@/src/contexts/AuthContext";
 import { EmailVerificationBanner } from "@/src/components/EmailVerificationBanner";
 import ContactList from "@/src/components/ContactList";
 import { color, font, radius, space, type } from "@/constants/theme";
-import { Avatar, Badge } from "@/src/components/ui";
+import { Avatar, Badge, useConfirm } from "@/src/components/ui";
 
 // Reusable Settings Row Component
 const SettingsRow = ({
@@ -55,6 +55,7 @@ export default function ProfileScreen() {
   const router = useRouter();
   const { logout } = useAuth();
   const { t } = useTranslation();
+  const confirm = useConfirm();
   const [user, setUser] = React.useState<any>(null);
   const [showContacts, setShowContacts] = React.useState(false);
 
@@ -62,17 +63,15 @@ export default function ProfileScreen() {
     storage.getCurrentUser().then(setUser);
   }, []);
 
-  const handleLogout = () => {
-    Alert.alert(t('Log Out'), t('Are you sure you want to log out?'), [
-      { text: t('Cancel'), style: 'cancel' },
-      {
-        text: t('Log Out'),
-        style: 'destructive',
-        onPress: async () => {
-          await logout();
-        }
-      },
-    ]);
+  const handleLogout = async () => {
+    const ok = await confirm({
+      title: t('Log Out'),
+      message: t('Are you sure you want to log out?'),
+      confirmLabel: t('Log Out'),
+      cancelLabel: t('Cancel'),
+      destructive: true,
+    });
+    if (ok) await logout();
   };
 
   // Users are stored with first_name/last_name; older sessions may have `name`.

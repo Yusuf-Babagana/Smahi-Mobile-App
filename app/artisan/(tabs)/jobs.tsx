@@ -1,6 +1,6 @@
 import React, { useCallback, useMemo, useState } from 'react';
 import {
-  Alert, FlatList, Modal, Pressable, RefreshControl, StyleSheet, Text, TextInput, View,
+  FlatList, Modal, Pressable, RefreshControl, StyleSheet, Text, TextInput, View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
@@ -10,7 +10,7 @@ import { useTranslation } from 'react-i18next';
 
 import { authAPI, bookingAPI } from '@/src/api/client';
 import { color, font, radius, shadow, space, type } from '@/constants/theme';
-import { Avatar, Badge, Button, EmptyState, SkeletonCard } from '@/src/components/ui';
+import { Avatar, Badge, Button, EmptyState, SkeletonCard, useToast, useConfirm } from '@/src/components/ui';
 import type { BadgeStatus } from '@/src/components/ui';
 
 type FilterValue = 'new' | 'active' | 'completed' | 'cancelled';
@@ -35,6 +35,8 @@ function badgeFor(status: string): { label: string; status: BadgeStatus } {
 export default function ArtisanJobsTab() {
   const router = useRouter();
   const { t } = useTranslation();
+  const { show: showToast } = useToast();
+  const confirm = useConfirm();
 
   const [bookings, setBookings] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -84,14 +86,14 @@ export default function ArtisanJobsTab() {
         setLateCancelId(bookingId);
       } else {
         console.log('Booking update error:', error);
-        Alert.alert(t('Error'), t('Could not update the booking. Please try again.'));
+        showToast(t('Could not update the booking. Please try again.'), { type: 'error' });
       }
     }
   };
 
   const submitLateCancel = async () => {
     if (!cancelReason.trim() || lateCancelId == null) {
-      Alert.alert(t('Reason required'), t('Please tell us why you need to decline.'));
+      showToast(t('Please tell us why you need to decline.'), { type: 'warn' });
       return;
     }
     setSubmittingCancel(true);
@@ -101,32 +103,35 @@ export default function ArtisanJobsTab() {
       setCancelReason('');
       await load();
     } catch {
-      Alert.alert(t('Error'), t('Could not update the booking. Please try again.'));
+      showToast(t('Could not update the booking. Please try again.'), { type: 'error' });
     } finally {
       setSubmittingCancel(false);
     }
   };
 
-  const confirmDecline = (bookingId: number) => {
-    Alert.alert(
-      t('Decline request'),
-      t('Are you sure you want to decline this booking request?'),
-      [
-        { text: t('Cancel'), style: 'cancel' },
-        { text: t('Decline'), style: 'destructive', onPress: () => updateStatus(bookingId, 'cancelled') },
-      ]
-    );
+  const confirmDecline = async (bookingId: number) => {
+    const ok = await confirm({
+      title: t('Decline request'),
+      message: t('Are you sure you want to decline this booking request?'),
+      confirmLabel: t('Decline'),
+      cancelLabel: t('Cancel'),
+      destructive: true,
+    });
+    if (ok) {
+      updateStatus(bookingId, 'cancelled');
+    }
   };
 
-  const confirmMarkDone = (bookingId: number) => {
-    Alert.alert(
-      t('Mark job as done'),
-      t('This completes the booking and adds it to your jobs done. Continue?'),
-      [
-        { text: t('Not yet'), style: 'cancel' },
-        { text: t('Mark done'), onPress: () => updateStatus(bookingId, 'completed') },
-      ]
-    );
+  const confirmMarkDone = async (bookingId: number) => {
+    const ok = await confirm({
+      title: t('Mark job as done'),
+      message: t('This completes the booking and adds it to your jobs done. Continue?'),
+      confirmLabel: t('Mark done'),
+      cancelLabel: t('Not yet'),
+    });
+    if (ok) {
+      updateStatus(bookingId, 'completed');
+    }
   };
 
   const openClientChat = (booking: any) => {

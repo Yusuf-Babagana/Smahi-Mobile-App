@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { View, Text, StyleSheet, ScrollView, Pressable, Image, TextInput, Alert, ActivityIndicator } from "react-native";
+import { View, Text, StyleSheet, ScrollView, Pressable, Image, TextInput, ActivityIndicator } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
@@ -14,6 +14,7 @@ import { useAuth } from "@/src/contexts/AuthContext";
 import ContactList from "@/src/components/ContactList";
 import { color, font, radius, shadow, space, type } from '@/constants/theme';
 import { useTranslation } from 'react-i18next';
+import { useToast, useConfirm } from '@/src/components/ui';
 
 import { API_URL as BASE_URL, CLOUDINARY_CLOUD_NAME as CLOUD_NAME } from '@/src/constants/env';
 
@@ -21,6 +22,8 @@ export default function ArtisanProfileScreen() {
     const router = useRouter();
     const { logout } = useAuth();
     const { t, i18n } = useTranslation();
+    const { show: showToast } = useToast();
+    const confirm = useConfirm();
     const [loading, setLoading] = useState(true);
     const [uploadingProfile, setUploadingProfile] = useState(false);
     const [user, setUser] = useState<any>(null);
@@ -66,7 +69,7 @@ export default function ArtisanProfileScreen() {
     const pickProfileImage = async () => {
         const { granted } = await ImagePicker.requestMediaLibraryPermissionsAsync();
         if (!granted) {
-            Alert.alert("Permission", "Allow access to photos to change profile picture.");
+            showToast("Allow access to photos to change profile picture.", { type: 'warn' });
             return;
         }
 
@@ -102,27 +105,26 @@ export default function ArtisanProfileScreen() {
                 },
             });
 
-            Alert.alert("Success", "Profile picture updated!");
+            showToast("Profile picture updated!", { type: 'success' });
             setUser((prev: any) => ({ ...prev, profile_picture: response.data.profile_picture }));
 
         } catch (error) {
-            Alert.alert("Error", "Failed to update profile picture.");
+            showToast("Failed to update profile picture.", { type: 'error' });
         } finally {
             setUploadingProfile(false);
         }
     };
 
-    const handleLogout = () => {
-        Alert.alert(t('Logout'), t('Are you sure?'), [
-            { text: t('Cancel'), style: 'cancel' },
-            {
-                text: t('Logout'),
-                style: 'destructive',
-                onPress: async () => {
-                    await logout();
-                },
-            },
-        ]);
+    const handleLogout = async () => {
+        const ok = await confirm({
+            title: t('Logout'),
+            message: t('Are you sure?'),
+            confirmLabel: t('Logout'),
+            destructive: true,
+        });
+        if (ok) {
+            await logout();
+        }
     };
 
     const handleSave = async () => {
@@ -131,9 +133,9 @@ export default function ArtisanProfileScreen() {
             const updated = await artisanAPI.updateMyProfile({ bio });
             setArtisan((prev: any) => ({ ...prev, ...updated }));
             setIsEditing(false);
-            Alert.alert(t('Success'), t('Profile updated successfully!'));
+            showToast(t('Profile updated successfully!'), { type: 'success' });
         } catch (error) {
-            Alert.alert(t('Error'), t('Failed to update profile.'));
+            showToast(t('Failed to update profile.'), { type: 'error' });
         }
     };
 

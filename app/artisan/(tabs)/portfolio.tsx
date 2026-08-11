@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import {
-    View, Text, StyleSheet, FlatList, Image, TouchableOpacity, Alert, ActivityIndicator, StatusBar
+    View, Text, StyleSheet, FlatList, Image, TouchableOpacity, ActivityIndicator, StatusBar
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
@@ -12,9 +12,12 @@ import * as SecureStore from 'expo-secure-store';
 
 import { color, font, radius, shadow, space, type } from '@/constants/theme';
 import { API_URL as BASE_URL, CLOUDINARY_CLOUD_NAME as CLOUD_NAME } from '@/src/constants/env';
+import { useToast, useConfirm } from '@/src/components/ui';
 
 export default function PortfolioScreen() {
     const router = useRouter();
+    const { show: showToast } = useToast();
+    const confirm = useConfirm();
     const [images, setImages] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
     const [uploading, setUploading] = useState(false);
@@ -40,7 +43,7 @@ export default function PortfolioScreen() {
     const pickImage = async () => {
         const { granted } = await ImagePicker.requestMediaLibraryPermissionsAsync();
         if (!granted) {
-            Alert.alert("Permission Required", "Allow access to photos to upload work samples.");
+            showToast("Allow access to photos to upload work samples.", { type: 'warn' });
             return;
         }
 
@@ -77,34 +80,35 @@ export default function PortfolioScreen() {
                 },
             });
 
-            Alert.alert("Success", "Image uploaded!");
+            showToast("Image uploaded!", { type: 'success' });
             setImages(prev => [response.data, ...prev]);
 
         } catch (error: any) {
             console.error("Upload Error:", error.response?.data || error.message);
-            Alert.alert("Upload Failed", "Please check your internet connection.");
+            showToast("Upload failed — please check your internet connection.", { type: 'error' });
         } finally {
             setUploading(false);
         }
     };
 
     const deleteImage = async (id: number) => {
-        Alert.alert("Delete", "Remove this image?", [
-            { text: "Cancel" },
-            {
-                text: "Delete", style: 'destructive', onPress: async () => {
-                    try {
-                        const token = await SecureStore.getItemAsync('accessToken');
-                        await axios.delete(`${BASE_URL}/auth/portfolio/${id}/delete/`, {
-                            headers: { Authorization: `Bearer ${token}` }
-                        });
-                        setImages(prev => prev.filter(img => img.id !== id));
-                    } catch (error) {
-                        Alert.alert("Error", "Could not delete image.");
-                    }
-                }
-            }
-        ]);
+        const ok = await confirm({
+            title: "Delete",
+            message: "Remove this image?",
+            confirmLabel: "Delete",
+            destructive: true,
+        });
+        if (!ok) return;
+
+        try {
+            const token = await SecureStore.getItemAsync('accessToken');
+            await axios.delete(`${BASE_URL}/auth/portfolio/${id}/delete/`, {
+                headers: { Authorization: `Bearer ${token}` }
+            });
+            setImages(prev => prev.filter(img => img.id !== id));
+        } catch (error) {
+            showToast("Could not delete image.", { type: 'error' });
+        }
     };
 
     const getImageUrl = (item: any) => {

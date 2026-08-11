@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, Image, ScrollView, Alert, Modal, Pressable } from 'react-native';
+import { View, Text, StyleSheet, Image, ScrollView, Modal, Pressable } from 'react-native';
 import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
@@ -8,22 +8,31 @@ import { useTranslation } from 'react-i18next';
 
 import { useAuth } from '@/src/contexts/AuthContext';
 import { color, font, radius, space, type } from '@/constants/theme';
-import { Avatar } from '@/src/components/ui';
+import { Avatar, useToast, useConfirm } from '@/src/components/ui';
 // import QRCode from 'react-native-qrcode-svg'; // 💡 INSTALL: npx expo install react-native-qrcode-svg react-native-svg
 
 export default function AgentProfileScreen() {
     const router = useRouter();
     const { t } = useTranslation();
     const { user, logout } = useAuth();
+    const { show: showToast } = useToast();
+    const confirm = useConfirm();
     const [showIdCard, setShowIdCard] = useState(false);
 
     const displayName = `${user?.first_name || ''} ${user?.last_name || ''}`.trim() || t('Agent');
 
-    const handleLogout = () => {
-        Alert.alert(t("Log Out"), t("Are you sure?"), [
-            { text: t("Cancel"), style: "cancel" },
-            { text: t("Log Out"), style: 'destructive', onPress: async () => { await logout(); router.replace('/login'); } }
-        ]);
+    const handleLogout = async () => {
+        const ok = await confirm({
+            title: t("Log Out"),
+            message: t("Are you sure?"),
+            confirmLabel: t("Log Out"),
+            cancelLabel: t("Cancel"),
+            destructive: true,
+        });
+        if (ok) {
+            await logout();
+            router.replace('/login');
+        }
     };
 
     const MenuItem = ({ icon, label, onPress }: {
@@ -88,11 +97,11 @@ export default function AgentProfileScreen() {
                 {/* Settings Menu */}
                 <Text style={styles.sectionTitle}>{t('Account settings')}</Text>
                 <View style={styles.sectionCard}>
-                    <MenuItem icon="person-outline" label={t('Personal Information')} onPress={() => Alert.alert("Coming Soon", "Edit Profile")} />
+                    <MenuItem icon="person-outline" label={t('Personal Information')} onPress={() => showToast("Coming soon: edit profile", { type: 'info' })} />
                     <View style={styles.separator} />
-                    <MenuItem icon="lock-outline" label={t('Security & Password')} onPress={() => Alert.alert("Coming Soon", "Change Password")} />
+                    <MenuItem icon="lock-outline" label={t('Security & Password')} onPress={() => showToast("Coming soon: change password", { type: 'info' })} />
                     <View style={styles.separator} />
-                    <MenuItem icon="notifications-none" label={t('Notifications')} onPress={() => Alert.alert("Coming Soon", "Notifications")} />
+                    <MenuItem icon="notifications-none" label={t('Notifications')} onPress={() => showToast("Coming soon: notifications", { type: 'info' })} />
                 </View>
 
                 <Text style={styles.sectionTitle}>{t('Support')}</Text>

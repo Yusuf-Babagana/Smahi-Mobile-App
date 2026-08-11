@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, TextInput, Alert, ScrollView, Pressable } from 'react-native';
+import { View, Text, StyleSheet, TextInput, ScrollView, Pressable } from 'react-native';
 import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
@@ -7,11 +7,12 @@ import { useTranslation } from 'react-i18next';
 
 import { ticketAPI } from '@/src/api/client';
 import { color, font, radius, space } from '@/constants/theme';
-import { Button, Input } from '@/src/components/ui';
+import { Button, Input, useToast } from '@/src/components/ui';
 
 export default function CreateTicketScreen() {
     const router = useRouter();
     const { t } = useTranslation();
+    const { show: showToast } = useToast();
     const [subject, setSubject] = useState('');
     const [description, setDescription] = useState('');
     const [priority, setPriority] = useState('medium');
@@ -19,18 +20,17 @@ export default function CreateTicketScreen() {
 
     const handleSubmit = async () => {
         if (!subject || !description) {
-            Alert.alert('Error', 'Please fill in all fields');
+            showToast('Please fill in all fields', { type: 'error' });
             return;
         }
 
         setLoading(true);
         try {
             await ticketAPI.createTicket({ subject, description, priority });
-            Alert.alert('Success', 'Complaint submitted successfully', [
-                { text: 'OK', onPress: () => router.back() }
-            ]);
+            showToast('Complaint submitted successfully', { type: 'success' });
+            router.back();
         } catch (error) {
-            Alert.alert('Error', 'Failed to submit complaint');
+            showToast('Failed to submit complaint', { type: 'error' });
         } finally {
             setLoading(false);
         }

@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from 'react';
 import {
-  Alert,
   KeyboardAvoidingView,
   Platform,
   Pressable,
@@ -20,7 +19,7 @@ import { authAPI, locationAPI, categoryAPI, paymentAPI } from '@/src/api/client'
 import { UserRole } from '@/src/types';
 import CustomPicker from '@/src/components/CustomPicker';
 import { color, font, radius, space, type } from '@/constants/theme';
-import { Button, Input, StepHeader } from '@/src/components/ui';
+import { Button, Input, StepHeader, useToast, useConfirm } from '@/src/components/ui';
 import '@/src/i18n'; // Ensure i18n is initialized
 
 // Define expanded roles locally for this screen
@@ -43,6 +42,8 @@ const TERMS_POINTS: { icon: keyof typeof MaterialIcons.glyphMap; text: string }[
 export default function RegisterScreen() {
   const { t } = useTranslation();
   const router = useRouter();
+  const { show: showToast } = useToast();
+  const confirm = useConfirm();
 
   // --- STEPS STATE ---
   const [currentStep, setCurrentStep] = useState(1);
@@ -122,7 +123,7 @@ export default function RegisterScreen() {
 
     if (step === 1) {
       if (!acceptedTerms) {
-        Alert.alert("Terms Required", "Please read and accept the Terms and Conditions to proceed.");
+        showToast("Please read and accept the Terms and Conditions to proceed.", { type: 'error' });
         return false;
       }
     }
@@ -199,22 +200,16 @@ export default function RegisterScreen() {
 
       // ✅ Non-artisans: check for locked roles
       if (['agent', 'state_coordinator'].includes(role)) {
-        Alert.alert(
-          'Account Created',
-          'Your account requires activation. Please log in to enter your Serial Number.',
-          [{ text: 'Go to Login', onPress: () => router.replace('/login') }]
-        );
+        showToast('Account created — it requires activation. Please log in to enter your Serial Number.', { type: 'success' });
+        router.replace('/login');
       } else {
-        Alert.alert(
-          'Success',
-          'Account created!',
-          [{ text: 'Login Now', onPress: () => router.replace('/login') }]
-        );
+        showToast('Account created!', { type: 'success' });
+        router.replace('/login');
       }
 
     } catch (error: any) {
       const msg = error.response?.data ? JSON.stringify(error.response.data) : 'Registration Failed';
-      Alert.alert('Error', msg);
+      showToast(msg, { type: 'error' });
     } finally {
       setLoading(false);
     }
@@ -237,11 +232,8 @@ export default function RegisterScreen() {
       // Fee already settled (e.g. a retry after a successful payment):
       // that's success, not an error — send the user to log in.
       if (payErr?.response?.data?.already_paid) {
-        Alert.alert(
-          'Already Paid',
-          'Your registration fee has already been paid. Please log in to continue.',
-          [{ text: 'Go to Login', onPress: () => router.replace('/login') }]
-        );
+        showToast('Your registration fee has already been paid. Please log in to continue.', { type: 'info' });
+        router.replace('/login');
         return;
       }
       // Surface the real reason (server error / network) so failures are
@@ -253,14 +245,17 @@ export default function RegisterScreen() {
         (payErr?.message === 'Network Error' || payErr?.code === 'ECONNABORTED'
           ? 'Network problem — check your internet connection.'
           : '');
-      Alert.alert(
-        'Payment Error',
-        `Could not initialize payment.${serverMsg ? `\n\nReason: ${serverMsg}` : ''}\n\nYou can retry now, or complete payment later when you log in.`,
-        [
-          { text: 'Retry', onPress: () => handlePayNow() },
-          { text: 'Go to Login', style: 'cancel', onPress: () => router.replace('/login') },
-        ]
-      );
+      const retry = await confirm({
+        title: 'Payment Error',
+        message: `Could not initialize payment.${serverMsg ? `\n\nReason: ${serverMsg}` : ''}\n\nYou can retry now, or complete payment later when you log in.`,
+        confirmLabel: 'Retry',
+        cancelLabel: 'Go to Login',
+      });
+      if (retry) {
+        handlePayNow();
+      } else {
+        router.replace('/login');
+      }
     } finally {
       setLoading(false);
     }

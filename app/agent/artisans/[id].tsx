@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import {
     View, Text, StyleSheet, ScrollView, Image,
-    ActivityIndicator, Alert, Linking, Pressable,
+    ActivityIndicator, Linking, Pressable,
 } from 'react-native';
 import { useLocalSearchParams, useRouter, Stack } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -11,12 +11,14 @@ import { useTranslation } from 'react-i18next';
 
 import { artisanAPI } from '@/src/api/client';
 import { color, font, radius, shadow, space, type } from '@/constants/theme';
-import { Badge } from '@/src/components/ui';
+import { Badge, useToast, useConfirm } from '@/src/components/ui';
 
 export default function ArtisanDetailScreen() {
     const { t, i18n } = useTranslation();
     const { id } = useLocalSearchParams();
     const router = useRouter();
+    const { show: showToast } = useToast();
+    const confirm = useConfirm();
     const [artisan, setArtisan] = useState<any>(null);
     const [loading, setLoading] = useState(true);
     const [verifying, setVerifying] = useState(false);
@@ -31,7 +33,7 @@ export default function ArtisanDetailScreen() {
             const data = await artisanAPI.getArtisanById(Number(id));
             setArtisan(data);
         } catch (error) {
-            Alert.alert("Error", "Could not load artisan details");
+            showToast("Could not load artisan details", { type: 'error' });
             router.back();
         } finally {
             setLoading(false);
@@ -45,18 +47,15 @@ export default function ArtisanDetailScreen() {
         }
     };
 
-    const handleVerify = () => {
-        Alert.alert(
-            "Confirm Verification",
-            "By clicking Confirm, you certify that you have physically inspected this artisan's business location and identity.",
-            [
-                { text: "Cancel", style: "cancel" },
-                {
-                    text: "Confirm & Verify",
-                    onPress: processVerification
-                }
-            ]
-        );
+    const handleVerify = async () => {
+        const ok = await confirm({
+            title: "Confirm Verification",
+            message: "By clicking Confirm, you certify that you have physically inspected this artisan's business location and identity.",
+            confirmLabel: "Confirm & Verify",
+        });
+        if (ok) {
+            processVerification();
+        }
     };
 
     const processVerification = async () => {
@@ -65,10 +64,10 @@ export default function ArtisanDetailScreen() {
             // verify-artisan takes the artisan's USER id, not this screen's
             // route param (which is the ArtisanProfile id).
             await artisanAPI.verifyArtisan(Number(artisan.user));
-            Alert.alert("Success", "Artisan verified successfully!");
+            showToast("Artisan verified successfully!", { type: 'success' });
             fetchDetails(); // Reload data to show "Verified" status
         } catch (error) {
-            Alert.alert("Error", "Verification failed. Please try again.");
+            showToast("Verification failed. Please try again.", { type: 'error' });
         } finally {
             setVerifying(false);
         }
