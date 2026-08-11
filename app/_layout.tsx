@@ -145,6 +145,7 @@ export default function RootLayout() {
                   <Stack.Screen name="booking/detail/[id]" options={{ headerShown: false }} />
                   <Stack.Screen name="chat/index" options={{ headerShown: false }} />
                   <Stack.Screen name="chat/[id]" options={{ headerShown: false }} />
+                  <Stack.Screen name="chat/ai" options={{ headerShown: false }} />
 
                   {/* Profile settings screens */}
                   <Stack.Screen name="personal-info" options={{ headerShown: false }} />
