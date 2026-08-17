@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import {
     View, Text, FlatList, TextInput, TouchableOpacity,
-    Platform, StyleSheet, ActivityIndicator, Pressable, AppState,
+    Platform, StyleSheet, ActivityIndicator, Pressable, AppState, Keyboard,
 } from 'react-native';
 // Native-insets KeyboardAvoidingView in real builds, RN fallback in Expo Go.
 import { KeyboardAvoidingView } from '@/src/components/Keyboard';
@@ -85,14 +85,18 @@ export default function ChatRoomScreen() {
             try {
                 const response = await chatAPI.getMessages(convId);
                 const data = Array.isArray(response) ? response : (response.results || []);
+                // Oldest first — normal chronological order, rendered in a
+                // non-inverted FlatList (see the FlatList below for why).
                 const sorted = data.sort((a: any, b: any) =>
-                    new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+                    new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
                 );
 
                 setMessages(prev => {
                     if (sorted.length > 0) {
-                        const isNew = prev.length === 0 || sorted[0].id !== prev[0].id;
-                        if (isNew && currentUserIdRef.current && Number(sorted[0].sender) !== currentUserIdRef.current) {
+                        const latest = sorted[sorted.length - 1];
+                        const prevLatest = prev[prev.length - 1];
+                        const isNew = !prevLatest || latest.id !== prevLatest.id;
+                        if (isNew && currentUserIdRef.current && Number(latest.sender) !== currentUserIdRef.current) {
                             playSound('receive');
                         }
                         if (isNew || sorted.length !== prev.length) return sorted;
@@ -106,6 +110,16 @@ export default function ChatRoomScreen() {
         const interval = setInterval(fetchMessages, 4000); // Polling every 4s
         return () => clearInterval(interval);
     }, []); // ⚡ EMPTY ARRAY to prevent 500 req/min loops!
+
+    // Without inverted, the list doesn't auto-anchor to the bottom — keep the
+    // latest message in view when the keyboard opens (mirrors app/chat/ai.tsx).
+    useEffect(() => {
+        const showEvent = Platform.OS === 'android' ? 'keyboardDidShow' : 'keyboardWillShow';
+        const sub = Keyboard.addListener(showEvent, () => {
+            requestAnimationFrame(() => flatListRef.current?.scrollToEnd({ animated: true }));
+        });
+        return () => sub.remove();
+    }, []);
 
     // --- HANDLERS ---
     const handleProfileClick = () => {
@@ -149,10 +163,10 @@ export default function ChatRoomScreen() {
                 id: tempId, text: textToSend, sender: currentUserId,
                 created_at: new Date().toISOString(), is_temp: true
             };
-            setMessages(prev => [tempMsg, ...prev]);
+            setMessages(prev => [...prev, tempMsg]);
 
             const newMsg = await chatAPI.sendMessage(payload);
-            setMessages(prev => [newMsg, ...prev.filter(m => m.id !== tempId)]);
+            setMessages(prev => [...prev.filter(m => m.id !== tempId), newMsg]);
 
         } catch (error: any) {
             showToast("Message not sent.", { type: 'error' });
@@ -174,9 +188,10 @@ export default function ChatRoomScreen() {
 
     const renderItem = ({ item, index }: { item: any; index: number }) => {
         const isMe = Number(item.sender) === Number(currentUserId);
-        // Inverted list: the next index holds the OLDER message. Show a date pill
-        // above the first message of each calendar day.
-        const older = messages[index + 1];
+        // Chronological (oldest-first) list — the previous index holds the
+        // OLDER message. Show a date pill above the first message of each
+        // calendar day.
+        const older = messages[index - 1];
         const showDate = !older ||
             new Date(older.created_at).toDateString() !== new Date(item.created_at).toDateString();
 
@@ -239,8 +254,8 @@ export default function ChatRoomScreen() {
                     data={messages}
                     keyExtractor={(item) => item.id.toString()}
                     renderItem={renderItem}
-                    inverted
                     contentContainerStyle={styles.list}
+                    onContentSizeChange={() => flatListRef.current?.scrollToEnd()}
                     keyboardShouldPersistTaps="handled"
                     ListEmptyComponent={
                         <View style={styles.empty}>
@@ -334,7 +349,7 @@ const styles = StyleSheet.create({
         marginLeft: space.md,
     },
 
-    list: { paddingHorizontal: space.lg, paddingVertical: space.xl },
+    list: { flexGrow: 1, paddingHorizontal: space.lg, paddingVertical: space.xl },
 
     dateChipWrap: { alignItems: 'center', marginVertical: space.md },
     dateChip: {
@@ -396,7 +411,7 @@ const styles = StyleSheet.create({
     },
     disabledBtn: { backgroundColor: color.border, shadowOpacity: 0, elevation: 0 },
 
-    empty: { alignItems: 'center', marginTop: 100, transform: [{ scaleY: -1 }] },
+    empty: { flex: 1, alignItems: 'center', justifyContent: 'center' },
     emptyIconCircle: {
         width: 64,
         height: 64,
