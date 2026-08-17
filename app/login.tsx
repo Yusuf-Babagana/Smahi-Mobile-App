@@ -129,7 +129,6 @@ export default function LoginScreen() {
                 resizeMode="contain"
               />
             </View>
-            <Text style={styles.eyebrow}>{t('Barka da dawowa')}</Text>
             <Text style={styles.title}>{t('Welcome back')}</Text>
             <Text style={styles.subtitle}>{t('Sign in to continue where you left off.')}</Text>
           </Animated.View>
@@ -229,14 +228,6 @@ const styles = StyleSheet.create({
     ...shadow.e2,
   },
   logo: { width: 58, height: 58 },
-  eyebrow: {
-    fontFamily: font.extrabold,
-    fontSize: 11.5,
-    letterSpacing: 1.2,
-    textTransform: 'uppercase',
-    color: color.brand600,
-    marginBottom: 6,
-  },
   title: { ...type.titleLg, textAlign: 'center' },
   subtitle: {
     fontFamily: font.medium,
