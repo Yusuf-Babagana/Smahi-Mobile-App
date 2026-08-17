@@ -1,9 +1,10 @@
 import React, { useState } from 'react';
-import { View, Text, Pressable, Modal, FlatList, StyleSheet } from 'react-native';
+import { View, Text, Pressable, StyleSheet } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useTranslation } from 'react-i18next';
 import { color, font, radius, space } from '@/constants/theme';
-import { SUPPORTED_LANGUAGES, languageName } from '@/src/constants/languages';
+import { languageName } from '@/src/constants/languages';
+import { LanguagePickerModal } from './LanguagePickerModal';
 
 interface LanguagePickerFieldProps {
   /** Current preferred_language code, e.g. 'en' — blank/undefined shows "English". */
@@ -17,8 +18,8 @@ interface LanguagePickerFieldProps {
 
 // Sets a user's default communication language (chat.translation on the
 // backend automatically translates every message they receive into it).
-// Used on both the client Personal Information screen and the artisan/
-// service-provider profile screen — one picker, one behavior, everywhere.
+// A labeled form field for settings screens (Personal Information, artisan
+// profile) — see LanguagePickerChip for the compact dashboard-header version.
 export function LanguagePickerField({ value, onChange, label, hint }: LanguagePickerFieldProps) {
   const { t } = useTranslation();
   const [open, setOpen] = useState(false);
@@ -39,34 +40,13 @@ export function LanguagePickerField({ value, onChange, label, hint }: LanguagePi
         {hint ?? t('Messages you receive are automatically translated into this language.')}
       </Text>
 
-      <Modal visible={open} transparent animationType="slide" onRequestClose={() => setOpen(false)}>
-        <Pressable style={styles.overlay} onPress={() => setOpen(false)} accessibilityRole="none">
-          <Pressable style={styles.sheet} onPress={() => {}}>
-            <View style={styles.handle} />
-            <Text style={styles.title}>{label ?? t('Message language')}</Text>
-            <FlatList
-              data={SUPPORTED_LANGUAGES}
-              keyExtractor={(item) => item.code}
-              style={styles.list}
-              renderItem={({ item }) => {
-                const selected = item.code === value;
-                return (
-                  <Pressable
-                    onPress={() => { onChange(item.code); setOpen(false); }}
-                    accessibilityRole="button"
-                    accessibilityLabel={item.name}
-                    accessibilityState={{ selected }}
-                    style={({ pressed }) => [styles.row, pressed && { opacity: 0.7 }]}
-                  >
-                    <Text style={[styles.rowText, selected && styles.rowTextSelected]}>{item.name}</Text>
-                    {selected && <MaterialIcons name="check" size={20} color={color.brand600} />}
-                  </Pressable>
-                );
-              }}
-            />
-          </Pressable>
-        </Pressable>
-      </Modal>
+      <LanguagePickerModal
+        visible={open}
+        value={value}
+        title={label ?? t('Message language')}
+        onClose={() => setOpen(false)}
+        onSelect={(code) => { onChange(code); setOpen(false); }}
+      />
     </View>
   );
 }
@@ -84,21 +64,6 @@ const styles = StyleSheet.create({
   },
   value: { fontFamily: font.semibold, fontSize: 15, color: color.ink900 },
   hint: { fontFamily: font.medium, fontSize: 12, color: color.ink400, marginTop: space.sm, marginLeft: 4, lineHeight: 16 },
-
-  overlay: { flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(11,31,63,0.55)' },
-  sheet: {
-    backgroundColor: color.surface, borderTopLeftRadius: radius.xxl, borderTopRightRadius: radius.xxl,
-    paddingTop: space.md, paddingHorizontal: space.xl, paddingBottom: space.xxl, maxHeight: '70%',
-  },
-  handle: { width: 36, height: 4, borderRadius: 2, backgroundColor: color.border, alignSelf: 'center', marginBottom: space.lg },
-  title: { fontFamily: font.extrabold, fontSize: 17, color: color.ink900, marginBottom: space.md },
-  list: { maxHeight: 400 },
-  row: {
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-    paddingVertical: space.md, borderBottomWidth: 1, borderBottomColor: color.border,
-  },
-  rowText: { fontFamily: font.semibold, fontSize: 15, color: color.ink900 },
-  rowTextSelected: { fontFamily: font.extrabold, color: color.brand600 },
 });
 
 export default LanguagePickerField;

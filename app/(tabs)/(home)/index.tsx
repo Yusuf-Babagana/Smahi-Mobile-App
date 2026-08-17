@@ -22,7 +22,7 @@ import {
 import { BACKEND_URL, CLOUDINARY_CLOUD_NAME as CLOUD_NAME } from '@/src/constants/env';
 import { color, font, radius, shadow, space, type } from '@/constants/theme';
 import {
-  ArtisanCard, Avatar, Chip, EmptyState, SegmentedControl, SkeletonCard, useToast,
+  ArtisanCard, Avatar, Chip, EmptyState, LanguagePickerChip, SegmentedControl, SkeletonCard, useToast,
 } from '@/src/components/ui';
 import { recordSearch } from '@/src/utils/recommendations';
 
@@ -637,6 +637,11 @@ export default function ClientHomeScreen() {
                   </TouchableOpacity>
                 ))}
               </View>
+              {/* Message language — separate from the EN/HA toggle above
+                  (that one switches the app's own interface text; this one
+                  sets which language incoming chat messages get
+                  automatically translated into). */}
+              <LanguagePickerChip variant="dark" />
               <TouchableOpacity
                 style={styles.iconBtn}
                 onPress={() => router.push('/chat/ai')}
