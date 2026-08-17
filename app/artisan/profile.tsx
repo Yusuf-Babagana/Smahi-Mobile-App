@@ -8,13 +8,13 @@ import Animated, { FadeInDown, FadeInUp } from "react-native-reanimated";
 import axios from 'axios';
 import * as SecureStore from 'expo-secure-store';
 
-import { artisanAPI } from "@/src/api/client";
+import { artisanAPI, authAPI } from "@/src/api/client";
 import { storage } from "@/src/utils/storage";
 import { useAuth } from "@/src/contexts/AuthContext";
 import ContactList from "@/src/components/ContactList";
 import { color, font, radius, shadow, space, type } from '@/constants/theme';
 import { useTranslation } from 'react-i18next';
-import { useToast, useConfirm } from '@/src/components/ui';
+import { useToast, useConfirm, LanguagePickerField } from '@/src/components/ui';
 
 import { API_URL as BASE_URL, CLOUDINARY_CLOUD_NAME as CLOUD_NAME } from '@/src/constants/env';
 
@@ -32,6 +32,10 @@ export default function ArtisanProfileScreen() {
     const [portfolioImages, setPortfolioImages] = useState<any[]>([]);
 
     const [bio, setBio] = useState("");
+    // Default language incoming/outgoing chat messages are automatically
+    // translated into (backend: User.preferred_language). Separate from
+    // the app's own UI language.
+    const [preferredLanguage, setPreferredLanguage] = useState("");
 
     useEffect(() => {
         loadData();
@@ -58,6 +62,7 @@ export default function ArtisanProfileScreen() {
 
             setUser(response.data);
             setPortfolioImages(response.data.portfolio_images || []);
+            setPreferredLanguage(response.data.preferred_language || "");
 
         } catch (error) {
             console.error(error);
@@ -136,6 +141,20 @@ export default function ArtisanProfileScreen() {
             showToast(t('Profile updated successfully!'), { type: 'success' });
         } catch (error) {
             showToast(t('Failed to update profile.'), { type: 'error' });
+        }
+    };
+
+    const handleLanguageChange = async (code: string) => {
+        const previous = preferredLanguage;
+        setPreferredLanguage(code); // optimistic — picker already closed itself
+        try {
+            await authAPI.updateProfile({ preferred_language: code });
+            await storage.updateCurrentUser({ preferred_language: code });
+            setUser((prev: any) => ({ ...prev, preferred_language: code }));
+            showToast(t('Message language updated.'), { type: 'success' });
+        } catch (error) {
+            setPreferredLanguage(previous);
+            showToast(t('Failed to update message language. Please try again.'), { type: 'error' });
         }
     };
 
@@ -248,6 +267,11 @@ export default function ArtisanProfileScreen() {
                     ) : (
                         <Text style={styles.bioText}>{bio}</Text>
                     )}
+                </Animated.View>
+
+                {/* Message language */}
+                <Animated.View entering={FadeInDown.delay(350)} style={styles.section}>
+                    <LanguagePickerField value={preferredLanguage} onChange={handleLanguageChange} />
                 </Animated.View>
 
                 {/* Portfolio */}

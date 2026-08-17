@@ -17,3 +17,4 @@ export { BookingTimeline } from './BookingTimeline';
 export { ToastProvider, useToast } from './Toast';
 export type { ToastType } from './Toast';
 export { ConfirmProvider, useConfirm } from './Dialog';
+export { LanguagePickerField } from './LanguagePickerField';
