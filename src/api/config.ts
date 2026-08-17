@@ -9,6 +9,19 @@ const BASE_URL = `${API_URL}/`;
 
 console.log("🔗 Connecting to Backend at:", BASE_URL);
 
+// This module can't reach React context (AuthContext lives above it in the
+// tree, and this file is imported by plain non-component code too), so it
+// notifies the app the same way: AuthProvider registers itself here on
+// mount. Without this, a dead refresh token used to just clear SecureStore
+// silently — AuthContext.user stayed populated, so every screen kept
+// rendering as "logged in" while every single request (chat polling, push
+// registration, artisan search, ...) 401'd forever with nothing telling the
+// user to log back in.
+let onSessionExpired: (() => void) | null = null;
+export function setSessionExpiredHandler(handler: (() => void) | null) {
+    onSessionExpired = handler;
+}
+
 const apiClient = axios.create({
     baseURL: BASE_URL,
     headers: {
@@ -63,11 +76,13 @@ apiClient.interceptors.response.use(
                 original.headers.Authorization = `Bearer ${newToken}`;
                 return apiClient(original);
             }
-            // Refresh failed (revoked/expired): drop the dead session so the
-            // next auth guard sends the user to login instead of spamming 401s.
+            // Refresh failed (revoked/expired/blacklisted): drop the dead
+            // session and tell AuthProvider to clear its state and send the
+            // user to login, instead of every screen silently spamming 401s.
             await SecureStore.deleteItemAsync('accessToken');
             await SecureStore.deleteItemAsync('refreshToken');
             await AsyncStorage.removeItem('user');
+            onSessionExpired?.();
         }
         return Promise.reject(error);
     }

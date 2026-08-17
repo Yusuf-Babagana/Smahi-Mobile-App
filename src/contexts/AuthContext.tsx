@@ -1,8 +1,9 @@
-import React, { createContext, useState, useEffect, useContext } from 'react';
+import React, { createContext, useState, useEffect, useContext, useRef } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as SecureStore from 'expo-secure-store';
 import { User, LoginCredentials } from '../types';
 import { authAPI } from '../api/client';
+import { setSessionExpiredHandler } from '../api/config';
 import { useRouter } from 'expo-router';
 import { unregisterCurrentDevice } from '../utils/pushNotifications';
 
@@ -24,11 +25,29 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const [user, setUser] = useState<User | null>(null);
     const [loading, setLoading] = useState(true);
     const router = useRouter();
+    // Guards against apiClient's interceptor firing this once per concurrent
+    // 401 (chat polling, artisan search, push registration can all be
+    // in flight at once) — only actually clear state/redirect the first time.
+    const sessionExpiredHandledRef = useRef(false);
 
     // Load user from storage on boot
     useEffect(() => {
         loadUser();
     }, []);
+
+    // Registers with apiClient (src/api/config.ts) so a dead refresh token
+    // (revoked/expired/blacklisted) forces the user back to login instead of
+    // leaving AuthContext.user populated while every request silently 401s.
+    useEffect(() => {
+        setSessionExpiredHandler(() => {
+            if (sessionExpiredHandledRef.current) return;
+            sessionExpiredHandledRef.current = true;
+            setUser(null);
+            AsyncStorage.removeItem('user').catch(() => {});
+            router.replace('/login');
+        });
+        return () => setSessionExpiredHandler(null);
+    }, [router]);
 
     const loadUser = async () => {
         try {
@@ -51,6 +70,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         const loggedInUser = response.user;
 
         // 2. Save Data
+        sessionExpiredHandledRef.current = false; // fresh session — allow a future expiry to be handled again
         setUser(loggedInUser);
         await AsyncStorage.setItem('user', JSON.stringify(loggedInUser));
 
@@ -87,6 +107,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     };
 
     const setAuthUser = async (nextUser: User) => {
+        sessionExpiredHandledRef.current = false; // fresh session — allow a future expiry to be handled again
         setUser(nextUser);
         await AsyncStorage.setItem('user', JSON.stringify(nextUser));
     };
