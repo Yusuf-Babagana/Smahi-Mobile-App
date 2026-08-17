@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
     View, Text, FlatList, TextInput, TouchableOpacity,
     Platform, StyleSheet, ActivityIndicator, Pressable, AppState, Keyboard,
@@ -63,19 +63,37 @@ export default function ChatRoomScreen() {
         storage.getCurrentUser().then(user => user && setCurrentUserId(Number(user.id)));
     }, []);
 
-    useEffect(() => {
-        const initChat = async () => {
-            if (initialId === 'new' && recipientId && !conversationId) {
-                setCheckingHistory(true);
-                try {
-                    const data = await chatAPI.getOrCreateConversation(Number(recipientId));
-                    if (data.id) setConversationId(data.id);
-                } catch (error) { console.log("Init chat failed", error); }
-                finally { setCheckingHistory(false); }
+    // Creates/fetches the conversation for a brand-new chat (id === 'new').
+    // Pulled out of the effect so handleSend can call it again as a retry —
+    // previously a failed attempt (bad network, cold-starting backend, an
+    // expired session the 401 interceptor couldn't recover) left
+    // conversationId stuck at null forever, since the effect below only
+    // ever ran once per screen mount. Every tap of Send just re-showed the
+    // same "please wait" toast with nothing actually retrying underneath.
+    const initChat = useCallback(async (): Promise<number | null> => {
+        if (conversationIdRef.current) return conversationIdRef.current;
+        if (initialId !== 'new' || !recipientId) return null;
+        setCheckingHistory(true);
+        try {
+            const data = await chatAPI.getOrCreateConversation(Number(recipientId));
+            if (data.id) {
+                // React state updates aren't visible synchronously — set the
+                // ref directly too so a caller awaiting this (handleSend's
+                // retry) sees the id immediately, not on the next render.
+                conversationIdRef.current = data.id;
+                setConversationId(data.id);
+                return data.id;
             }
-        };
-        initChat();
-    }, [recipientId, initialId]);
+            return null;
+        } catch (error) {
+            console.log("Init chat failed", error);
+            return null;
+        } finally {
+            setCheckingHistory(false);
+        }
+    }, [initialId, recipientId]);
+
+    useEffect(() => { initChat(); }, [initChat]);
 
     useEffect(() => {
         const fetchMessages = async () => {
@@ -148,13 +166,18 @@ export default function ChatRoomScreen() {
         playSound('send');
 
         try {
-            if (!conversationId) {
-                showToast("Please wait — initializing conversation...", { type: 'info' });
+            // Not just "wait" — actively (re)creates the conversation if it
+            // isn't ready yet, in case the first attempt failed (see initChat
+            // above for why this used to get stuck on a dead-end toast).
+            const activeConversationId = conversationIdRef.current ?? await initChat();
+            if (!activeConversationId) {
+                showToast("Couldn't start this conversation. Check your connection and try again.", { type: 'error' });
+                setInputText(textToSend);
                 return;
             }
 
             const payload: any = {
-                conversation_id: conversationId,
+                conversation_id: activeConversationId,
                 text: textToSend
             };
 
