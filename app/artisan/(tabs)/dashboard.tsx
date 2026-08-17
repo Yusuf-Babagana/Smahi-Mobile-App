@@ -15,7 +15,7 @@ import { useLocation } from '@/src/contexts/LocationContext';
 import { EmailVerificationBanner } from '@/src/components/EmailVerificationBanner';
 import { CLOUDINARY_CLOUD_NAME as CLOUD_NAME } from '@/src/constants/env';
 import { color, font, radius, shadow, space, type } from '@/constants/theme';
-import { Avatar, Badge, Button, StatTile, useToast, useConfirm } from '@/src/components/ui';
+import { Avatar, Badge, Button, LanguagePickerChip, StatTile, useToast, useConfirm } from '@/src/components/ui';
 
 export default function ArtisanDashboard() {
   const router = useRouter();
@@ -298,9 +298,14 @@ export default function ArtisanDashboard() {
               </Text>
             </View>
 
-            <Pressable style={styles.iconBtn} accessibilityRole="button" accessibilityLabel={t('Notifications')}>
-              <MaterialIcons name="notifications" size={19} color="#FFF" />
-            </Pressable>
+            <View style={styles.headerActions}>
+              <Pressable style={styles.iconBtn} accessibilityRole="button" accessibilityLabel={t('Notifications')}>
+                <MaterialIcons name="notifications" size={19} color="#FFF" />
+              </Pressable>
+              {/* Which language incoming chat messages get auto-translated
+                  into — separate from the app's own interface language. */}
+              <LanguagePickerChip variant="dark" />
+            </View>
           </View>
         </SafeAreaView>
       </View>
@@ -561,6 +566,7 @@ const styles = StyleSheet.create({
     paddingTop: space.md,
   },
   headerText: { flex: 1, marginLeft: space.md },
+  headerActions: { alignItems: 'center', gap: 6 },
   nameLabel: { fontFamily: font.extrabold, fontSize: 17, letterSpacing: -0.17, color: '#FFF' },
   tradeLabel: { fontFamily: font.bold, fontSize: 12, color: '#B9CBE6', marginTop: 2 },
   iconBtn: {
