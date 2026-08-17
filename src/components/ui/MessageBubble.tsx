@@ -1,45 +1,44 @@
 import React, { useState } from 'react';
-import { StyleSheet, Text, View, TouchableOpacity, ActivityIndicator, StyleProp, ViewStyle } from 'react-native';
+import { StyleSheet, Text, View, TouchableOpacity, StyleProp, ViewStyle } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
 import { color, font } from '@/constants/theme';
-import { translateText } from '@/src/utils/translation';
+import { languageName } from '@/src/constants/languages';
 
 interface MessageBubbleProps {
+  /** Text to display — already translated into the viewer's preferred
+   * language by the backend (chat.serializers.MessageSerializer), or the
+   * original if no translation was needed/possible. */
   text: string;
   mine: boolean;
   timestamp?: string;
   seen?: boolean;
   delivered?: boolean;
   style?: StyleProp<ViewStyle>;
+  /** The untouched original — only meaningful when isTranslated is true. */
+  originalText?: string;
+  isTranslated?: boolean;
+  /** ISO 639-1 code of the original message, for the "Translated from X" label. */
+  sourceLanguage?: string;
 }
 
-export function MessageBubble({ text, mine, timestamp, seen, delivered, style }: MessageBubbleProps) {
-  const [translated, setTranslated] = useState<string | null>(null);
-  const [translating, setTranslating] = useState(false);
+export function MessageBubble({
+  text, mine, timestamp, seen, delivered, style,
+  originalText, isTranslated, sourceLanguage,
+}: MessageBubbleProps) {
+  const [showOriginal, setShowOriginal] = useState(false);
 
-  const handleTranslate = async () => {
-    if (translated) {
-      setTranslated(null);
-      return;
-    }
-    setTranslating(true);
-    try {
-      const targetLang = mine ? 'ha' : 'en';
-      const result = await translateText(text, 'auto', targetLang);
-      if (result !== text) setTranslated(result);
-    } catch {}
-    setTranslating(false);
-  };
-
-  const displayText = translated || text;
+  // Automatic, server-side translation (see chat.serializers.MessageSerializer)
+  // means there's nothing to fetch here — the toggle just flips between two
+  // strings the API already sent.
+  const displayText = showOriginal && originalText ? originalText : text;
 
   return (
     <View style={[styles.row, mine ? styles.rowMine : styles.rowTheirs, style]}>
       <View style={[styles.bubble, mine ? styles.bubbleMine : styles.bubbleTheirs]}>
         <Text style={[styles.text, mine ? styles.textMine : styles.textTheirs]}>{displayText}</Text>
-        {translated && (
+        {isTranslated && (
           <Text style={[styles.translationLabel, mine ? styles.translationLabelMine : styles.translationLabelTheirs]}>
-            {mine ? 'Translated to Hausa' : 'Translated to English'}
+            {showOriginal ? `Original (${languageName(sourceLanguage)})` : `Translated from ${languageName(sourceLanguage)}`}
           </Text>
         )}
       </View>
@@ -53,22 +52,19 @@ export function MessageBubble({ text, mine, timestamp, seen, delivered, style }:
             style={styles.ticks}
           />
         )}
-        {!mine && (
+        {isTranslated && (
           <TouchableOpacity
-            onPress={handleTranslate}
+            onPress={() => setShowOriginal((v) => !v)}
             style={styles.translateBtn}
             accessibilityRole="button"
-            accessibilityLabel={translated ? 'Show original' : 'Translate'}
+            accessibilityLabel={showOriginal ? 'Show translation' : 'View original'}
+            accessibilityState={{ selected: showOriginal }}
           >
-            {translating ? (
-              <ActivityIndicator size={12} color={color.ink400} />
-            ) : (
-              <MaterialIcons
-                name={translated ? 'undo' : 'translate'}
-                size={14}
-                color={translated ? color.brand600 : color.ink400}
-              />
-            )}
+            <MaterialIcons
+              name={showOriginal ? 'undo' : 'translate'}
+              size={14}
+              color={showOriginal ? color.brand600 : color.ink400}
+            />
           </TouchableOpacity>
         )}
       </View>

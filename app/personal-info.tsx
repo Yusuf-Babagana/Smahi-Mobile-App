@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from "react";
 import {
     View, Text, StyleSheet, ScrollView, Pressable, TextInput,
-    ActivityIndicator, KeyboardAvoidingView, Platform,
+    ActivityIndicator, KeyboardAvoidingView, Platform, Modal, FlatList,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { MaterialIcons } from "@expo/vector-icons";
@@ -14,6 +14,7 @@ import { storage } from "@/src/utils/storage";
 import { useAuth } from "@/src/contexts/AuthContext";
 import { color, font, radius, shadow, space } from "@/constants/theme";
 import { useToast } from "@/src/components/ui";
+import { SUPPORTED_LANGUAGES, languageName } from "@/src/constants/languages";
 
 // Editable account fields — matches the backend UserUpdateSerializer
 // (auth/profile/ PATCH accepts first_name, last_name, phone_number, address).
@@ -29,6 +30,11 @@ export default function PersonalInfoScreen() {
     const [lastName, setLastName] = useState("");
     const [phone, setPhone] = useState("");
     const [address, setAddress] = useState("");
+    // Default language incoming/outgoing chat messages are automatically
+    // translated into (backend: User.preferred_language). Separate from
+    // the app's own UI language (LanguageToggle.tsx).
+    const [preferredLanguage, setPreferredLanguage] = useState("");
+    const [showLanguagePicker, setShowLanguagePicker] = useState(false);
 
     // --- Account deletion (Play Store data-safety requirement) ---
     const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
@@ -44,6 +50,7 @@ export default function PersonalInfoScreen() {
                 setLastName(user.last_name || "");
                 setPhone(user.phone_number || "");
                 setAddress(user.address || "");
+                setPreferredLanguage(user.preferred_language || "");
             }
             setLoading(false);
         });
@@ -61,6 +68,7 @@ export default function PersonalInfoScreen() {
                 last_name: lastName.trim(),
                 phone_number: phone.trim(),
                 address: address.trim(),
+                preferred_language: preferredLanguage,
             };
             await authAPI.updateProfile(payload);
             await storage.updateCurrentUser(payload);
@@ -141,6 +149,22 @@ export default function PersonalInfoScreen() {
                         <Field label={t('Phone Number')} value={phone} onChangeText={setPhone} keyboardType="phone-pad" />
                         <Field label={t('Address')} value={address} onChangeText={setAddress} />
 
+                        <View style={styles.fieldBlock}>
+                            <Text style={styles.fieldLabel}>{t('Message language')}</Text>
+                            <Pressable
+                                onPress={() => setShowLanguagePicker(true)}
+                                accessibilityRole="button"
+                                accessibilityLabel={t('Change message language')}
+                                style={({ pressed }) => [styles.input, styles.languageInput, pressed && { opacity: 0.8 }]}
+                            >
+                                <Text style={styles.languageValue}>{languageName(preferredLanguage)}</Text>
+                                <MaterialIcons name="expand-more" size={20} color={color.ink400} />
+                            </Pressable>
+                            <Text style={styles.fieldHint}>
+                                {t('Messages you receive are automatically translated into this language.')}
+                            </Text>
+                        </View>
+
                         <Pressable
                             onPress={handleSave}
                             disabled={saving}
@@ -204,6 +228,51 @@ export default function PersonalInfoScreen() {
                     </Animated.View>
                 </ScrollView>
             </KeyboardAvoidingView>
+
+            <Modal
+                visible={showLanguagePicker}
+                transparent
+                animationType="slide"
+                onRequestClose={() => setShowLanguagePicker(false)}
+            >
+                <Pressable
+                    style={styles.modalOverlay}
+                    onPress={() => setShowLanguagePicker(false)}
+                    accessibilityRole="none"
+                >
+                    <Pressable style={styles.modalSheet} onPress={() => {}}>
+                        <View style={styles.modalHandle} />
+                        <Text style={styles.modalTitle}>{t('Message language')}</Text>
+                        <FlatList
+                            data={SUPPORTED_LANGUAGES}
+                            keyExtractor={(item) => item.code}
+                            style={styles.modalList}
+                            renderItem={({ item }) => {
+                                const selected = item.code === preferredLanguage;
+                                return (
+                                    <Pressable
+                                        onPress={() => {
+                                            setPreferredLanguage(item.code);
+                                            setShowLanguagePicker(false);
+                                        }}
+                                        accessibilityRole="button"
+                                        accessibilityLabel={item.name}
+                                        accessibilityState={{ selected }}
+                                        style={({ pressed }) => [styles.languageRow, pressed && { opacity: 0.7 }]}
+                                    >
+                                        <Text style={[styles.languageRowText, selected && styles.languageRowTextSelected]}>
+                                            {item.name}
+                                        </Text>
+                                        {selected && (
+                                            <MaterialIcons name="check" size={20} color={color.brand600} />
+                                        )}
+                                    </Pressable>
+                                );
+                            }}
+                        />
+                    </Pressable>
+                </Pressable>
+            </Modal>
         </SafeAreaView>
     );
 }
@@ -233,6 +302,28 @@ const styles = StyleSheet.create({
         fontFamily: font.semibold, fontSize: 15, color: color.ink900,
     },
     inputDisabled: { backgroundColor: color.surfaceChip, color: color.ink400 },
+    fieldHint: { fontFamily: font.medium, fontSize: 12, color: color.ink400, marginTop: space.sm, marginLeft: 4, lineHeight: 16 },
+
+    languageInput: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+    languageValue: { fontFamily: font.semibold, fontSize: 15, color: color.ink900 },
+
+    modalOverlay: { flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(11,31,63,0.55)' },
+    modalSheet: {
+        backgroundColor: color.surface, borderTopLeftRadius: radius.xxl, borderTopRightRadius: radius.xxl,
+        paddingTop: space.md, paddingHorizontal: space.xl, paddingBottom: space.xxl, maxHeight: '70%',
+    },
+    modalHandle: {
+        width: 36, height: 4, borderRadius: 2, backgroundColor: color.border,
+        alignSelf: 'center', marginBottom: space.lg,
+    },
+    modalTitle: { fontFamily: font.extrabold, fontSize: 17, color: color.ink900, marginBottom: space.md },
+    modalList: { maxHeight: 400 },
+    languageRow: {
+        flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+        paddingVertical: space.md, borderBottomWidth: 1, borderBottomColor: color.border,
+    },
+    languageRowText: { fontFamily: font.semibold, fontSize: 15, color: color.ink900 },
+    languageRowTextSelected: { fontFamily: font.extrabold, color: color.brand600 },
 
     saveBtn: {
         height: 52, borderRadius: radius.lg, backgroundColor: color.brand600,

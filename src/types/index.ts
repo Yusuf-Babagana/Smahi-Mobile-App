@@ -85,6 +85,10 @@ export interface User {
   account_status?: 'active' | 'suspended' | 'locked';
   created_at?: string;
   serial_number?: string;
+  // Default language incoming/outgoing chat messages are automatically
+  // translated into (see src/constants/languages.ts). Blank = never
+  // explicitly chosen.
+  preferred_language?: string;
 }
 
 // The data collected from the Register Form

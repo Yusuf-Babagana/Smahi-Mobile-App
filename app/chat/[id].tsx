@@ -195,6 +195,9 @@ export default function ChatRoomScreen() {
                     timestamp={new Date(item.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                     delivered={isMe && !item.is_temp}
                     seen={!!(item.seen || item.is_seen || item.read)}
+                    originalText={item.original_text}
+                    isTranslated={!!item.is_translated}
+                    sourceLanguage={item.original_language}
                 />
             </View>
         );
