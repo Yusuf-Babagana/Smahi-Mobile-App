@@ -154,8 +154,16 @@ export default function AgentDashboard() {
             </Pressable>
           </View>
 
-          {/* User Profile Section */}
-          <View style={styles.profileSection}>
+          {/* User Profile Section — tap through to My Profile (Digital ID,
+              account settings, logout), same pattern as the artisan dashboard's
+              avatar. This was previously the only screen with no entry point
+              into app/agent/artisans/profile.tsx at all. */}
+          <Pressable
+            style={styles.profileSection}
+            onPress={() => router.push('/agent/artisans/profile')}
+            accessibilityRole="button"
+            accessibilityLabel={t('My profile')}
+          >
             <Avatar name={displayName} uri={user?.profile_picture} size={60} borderRadius={20} online />
             <View style={styles.profileInfo}>
               <Text style={styles.userName} numberOfLines={1}>{displayName}</Text>
@@ -170,7 +178,8 @@ export default function AgentDashboard() {
                 </Text>
               </View>
             </View>
-          </View>
+            <MaterialIcons name="chevron-right" size={20} color="rgba(255,255,255,0.5)" />
+          </Pressable>
 
         </SafeAreaView>
       </View>

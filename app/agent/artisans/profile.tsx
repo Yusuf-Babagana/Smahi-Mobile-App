@@ -30,8 +30,7 @@ export default function AgentProfileScreen() {
             destructive: true,
         });
         if (ok) {
-            await logout();
-            router.replace('/login');
+            await logout(); // already navigates to /login itself
         }
     };
 
@@ -106,7 +105,7 @@ export default function AgentProfileScreen() {
 
                 <Text style={styles.sectionTitle}>{t('Support')}</Text>
                 <View style={styles.sectionCard}>
-                    <MenuItem icon="help-outline" label={t('Help Center')} />
+                    <MenuItem icon="help-outline" label={t('Help Center')} onPress={() => router.push('/help-center')} />
                 </View>
 
             </ScrollView>
