@@ -444,68 +444,14 @@ export const adminAPI = {
   }
 };
 
-// --- TICKETS ---
-export const ticketAPI = {
-  getTickets: async () => {
-    try {
-      const response = await apiClient.get('/core/tickets/');
-      return response.data;
-    } catch (error) {
-      console.error('Fetch Tickets Error:', error);
-      throw error;
-    }
-  },
-
-  createTicket: async (data: any) => {
-    try {
-      if (data.attachment) {
-        const formData = new FormData();
-        formData.append('subject', data.subject);
-        formData.append('description', data.description);
-        formData.append('priority', data.priority);
-
-        const uri = data.attachment;
-        const filename = uri.split('/').pop();
-        const match = /\.(\w+)$/.exec(filename);
-        const type = match ? `image/${match[1]}` : `image`;
-
-        formData.append('attachment', { uri, name: filename, type } as any);
-
-        const response = await apiClient.post('/core/tickets/', formData, {
-          headers: { 'Content-Type': 'multipart/form-data' },
-        });
-        return response.data;
-      }
-
-      const response = await apiClient.post('/core/tickets/', data);
-      return response.data;
-    } catch (error) {
-      console.error('Create Ticket Error:', error);
-      throw error;
-    }
-  },
-
-  getTicketDetail: async (id: string | number) => {
-    try {
-      const response = await apiClient.get(`/core/tickets/${id}/`);
-      return response.data;
-    } catch (error) {
-      console.error(`Fetch Ticket ${id} Error:`, error);
-      throw error;
-    }
-  },
-
-  updateTicket: async (id: string | number, data: any) => {
-    try {
-      const response = await apiClient.patch(`/core/tickets/${id}/`, data);
-      return response.data;
-    } catch (error) {
-      console.error(`Update Ticket ${id} Error:`, error);
-      throw error;
-    }
-  }
-};
-// src/api/client.ts
+// Note: a `ticketAPI` used to live here, calling /core/tickets/ — a Django
+// URL that was never actually implemented (core/models.py's DisputeReport
+// docstring: "the earlier Tickets feature had no backend at all"). Its only
+// callers were app/agent/tickets/* and app/agent/wallet.tsx, themselves
+// unreachable from any navigation but still live, deep-linkable expo-router
+// routes; removed together (see the file diff) rather than left as a
+// screen that 404s on every request. Complaints/support go through
+// disputeAPI (app/report-problem.tsx) instead.
 
 export const agentAPI = {
   // Backend generates and returns a one-time password — never send one from the client.

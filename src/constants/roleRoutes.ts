@@ -3,13 +3,11 @@
 // keep them on this map so a role can never land somewhere different
 // depending on which door it came through.
 //
-// lga_admin / state_coordinator share the agent dashboard until they get
-// dedicated dashboards.
+// state_coordinator shares the agent dashboard until it gets a dedicated one.
 export const ROLE_HOME_ROUTES = {
     client: '/(tabs)/(home)',
     artisan: '/artisan/dashboard',
     agent: '/agent/dashboard',
-    lga_admin: '/agent/dashboard',
     state_coordinator: '/agent/dashboard',
     admin: '/admin/dashboard',
 } as const;

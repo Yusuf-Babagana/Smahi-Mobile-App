@@ -1,4 +1,4 @@
-export type UserRole = 'client' | 'artisan' | 'agent' | 'lga_admin' | 'state_coordinator' | 'admin';
+export type UserRole = 'client' | 'artisan' | 'agent' | 'state_coordinator' | 'admin';
 
 export type VerificationStatus = 'pending' | 'approved' | 'rejected' | 'none';
 
