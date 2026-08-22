@@ -106,8 +106,21 @@ export default function ArtisanProfileScreen() {
             setUser((prev: any) => ({ ...prev, profile_picture: updated.profile_picture }));
             await storage.updateCurrentUser({ profile_picture: updated.profile_picture });
 
-        } catch (error) {
-            showToast("Failed to update profile picture.", { type: 'error' });
+        } catch (error: any) {
+            // Surfacing the real cause instead of a generic message — this
+            // exact upload has already had two silent-failure bugs (a dead
+            // URL, then a malformed Content-Type), both of which only ever
+            // showed "Failed to update profile picture" no matter what
+            // actually went wrong underneath.
+            console.error('[ArtisanProfile] Picture upload failed:', {
+                status: error?.response?.status,
+                data: error?.response?.data,
+                message: error?.message,
+            });
+            const detail = error?.response?.data
+                ? (typeof error.response.data === 'string' ? error.response.data : JSON.stringify(error.response.data))
+                : error?.message || 'Unknown error';
+            showToast(`Failed to update profile picture: ${detail}`, { type: 'error' });
         } finally {
             setUploadingProfile(false);
         }
