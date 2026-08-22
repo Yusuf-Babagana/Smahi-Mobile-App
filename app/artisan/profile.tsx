@@ -4,6 +4,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import * as ImagePicker from 'expo-image-picker';
+import * as ImageManipulator from 'expo-image-manipulator';
 import Animated, { FadeInDown, FadeInUp } from "react-native-reanimated";
 import axios from 'axios';
 import * as SecureStore from 'expo-secure-store';
@@ -93,12 +94,26 @@ export default function ArtisanProfileScreen() {
     const uploadProfileImage = async (asset: ImagePicker.ImagePickerAsset) => {
         setUploadingProfile(true);
         try {
+            // launchImageLibraryAsync's quality:0.5 only controls JPEG
+            // compression — aspect:[1,1] just crops the framing, it doesn't
+            // downscale resolution, so a modern phone photo can still be
+            // several MB after "compression." That's plausible enough to
+            // time out or hit a size limit on this app's hosting tier to
+            // have shown up as a bare "Network Error" with no server
+            // response at all. A profile photo never renders larger than a
+            // couple hundred px anywhere in this app, so 512px is generous.
+            const resized = await ImageManipulator.manipulateAsync(
+                asset.uri,
+                [{ resize: { width: 512 } }],
+                { compress: 0.6, format: ImageManipulator.SaveFormat.JPEG }
+            );
+
             // profile_picture lives on the same auth/profile/ PATCH endpoint
             // every other account field does — there's no separate upload
             // route (the previous /auth/profile/picture/ URL here 404'd).
             const updated = await authAPI.uploadProfilePicture({
-                uri: asset.uri,
-                name: asset.uri.split('/').pop(),
+                uri: resized.uri,
+                name: 'profile.jpg',
                 type: 'image/jpeg',
             });
 

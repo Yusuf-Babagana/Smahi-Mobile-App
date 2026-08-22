@@ -69,6 +69,11 @@ export const authAPI = {
     // default ('application/json') would also do if left in place here.
     const response = await apiClient.patch('auth/profile/', formData, {
       headers: { 'Content-Type': undefined },
+      // A photo upload is inherently slower than the typical small JSON
+      // PATCH this client is tuned for (apiClient's default is 15s) —
+      // give it real headroom on a slow mobile connection instead of
+      // aborting client-side and surfacing as a bare "Network Error".
+      timeout: 45000,
     });
     return response.data;
   },
