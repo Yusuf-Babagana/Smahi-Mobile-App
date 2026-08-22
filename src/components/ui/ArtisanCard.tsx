@@ -3,7 +3,8 @@ import { Pressable, StyleSheet, Text, View, StyleProp, ViewStyle } from 'react-n
 import { MaterialIcons } from '@expo/vector-icons';
 import { useTranslation } from 'react-i18next';
 import { color, font, radius, shadow, space } from '@/constants/theme';
-import { BACKEND_URL } from '@/src/constants/env';
+import { professionIcon } from '@/src/constants/professionIcons';
+import { optimizedPhotoUrl } from '@/src/utils/photo';
 import { Avatar } from './Avatar';
 
 interface ArtisanCardProps {
@@ -18,19 +19,6 @@ interface ArtisanCardProps {
   isFavorited?: boolean;
   formattedLocation?: string;
   style?: StyleProp<ViewStyle>;
-}
-
-function optimizedPhoto(url: string | null | undefined): string | undefined {
-  if (!url) return undefined;
-  let finalUrl = url;
-  if (finalUrl.startsWith('/')) finalUrl = `${BACKEND_URL}${finalUrl}`;
-  if (finalUrl.includes('res.cloudinary.com')) {
-    if (finalUrl.startsWith('http:')) finalUrl = finalUrl.replace('http:', 'https:');
-    if (finalUrl.includes('upload/') && !finalUrl.includes('w_')) {
-      finalUrl = finalUrl.replace('upload/', 'upload/w_250,h_250,c_fill,q_auto,f_auto/');
-    }
-  }
-  return finalUrl;
 }
 
 export const ArtisanCard = React.memo(function ArtisanCard({
@@ -58,7 +46,7 @@ export const ArtisanCard = React.memo(function ArtisanCard({
       ? artisan.category_name_ha
       : artisan?.profession_name || artisan?.category_name || artisan?.service_category || 'Artisan';
 
-  const photo = optimizedPhoto(userObj.profile_picture || artisan.profile_picture);
+  const photo = optimizedPhotoUrl(userObj.profile_picture || artisan.profile_picture);
   const rating = artisan.rating || 4.8;
   const reviewCount = artisan.review_count || 24;
   const isVerified = artisan.is_verified || userObj.is_verified || false;
@@ -92,9 +80,12 @@ export const ArtisanCard = React.memo(function ArtisanCard({
           <Text style={styles.name} numberOfLines={1}>
             {displayName}
           </Text>
-          <Text style={styles.profession} numberOfLines={1}>
-            {t(professionName)}
-          </Text>
+          <View style={styles.professionRow}>
+            <MaterialIcons name={professionIcon(professionName)} size={13} color={color.brand600} />
+            <Text style={styles.profession} numberOfLines={1}>
+              {t(professionName)}
+            </Text>
+          </View>
           <View style={styles.ratingRow}>
             <MaterialIcons name="star" size={14} color={color.star} />
             <Text style={styles.rating}>{rating}</Text>
@@ -181,11 +172,17 @@ const styles = StyleSheet.create({
     fontSize: 14.5,
     color: color.ink900,
   },
+  professionRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    marginTop: 2,
+  },
   profession: {
     fontFamily: font.bold,
     fontSize: 12.5,
     color: color.ink400,
-    marginTop: 2,
+    flexShrink: 1,
   },
   ratingRow: {
     flexDirection: 'row',

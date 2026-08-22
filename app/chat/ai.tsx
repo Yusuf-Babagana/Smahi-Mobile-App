@@ -24,6 +24,7 @@ import { translateText } from '@/src/utils/translation';
 import { AIAction } from '@/src/types';
 import AIActionCard from '@/src/components/AIActionCard';
 import { useToast, useConfirm } from '@/src/components/ui';
+import { useLocation } from '@/src/contexts/LocationContext';
 
 const MESSAGES_KEY = '@smaahi_ai_chat_messages';
 
@@ -52,6 +53,9 @@ export default function AIChatScreen() {
   const { t } = useTranslation();
   const { show: showToast } = useToast();
   const confirm = useConfirm();
+  // Lets the AI's artisan results carry a real distance instead of never
+  // showing one — same GPS the Home screen already uses, not a fresh permission ask.
+  const { location } = useLocation();
   const [messages, setMessages] = useState<Message[]>([WELCOME_MESSAGE]);
   const [inputText, setInputText] = useState('');
   const [isLoading, setIsLoading] = useState(false);
@@ -184,7 +188,13 @@ export default function AIChatScreen() {
 
       const res = await axios.post(
         `${BACKEND_URL}/api/ai/chat/`,
-        { messages: apiMessages },
+        {
+          messages: apiMessages,
+          // Omitted entirely (not sent as null/0) when location permission
+          // hasn't been granted yet — the backend then falls back to the
+          // user's saved profile location, or leaves distance_km null.
+          ...(location ? { latitude: location.latitude, longitude: location.longitude } : {}),
+        },
         { timeout: 30000 }
       );
 

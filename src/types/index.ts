@@ -149,6 +149,10 @@ export interface AIArtisanResult {
   category: string;
   rating: number;
   is_verified: boolean;
+  /** Absolute or relative URL; null when the artisan has no photo uploaded. */
+  profile_picture: string | null;
+  /** Null when the caller's location wasn't available — never guess a distance for display. */
+  distance_km: number | null;
 }
 
 export interface AISearchActionResult {
@@ -171,6 +175,8 @@ export interface AIArtisanProfileAction {
     category?: string;
     rating?: number;
     is_verified?: boolean;
+    profile_picture?: string | null;
+    distance_km?: number | null;
     bio?: string;
   };
 }

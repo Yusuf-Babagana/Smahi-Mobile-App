@@ -3,6 +3,9 @@ import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
 import { color, font, radius, shadow, space } from '@/constants/theme';
 import { AIAction, AIArtisanResult } from '@/src/types';
+import { professionIcon } from '@/src/constants/professionIcons';
+import { optimizedPhotoUrl } from '@/src/utils/photo';
+import { Avatar } from '@/src/components/ui';
 
 interface AIActionCardProps {
   action: AIAction;
@@ -21,23 +24,28 @@ function ArtisanMiniCard({
 }) {
   return (
     <TouchableOpacity style={styles.miniCard} onPress={onPress} activeOpacity={0.7}>
-      <View style={styles.miniAvatar}>
-        <Text style={styles.miniAvatarText}>
-          {artisan.name.charAt(0).toUpperCase()}
-        </Text>
-      </View>
+      <Avatar
+        name={artisan.name}
+        uri={optimizedPhotoUrl(artisan.profile_picture)}
+        size={36}
+        borderRadius={radius.sm}
+        verified={artisan.is_verified}
+      />
       <View style={styles.miniInfo}>
-        <View style={styles.miniNameRow}>
-          <Text style={styles.miniName} numberOfLines={1}>{artisan.name}</Text>
-          {artisan.is_verified && (
-            <MaterialIcons name="verified" size={14} color={color.accent600} />
-          )}
+        <Text style={styles.miniName} numberOfLines={1}>{artisan.name}</Text>
+        <View style={styles.miniCategoryRow}>
+          <MaterialIcons name={professionIcon(artisan.category)} size={11} color={color.ink400} />
+          <Text style={styles.miniCategory} numberOfLines={1}>{artisan.category || 'Artisan'}</Text>
         </View>
-        <Text style={styles.miniCategory}>{artisan.category || 'Artisan'}</Text>
       </View>
-      <View style={styles.miniRating}>
-        <MaterialIcons name="star" size={12} color={color.star} />
-        <Text style={styles.miniRatingText}>{artisan.rating > 0 ? artisan.rating.toFixed(1) : 'New'}</Text>
+      <View style={styles.miniMetaCol}>
+        <View style={styles.miniRating}>
+          <MaterialIcons name="star" size={12} color={color.star} />
+          <Text style={styles.miniRatingText}>{artisan.rating > 0 ? artisan.rating.toFixed(1) : 'New'}</Text>
+        </View>
+        {artisan.distance_km != null && (
+          <Text style={styles.miniDistance}>{artisan.distance_km.toFixed(1)} km</Text>
+        )}
       </View>
     </TouchableOpacity>
   );
@@ -112,25 +120,31 @@ export default function AIActionCard({
       <View style={styles.actionContainer}>
         <View style={styles.profileCard}>
           <View style={styles.profileHeader}>
-            <View style={styles.profileAvatar}>
-              <Text style={styles.profileAvatarText}>
-                {data.name.charAt(0).toUpperCase()}
-              </Text>
-            </View>
+            <Avatar
+              name={data.name}
+              uri={optimizedPhotoUrl(data.profile_picture)}
+              size={50}
+              borderRadius={radius.lg}
+              verified={!!data.is_verified}
+              style={{ marginRight: space.md }}
+            />
             <View style={styles.profileInfo}>
-              <View style={styles.profileNameRow}>
-                <Text style={styles.profileName}>{data.name}</Text>
-                {data.is_verified && (
-                  <MaterialIcons name="verified" size={16} color={color.accent600} />
+              <Text style={styles.profileName}>{data.name}</Text>
+              <View style={styles.profileCategoryRow}>
+                <MaterialIcons name={professionIcon(data.category)} size={12} color={color.ink400} />
+                <Text style={styles.profileCategory}>{data.category || 'Artisan'}</Text>
+              </View>
+              <View style={styles.profileMetaRow}>
+                {data.rating != null && data.rating > 0 && (
+                  <View style={styles.profileRatingRow}>
+                    <MaterialIcons name="star" size={14} color={color.star} />
+                    <Text style={styles.profileRating}>{data.rating.toFixed(1)}</Text>
+                  </View>
+                )}
+                {data.distance_km != null && (
+                  <Text style={styles.profileDistance}>{data.distance_km.toFixed(1)} km away</Text>
                 )}
               </View>
-              <Text style={styles.profileCategory}>{data.category || 'Artisan'}</Text>
-              {data.rating != null && data.rating > 0 && (
-                <View style={styles.profileRatingRow}>
-                  <MaterialIcons name="star" size={14} color={color.star} />
-                  <Text style={styles.profileRating}>{data.rating.toFixed(1)}</Text>
-                </View>
-              )}
             </View>
           </View>
           {data.bio ? (
@@ -304,30 +318,17 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: space.md,
   },
-  profileAvatar: {
-    width: 50,
-    height: 50,
-    borderRadius: radius.lg,
-    backgroundColor: color.brand100,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginRight: space.md,
-  },
-  profileAvatarText: {
-    fontFamily: font.extrabold,
-    fontSize: 20,
-    color: color.brand600,
-  },
   profileInfo: { flex: 1 },
-  profileNameRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-  },
   profileName: {
     fontFamily: font.extrabold,
     fontSize: 16,
     color: color.ink900,
+  },
+  profileCategoryRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    marginTop: 2,
   },
   profileCategory: {
     fontFamily: font.bold,
@@ -335,18 +336,27 @@ const styles = StyleSheet.create({
     color: color.ink400,
     textTransform: 'uppercase',
     letterSpacing: 0.3,
-    marginTop: 2,
+  },
+  profileMetaRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    marginTop: 4,
   },
   profileRatingRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
-    marginTop: 4,
   },
   profileRating: {
     fontFamily: font.bold,
     fontSize: 13,
     color: color.ink600,
+  },
+  profileDistance: {
+    fontFamily: font.extrabold,
+    fontSize: 12,
+    color: color.brand600,
   },
   profileBio: {
     fontFamily: font.medium,
@@ -447,37 +457,25 @@ const styles = StyleSheet.create({
     backgroundColor: color.surfaceSunken,
     gap: space.sm,
   },
-  miniAvatar: {
-    width: 36,
-    height: 36,
-    borderRadius: radius.sm,
-    backgroundColor: color.brand100,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  miniAvatarText: {
-    fontFamily: font.extrabold,
-    fontSize: 14,
-    color: color.brand600,
-  },
   miniInfo: { flex: 1 },
-  miniNameRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-  },
   miniName: {
     fontFamily: font.bold,
     fontSize: 13,
     color: color.ink900,
-    flexShrink: 1,
+  },
+  miniCategoryRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    marginTop: 2,
   },
   miniCategory: {
     fontFamily: font.medium,
     fontSize: 11,
     color: color.ink400,
-    marginTop: 1,
+    flexShrink: 1,
   },
+  miniMetaCol: { alignItems: 'flex-end', gap: 2 },
   miniRating: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -487,6 +485,11 @@ const styles = StyleSheet.create({
     fontFamily: font.bold,
     fontSize: 12,
     color: color.ink600,
+  },
+  miniDistance: {
+    fontFamily: font.extrabold,
+    fontSize: 10.5,
+    color: color.brand600,
   },
   seeAllBtn: {
     flexDirection: 'row',
