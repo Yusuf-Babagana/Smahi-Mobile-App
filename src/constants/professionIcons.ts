@@ -59,6 +59,18 @@ const PROFESSION_ICONS: [RegExp, IconName][] = [
   [/watch repair/i, 'hardware'],
 ];
 
+// Offered at step 4 of artisan registration when someone picks "Other" and
+// types a custom profession — lets them choose an icon explicitly rather
+// than leave it to professionIcon()'s guess. Deliberately disjoint from
+// every icon assigned above, so a chosen icon never collides with one a
+// client already associates with a specific listed trade. Must match
+// core/models.py's DEFAULT_OTHER_ICONS on the backend exactly — that's
+// where the choice is validated and persisted (Category.material_icon).
+export const DEFAULT_OTHER_ICONS: IconName[] = [
+  'engineering', 'design-services', 'category', 'apps', 'star',
+  'diamond', 'badge', 'palette', 'pets', 'groups', 'public', 'terrain',
+];
+
 /** A generic, always-valid MaterialIcons glyph for any profession/category
  * name — used on artisan cards so a client always sees a relevant icon,
  * even for a category whose backend Category.icon field is blank or in a
@@ -68,6 +80,17 @@ export function professionIcon(name?: string | null): IconName {
   if (!name) return 'build';
   const match = PROFESSION_ICONS.find(([pattern]) => pattern.test(name));
   return match ? match[1] : 'build';
+}
+
+/** Prefer an explicit icon choice (Category.material_icon, from the API —
+ * e.g. someone who registered with a custom "Other" profession and picked
+ * one of DEFAULT_OTHER_ICONS for it) over guessing one from the name.
+ * `explicitIcon` is trusted as-is rather than re-validated against the
+ * glyph set here — the only place that ever writes it (registration)
+ * already checks it against DEFAULT_OTHER_ICONS server-side. */
+export function resolveProfessionIcon(explicitIcon: string | null | undefined, name?: string | null): IconName {
+  if (explicitIcon) return explicitIcon as IconName;
+  return professionIcon(name);
 }
 
 export default professionIcon;

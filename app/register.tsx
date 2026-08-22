@@ -19,6 +19,7 @@ import { authAPI, locationAPI, categoryAPI, paymentAPI } from '@/src/api/client'
 import { UserRole } from '@/src/types';
 import CustomPicker from '@/src/components/CustomPicker';
 import ServiceCategoryPicker from '@/src/components/ServiceCategoryPicker';
+import { DEFAULT_OTHER_ICONS } from '@/src/constants/professionIcons';
 import { color, font, radius, space, type } from '@/constants/theme';
 import { Button, Input, StepHeader, useToast, useConfirm } from '@/src/components/ui';
 import '@/src/i18n'; // Ensure i18n is initialized
@@ -72,6 +73,10 @@ export default function RegisterScreen() {
   const [services, setServices] = useState<any[]>([]);
   const [selectedService, setSelectedService] = useState('');
   const [customCategoryName, setCustomCategoryName] = useState('');
+  // Only sent/used when selectedService === '__custom__' — lets the person
+  // pick an icon for their custom profession explicitly instead of leaving
+  // it to the app's keyword-guessed default (professionIcon()).
+  const [customIcon, setCustomIcon] = useState('');
   const [countries, setCountries] = useState<any[]>([]);
   const [states, setStates] = useState<any[]>([]);
   const [lgas, setLgas] = useState<any[]>([]);
@@ -187,6 +192,7 @@ export default function RegisterScreen() {
         phone_number: phone,
         category_id: role === 'artisan' && selectedService !== '__custom__' ? selectedService : undefined,
         custom_category_name: role === 'artisan' && selectedService === '__custom__' ? customCategoryName.trim() : undefined,
+        custom_category_icon: role === 'artisan' && selectedService === '__custom__' ? customIcon || undefined : undefined,
         country: selectedCountry,
         state: selectedState,
         lga: selectedLga
@@ -439,7 +445,7 @@ export default function RegisterScreen() {
                 {role === 'artisan' && (
                   <View style={styles.sectionCard}>
                     <Text style={styles.cardTitle}>{t('Your expertise')}</Text>
-                    <ServiceCategoryPicker label={t('Service provided')} placeholder={t('Select Service')} value={selectedService} onValueChange={(val) => { setSelectedService(val); setCustomCategoryName(''); }} items={services} />
+                    <ServiceCategoryPicker label={t('Service provided')} placeholder={t('Select Service')} value={selectedService} onValueChange={(val) => { setSelectedService(val); setCustomCategoryName(''); setCustomIcon(''); }} items={services} />
                     {errors.service && <Text style={styles.errorText}>{errors.service}</Text>}
 
                     {selectedService === '__custom__' && (
@@ -452,6 +458,29 @@ export default function RegisterScreen() {
                           icon="edit"
                           error={errors.customCategory}
                         />
+
+                        {/* Not in the picked-from list above, so nothing has
+                            guessed an icon for this profession yet — let the
+                            person choose one that fits instead of leaving it
+                            to chance. */}
+                        <Text style={styles.iconPickerLabel}>{t('Pick an icon for your profession (optional)')}</Text>
+                        <View style={styles.iconGrid}>
+                          {DEFAULT_OTHER_ICONS.map((icon) => {
+                            const selected = customIcon === icon;
+                            return (
+                              <Pressable
+                                key={icon}
+                                onPress={() => setCustomIcon(selected ? '' : icon)}
+                                style={[styles.iconTile, selected && styles.iconTileSelected]}
+                                accessibilityRole="button"
+                                accessibilityLabel={icon.replace(/-/g, ' ')}
+                                accessibilityState={{ selected }}
+                              >
+                                <MaterialIcons name={icon} size={22} color={selected ? '#FFF' : color.ink400} />
+                              </Pressable>
+                            );
+                          })}
+                        </View>
                       </View>
                     )}
                   </View>
@@ -682,6 +711,19 @@ const styles = StyleSheet.create({
   // FORM
   formSection: { gap: space.lg },
   errorText: { fontFamily: font.bold, fontSize: 12, color: color.danger600, marginTop: 6 },
+
+  // STEP 4 — custom profession icon picker
+  iconPickerLabel: {
+    fontFamily: font.bold, fontSize: 12.5, color: color.ink600,
+    marginTop: space.lg, marginBottom: space.sm,
+  },
+  iconGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: space.sm },
+  iconTile: {
+    width: 46, height: 46, borderRadius: radius.md,
+    borderWidth: 1.5, borderColor: color.border, backgroundColor: color.surface,
+    alignItems: 'center', justifyContent: 'center',
+  },
+  iconTileSelected: { backgroundColor: color.brand600, borderColor: color.brand600 },
 
   // STEP 3 — role cards
   roleCard: {

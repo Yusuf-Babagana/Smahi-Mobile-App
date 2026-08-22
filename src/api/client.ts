@@ -119,6 +119,13 @@ export const authAPI = {
       if (data.custom_category_name) {
         payload.custom_category_name = data.custom_category_name;
         payload.category_id = null;
+        // Only meaningful alongside custom_category_name — an explicit
+        // icon choice for a brand-new category (register.tsx step 4's
+        // "Pick an icon" grid), ignored server-side if that category
+        // name already exists.
+        if (data.custom_category_icon) {
+          payload.custom_category_icon = data.custom_category_icon;
+        }
       } else if (data.category_id) {
         payload.category_id = Number(data.category_id);
       }

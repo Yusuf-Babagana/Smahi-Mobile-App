@@ -3,7 +3,7 @@ import { Pressable, StyleSheet, Text, View, StyleProp, ViewStyle } from 'react-n
 import { MaterialIcons } from '@expo/vector-icons';
 import { useTranslation } from 'react-i18next';
 import { color, font, radius, shadow, space } from '@/constants/theme';
-import { professionIcon } from '@/src/constants/professionIcons';
+import { resolveProfessionIcon } from '@/src/constants/professionIcons';
 import { optimizedPhotoUrl } from '@/src/utils/photo';
 import { Avatar } from './Avatar';
 
@@ -81,7 +81,11 @@ export const ArtisanCard = React.memo(function ArtisanCard({
             {displayName}
           </Text>
           <View style={styles.professionRow}>
-            <MaterialIcons name={professionIcon(professionName)} size={13} color={color.brand600} />
+            <MaterialIcons
+              name={resolveProfessionIcon(artisan.category_material_icon, professionName)}
+              size={13}
+              color={color.brand600}
+            />
             <Text style={styles.profession} numberOfLines={1}>
               {t(professionName)}
             </Text>

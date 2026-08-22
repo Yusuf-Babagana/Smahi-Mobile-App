@@ -3,7 +3,7 @@ import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
 import { color, font, radius, shadow, space } from '@/constants/theme';
 import { AIAction, AIArtisanResult } from '@/src/types';
-import { professionIcon } from '@/src/constants/professionIcons';
+import { resolveProfessionIcon } from '@/src/constants/professionIcons';
 import { optimizedPhotoUrl } from '@/src/utils/photo';
 import { Avatar } from '@/src/components/ui';
 
@@ -34,7 +34,11 @@ function ArtisanMiniCard({
       <View style={styles.miniInfo}>
         <Text style={styles.miniName} numberOfLines={1}>{artisan.name}</Text>
         <View style={styles.miniCategoryRow}>
-          <MaterialIcons name={professionIcon(artisan.category)} size={11} color={color.ink400} />
+          <MaterialIcons
+            name={resolveProfessionIcon(artisan.category_material_icon, artisan.category)}
+            size={11}
+            color={color.ink400}
+          />
           <Text style={styles.miniCategory} numberOfLines={1}>{artisan.category || 'Artisan'}</Text>
         </View>
       </View>
@@ -131,7 +135,11 @@ export default function AIActionCard({
             <View style={styles.profileInfo}>
               <Text style={styles.profileName}>{data.name}</Text>
               <View style={styles.profileCategoryRow}>
-                <MaterialIcons name={professionIcon(data.category)} size={12} color={color.ink400} />
+                <MaterialIcons
+                  name={resolveProfessionIcon(data.category_material_icon, data.category)}
+                  size={12}
+                  color={color.ink400}
+                />
                 <Text style={styles.profileCategory}>{data.category || 'Artisan'}</Text>
               </View>
               <View style={styles.profileMetaRow}>

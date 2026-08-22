@@ -147,6 +147,9 @@ export interface AIArtisanResult {
   user_id: number;
   name: string;
   category: string;
+  /** Blank unless this category is a custom "Other" one whose registrant
+   * explicitly picked an icon for it — see resolveProfessionIcon(). */
+  category_material_icon: string;
   rating: number;
   is_verified: boolean;
   /** Absolute or relative URL; null when the artisan has no photo uploaded. */
@@ -173,6 +176,7 @@ export interface AIArtisanProfileAction {
     id?: number;
     user_id?: number;
     category?: string;
+    category_material_icon?: string;
     rating?: number;
     is_verified?: boolean;
     profile_picture?: string | null;
