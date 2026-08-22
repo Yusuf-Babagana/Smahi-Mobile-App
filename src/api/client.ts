@@ -59,8 +59,16 @@ export const authAPI = {
       name: asset.name || asset.uri.split('/').pop() || 'profile.jpg',
       type: asset.type || 'image/jpeg',
     });
+    // Deliberately NOT setting Content-Type here. React Native's own
+    // networking layer detects a FormData body and generates the
+    // multipart header itself, including the random boundary marker the
+    // server needs to split the parts. A hardcoded string like
+    // 'multipart/form-data' (no boundary) looks fine in JS but produces a
+    // request Django's multipart parser can't actually read — it silently
+    // sees no fields/files, which is exactly what apiClient's instance
+    // default ('application/json') would also do if left in place here.
     const response = await apiClient.patch('auth/profile/', formData, {
-      headers: { 'Content-Type': 'multipart/form-data' },
+      headers: { 'Content-Type': undefined },
     });
     return response.data;
   },
