@@ -93,25 +93,18 @@ export default function ArtisanProfileScreen() {
     const uploadProfileImage = async (asset: ImagePicker.ImagePickerAsset) => {
         setUploadingProfile(true);
         try {
-            const token = await SecureStore.getItemAsync('accessToken');
-            const formData = new FormData();
-
-            // @ts-ignore
-            formData.append('profile_picture', {
+            // profile_picture lives on the same auth/profile/ PATCH endpoint
+            // every other account field does — there's no separate upload
+            // route (the previous /auth/profile/picture/ URL here 404'd).
+            const updated = await authAPI.uploadProfilePicture({
                 uri: asset.uri,
                 name: asset.uri.split('/').pop(),
                 type: 'image/jpeg',
             });
 
-            const response = await axios.post(`${BASE_URL}/auth/profile/picture/`, formData, {
-                headers: {
-                    'Content-Type': 'multipart/form-data',
-                    Authorization: `Bearer ${token}`,
-                },
-            });
-
             showToast("Profile picture updated!", { type: 'success' });
-            setUser((prev: any) => ({ ...prev, profile_picture: response.data.profile_picture }));
+            setUser((prev: any) => ({ ...prev, profile_picture: updated.profile_picture }));
+            await storage.updateCurrentUser({ profile_picture: updated.profile_picture });
 
         } catch (error) {
             showToast("Failed to update profile picture.", { type: 'error' });

@@ -46,6 +46,25 @@ export const authAPI = {
     return response.data;
   },
 
+  // profile_picture is just another UserUpdateSerializer field on the same
+  // auth/profile/ PATCH endpoint — no separate upload route exists. Needs
+  // its own method (rather than reusing updateProfile) because it must send
+  // multipart/form-data, not JSON.
+  uploadProfilePicture: async (asset: { uri: string; name?: string; type?: string }) => {
+    const formData = new FormData();
+    // @ts-expect-error — React Native's FormData accepts a { uri, name, type }
+    // file descriptor here; the DOM lib's FormData.append() type doesn't model it.
+    formData.append('profile_picture', {
+      uri: asset.uri,
+      name: asset.name || asset.uri.split('/').pop() || 'profile.jpg',
+      type: asset.type || 'image/jpeg',
+    });
+    const response = await apiClient.patch('auth/profile/', formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    });
+    return response.data;
+  },
+
   register: async (data: any) => {
     // Collect names: either from direct fields or by splitting 'name'
     let firstName = data.first_name;
