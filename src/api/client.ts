@@ -1,6 +1,11 @@
 import apiClient from './config';
 import * as SecureStore from 'expo-secure-store';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+// The "legacy" subpath is deliberate — Expo SDK 54 restructured
+// expo-file-system, and uploadAsync/FileSystemUploadType only exist under
+// this path now (the new top-level API dropped them).
+import * as FileSystem from 'expo-file-system/legacy';
+import { API_URL } from '../constants/env';
 import { RegisterData } from '../types';
 
 // Helper to unwrap Django Pagination
@@ -47,35 +52,42 @@ export const authAPI = {
   },
 
   // profile_picture is just another UserUpdateSerializer field on the same
-  // auth/profile/ PATCH endpoint — no separate upload route exists. Needs
-  // its own method (rather than reusing updateProfile) because it must send
-  // multipart/form-data, not JSON.
+  // auth/profile/ PATCH endpoint — no separate upload route exists (confirmed
+  // working directly against production: a real multipart PATCH here returns
+  // 200 with the saved photo URL every time).
+  //
+  // This does NOT go through apiClient/axios's FormData handling. Two
+  // attempts at that (letting the platform set Content-Type, then clearing
+  // it explicitly) both still failed on-device with a bare axios
+  // "Network Error" — no status, no response, meaning the request never
+  // reached the server at all, on this app's RN New Architecture build.
+  // expo-file-system's uploadAsync is Expo's own native multipart upload,
+  // built specifically for uploading a local file — it bypasses
+  // axios/fetch/FormData entirely, which is the standard fix for this
+  // exact class of RN upload bug.
   uploadProfilePicture: async (asset: { uri: string; name?: string; type?: string }) => {
-    const formData = new FormData();
-    // @ts-expect-error — React Native's FormData accepts a { uri, name, type }
-    // file descriptor here; the DOM lib's FormData.append() type doesn't model it.
-    formData.append('profile_picture', {
-      uri: asset.uri,
-      name: asset.name || asset.uri.split('/').pop() || 'profile.jpg',
-      type: asset.type || 'image/jpeg',
-    });
-    // Deliberately NOT setting Content-Type here. React Native's own
-    // networking layer detects a FormData body and generates the
-    // multipart header itself, including the random boundary marker the
-    // server needs to split the parts. A hardcoded string like
-    // 'multipart/form-data' (no boundary) looks fine in JS but produces a
-    // request Django's multipart parser can't actually read — it silently
-    // sees no fields/files, which is exactly what apiClient's instance
-    // default ('application/json') would also do if left in place here.
-    const response = await apiClient.patch('auth/profile/', formData, {
-      headers: { 'Content-Type': undefined },
-      // A photo upload is inherently slower than the typical small JSON
-      // PATCH this client is tuned for (apiClient's default is 15s) —
-      // give it real headroom on a slow mobile connection instead of
-      // aborting client-side and surfacing as a bare "Network Error".
-      timeout: 45000,
-    });
-    return response.data;
+    const token = await SecureStore.getItemAsync('accessToken');
+    const result = await FileSystem.uploadAsync(
+      `${API_URL}/auth/profile/`,
+      asset.uri,
+      {
+        httpMethod: 'PATCH',
+        uploadType: FileSystem.FileSystemUploadType.MULTIPART,
+        fieldName: 'profile_picture',
+        mimeType: asset.type || 'image/jpeg',
+        headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+      }
+    );
+
+    let data: any = {};
+    try { data = JSON.parse(result.body); } catch {}
+
+    if (result.status < 200 || result.status >= 300) {
+      const error: any = new Error(data?.detail || 'Upload failed');
+      error.response = { status: result.status, data };
+      throw error;
+    }
+    return data;
   },
 
   register: async (data: any) => {
