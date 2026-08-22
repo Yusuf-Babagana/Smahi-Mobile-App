@@ -18,6 +18,7 @@ import { useTranslation } from 'react-i18next';
 import { authAPI, locationAPI, categoryAPI, paymentAPI } from '@/src/api/client';
 import { UserRole } from '@/src/types';
 import CustomPicker from '@/src/components/CustomPicker';
+import ServiceCategoryPicker from '@/src/components/ServiceCategoryPicker';
 import { color, font, radius, space, type } from '@/constants/theme';
 import { Button, Input, StepHeader, useToast, useConfirm } from '@/src/components/ui';
 import '@/src/i18n'; // Ensure i18n is initialized
@@ -438,7 +439,7 @@ export default function RegisterScreen() {
                 {role === 'artisan' && (
                   <View style={styles.sectionCard}>
                     <Text style={styles.cardTitle}>{t('Your expertise')}</Text>
-                    <CustomPicker label={t('Service provided')} placeholder={t('Select Service')} value={selectedService} onValueChange={(val) => { setSelectedService(val); setCustomCategoryName(''); }} items={services} />
+                    <ServiceCategoryPicker label={t('Service provided')} placeholder={t('Select Service')} value={selectedService} onValueChange={(val) => { setSelectedService(val); setCustomCategoryName(''); }} items={services} />
                     {errors.service && <Text style={styles.errorText}>{errors.service}</Text>}
 
                     {selectedService === '__custom__' && (
