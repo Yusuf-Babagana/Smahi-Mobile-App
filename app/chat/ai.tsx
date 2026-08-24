@@ -12,6 +12,7 @@ import { MaterialIcons } from '@expo/vector-icons';
 import axios from 'axios';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Audio } from 'expo-av';
+import * as Clipboard from 'expo-clipboard';
 import { useTranslation } from 'react-i18next';
 
 import {
@@ -146,8 +147,10 @@ export default function AIChatScreen() {
 
   // --- Action handlers: bridge AI actions to app navigation/search ---
 
-  const handleArtisanPress = useCallback((artisanUserId: number) => {
-    router.push(`/artisan/${artisanUserId}`);
+  // ArtisanProfile.id (not User.id) — see the comment on AIActionCardProps
+  // for why the two must never be confused here.
+  const handleArtisanPress = useCallback((artisanProfileId: number) => {
+    router.push(`/artisan/${artisanProfileId}`);
   }, [router]);
 
   const handleNavigate = useCallback((route: string) => {
@@ -258,6 +261,11 @@ export default function AIChatScreen() {
     setTranslatingId(null);
   }, [translatedMap]);
 
+  const handleCopyMessage = useCallback(async (text: string) => {
+    await Clipboard.setStringAsync(text);
+    showToast(t('Copied to clipboard.'), { type: 'success' });
+  }, [showToast, t]);
+
   const renderMessage = ({ item }: { item: Message }) => (
     <View style={[
       styles.bubbleRow,
@@ -281,25 +289,36 @@ export default function AIChatScreen() {
             item.role === 'user' ? styles.userText : styles.botText
           ]}>{translatedMap[item.id] || item.text}</Text>
           {item.role === 'bot' && (
-            <TouchableOpacity
-              onPress={() => handleTranslateMessage(item.id, item.text)}
-              style={styles.translateBtn}
-              accessibilityRole="button"
-              accessibilityLabel={translatedMap[item.id] ? t('Show original text') : t('Translate to Hausa')}
-            >
-              {translatingId === item.id ? (
-                <ActivityIndicator size={11} color={color.ink400} />
-              ) : (
-                <MaterialIcons
-                  name={translatedMap[item.id] ? 'undo' : 'translate'}
-                  size={13}
-                  color={translatedMap[item.id] ? color.brand600 : color.ink400}
-                />
-              )}
-              <Text style={[styles.translateText, translatedMap[item.id] && { color: color.brand600 }]}>
-                {translatedMap[item.id] ? 'Original' : 'Hausa'}
-              </Text>
-            </TouchableOpacity>
+            <View style={styles.bubbleActions}>
+              <TouchableOpacity
+                onPress={() => handleTranslateMessage(item.id, item.text)}
+                style={styles.translateBtn}
+                accessibilityRole="button"
+                accessibilityLabel={translatedMap[item.id] ? t('Show original text') : t('Translate to Hausa')}
+              >
+                {translatingId === item.id ? (
+                  <ActivityIndicator size={11} color={color.ink400} />
+                ) : (
+                  <MaterialIcons
+                    name={translatedMap[item.id] ? 'undo' : 'translate'}
+                    size={13}
+                    color={translatedMap[item.id] ? color.brand600 : color.ink400}
+                  />
+                )}
+                <Text style={[styles.translateText, translatedMap[item.id] && { color: color.brand600 }]}>
+                  {translatedMap[item.id] ? 'Original' : 'Hausa'}
+                </Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                onPress={() => handleCopyMessage(translatedMap[item.id] || item.text)}
+                style={styles.translateBtn}
+                accessibilityRole="button"
+                accessibilityLabel={t('Copy answer')}
+              >
+                <MaterialIcons name="content-copy" size={12} color={color.ink400} />
+                <Text style={styles.translateText}>{t('Copy')}</Text>
+              </TouchableOpacity>
+            </View>
           )}
         </View>
         {item.role === 'bot' && item.action && (
@@ -575,12 +594,16 @@ const styles = StyleSheet.create({
 
   typingText: { fontSize: 22, color: color.ink300, lineHeight: 26, letterSpacing: 3 },
 
+  bubbleActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: space.md,
+    marginTop: 6,
+  },
   translateBtn: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
-    marginTop: 6,
-    alignSelf: 'flex-start',
   },
   translateText: {
     fontFamily: font.bold,

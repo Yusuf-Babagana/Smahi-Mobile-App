@@ -9,6 +9,11 @@ import { Avatar } from '@/src/components/ui';
 
 interface AIActionCardProps {
   action: AIAction;
+  // ArtisanProfile.id, NOT User.id — /artisan/[id].tsx and its
+  // getArtisanById/getArtisanReviews calls are keyed on the profile id
+  // (same as every other artisan card in the app). Passing artisan.user_id
+  // here instead 404'd reviews for any artisan whose ids happened not to
+  // collide (bug fixed here — always pass artisan.id / data.id).
   onArtisanPress: (artisanId: number) => void;
   onNavigate: (route: string) => void;
   onSearchLocal: (query: string) => void;
@@ -162,7 +167,7 @@ export default function AIActionCard({
           ) : null}
           <TouchableOpacity
             style={styles.viewProfileBtn}
-            onPress={() => data.user_id && onArtisanPress(data.user_id)}
+            onPress={() => data.id && onArtisanPress(data.id)}
             activeOpacity={0.7}
           >
             <Text style={styles.viewProfileBtnText}>View Full Profile</Text>
@@ -228,7 +233,7 @@ export default function AIActionCard({
             <ArtisanMiniCard
               key={artisan.id}
               artisan={artisan}
-              onPress={() => onArtisanPress(artisan.user_id)}
+              onPress={() => onArtisanPress(artisan.id)}
             />
           ))}
         </View>

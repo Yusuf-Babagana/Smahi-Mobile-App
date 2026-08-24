@@ -86,7 +86,10 @@ export default function LoginScreen() {
 
       router.replace(getHomeRouteForRole(user.role));
     } catch (error: any) {
-      const msg = error.message || 'Invalid credentials';
+      // The backend sends a specific reason ({"error": "Invalid credentials."} /
+      // "User account is disabled.") — error.message is just axios's generic
+      // "Request failed with status code 401", which told the user nothing.
+      const msg = error.response?.data?.error || error.message || 'Invalid credentials';
       showToast(msg, { type: 'error' });
     } finally {
       setLoading(false);

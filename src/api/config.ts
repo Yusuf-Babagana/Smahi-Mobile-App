@@ -65,6 +65,28 @@ apiClient.interceptors.response.use(
     (response) => response,
     async (error) => {
         const original = error.config;
+
+        // --- Timeout on a read → retry once ---
+        // PythonAnywhere's WSGI worker idles after inactivity and cold-starts
+        // on the next request (observed directly: ~11s for a cold hit vs
+        // ~1.5-2s once warm) — occasionally enough, combined with mobile
+        // network latency, to exceed this client's 15s timeout on the first
+        // request after opening the app (e.g. "FETCH ARTISANS ERROR: timeout
+        // of 15000ms exceeded"). A retry against the now-warm server is
+        // reliably fast, so this clears silently without the user ever
+        // seeing an error. Scoped to GET/HEAD only — a POST/PATCH that
+        // timed out might have already been received and processed
+        // server-side (a booking, a chat message, a payment init), and
+        // blindly retrying those risks a duplicate write. _timeoutRetried
+        // bounds it to a single retry so a genuinely unreachable backend
+        // still fails instead of retrying forever.
+        const method = (original?.method || 'get').toLowerCase();
+        const isIdempotentRead = method === 'get' || method === 'head';
+        if (error.code === 'ECONNABORTED' && original && isIdempotentRead && !original._timeoutRetried) {
+            original._timeoutRetried = true;
+            return apiClient(original);
+        }
+
         const isLoginCall = original?.url?.includes('auth/login');
         if (error.response?.status === 401 && original && !original._retry && !isLoginCall) {
             original._retry = true;
