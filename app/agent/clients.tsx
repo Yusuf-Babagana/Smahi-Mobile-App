@@ -71,7 +71,7 @@ export default function AgentClientList() {
                 accessibilityRole="button"
                 accessibilityLabel={name}
             >
-                <Avatar name={name} uri={item.profile_picture} size={48} verified={!!item.email_verified} />
+                <Avatar name={name} uri={item.profile_picture} gender={item.gender} size={48} verified={!!item.email_verified} />
 
                 <View style={styles.info}>
                     <Text style={styles.name} numberOfLines={1}>{name}</Text>

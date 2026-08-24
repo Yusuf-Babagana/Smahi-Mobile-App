@@ -164,7 +164,7 @@ export default function ArtisanJobsTab() {
     return (
       <View style={styles.card}>
         <View style={styles.cardHead}>
-          <Avatar name={clientName} uri={client.profile_picture} size={44} />
+          <Avatar name={clientName} uri={client.profile_picture} gender={client.gender} size={44} />
           <View style={styles.cardHeadText}>
             <Text style={styles.cardName} numberOfLines={1}>{clientName}</Text>
             {item.location ? (

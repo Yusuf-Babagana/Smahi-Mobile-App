@@ -67,6 +67,10 @@ export interface User {
   phone_number?: string;
   address?: string;
   profile_picture?: string;
+  /** '' | 'male' | 'female' — optional; blank for every account created
+   * before this field existed and for anyone who hasn't set it. Powers a
+   * male/female fallback Avatar in place of initials when there's no photo. */
+  gender?: string;
 
   // Location IDs (numbers in Django)
   country?: number;
@@ -154,6 +158,8 @@ export interface AIArtisanResult {
   is_verified: boolean;
   /** Absolute or relative URL; null when the artisan has no photo uploaded. */
   profile_picture: string | null;
+  /** '' | 'male' | 'female' — used for a fallback Avatar icon when there's no photo. */
+  gender: string;
   /** Null when the caller's location wasn't available — never guess a distance for display. */
   distance_km: number | null;
 }
@@ -180,6 +186,7 @@ export interface AIArtisanProfileAction {
     rating?: number;
     is_verified?: boolean;
     profile_picture?: string | null;
+    gender?: string;
     distance_km?: number | null;
     bio?: string;
   };

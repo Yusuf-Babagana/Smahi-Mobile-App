@@ -303,7 +303,7 @@ export default function BookingFlow() {
 
                 {/* Artisan summary */}
                 <View style={styles.summaryCard}>
-                  <Avatar name={artisanName} uri={userObj.profile_picture} size={52} borderRadius={16} verified={artisan?.is_verified || userObj.is_verified} />
+                  <Avatar name={artisanName} uri={userObj.profile_picture} gender={userObj.gender} size={52} borderRadius={16} verified={artisan?.is_verified || userObj.is_verified} />
                   <View style={{ flex: 1, marginLeft: space.md }}>
                     <Text style={styles.summaryName}>{artisanName}</Text>
                     <Text style={styles.summaryTrade}>{trade}</Text>

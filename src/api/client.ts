@@ -109,6 +109,7 @@ export const authAPI = {
       last_name: lastName || '',
       role: data.role,
       phone_number: data.phone_number || data.phone,
+      gender: data.gender || undefined,
       country: data.country,
       state: data.state,
       lga: data.lga

@@ -5,8 +5,13 @@ import { avatarTones, color, font } from '@/constants/theme';
 
 interface AvatarProps {
   name?: string;
-  /** Optional photo; falls back to tonal initials when missing or on load error. */
+  /** Optional photo; falls back to a gender icon (if set) or tonal initials
+   * when missing or on load error. */
   uri?: string | null;
+  /** 'male' | 'female' | '' — only used when there's no photo. Blank (the
+   * default for every account created before this field existed, and for
+   * anyone who hasn't set it) falls back to initials exactly as before. */
+  gender?: string | null;
   size?: number;
   /** Circular by default; pass a radius for rounded-square avatars (e.g. profile head card). */
   borderRadius?: number;
@@ -31,6 +36,7 @@ function initialsFor(name: string) {
 export function Avatar({
   name = '',
   uri,
+  gender,
   size = 50,
   borderRadius,
   verified = false,
@@ -42,6 +48,7 @@ export function Avatar({
   const r = borderRadius ?? size / 2;
   const badgeSize = Math.max(16, Math.round(size * 0.34));
   const dotSize = Math.max(10, Math.round(size * 0.26));
+  const genderIcon = gender === 'male' ? 'man' : gender === 'female' ? 'woman' : null;
 
   return (
     <View style={[{ width: size, height: size }, style]}>
@@ -51,6 +58,15 @@ export function Avatar({
           onError={() => setFailed(true)}
           style={{ width: size, height: size, borderRadius: r, backgroundColor: tone.bg }}
         />
+      ) : genderIcon ? (
+        <View
+          style={[
+            styles.initialsBox,
+            { width: size, height: size, borderRadius: r, backgroundColor: tone.bg },
+          ]}
+        >
+          <MaterialIcons name={genderIcon} size={size * 0.6} color={tone.fg} />
+        </View>
       ) : (
         <View
           style={[

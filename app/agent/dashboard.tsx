@@ -164,7 +164,7 @@ export default function AgentDashboard() {
             accessibilityRole="button"
             accessibilityLabel={t('My profile')}
           >
-            <Avatar name={displayName} uri={user?.profile_picture} size={60} borderRadius={20} online />
+            <Avatar name={displayName} uri={user?.profile_picture} gender={user?.gender} size={60} borderRadius={20} online />
             <View style={styles.profileInfo}>
               <Text style={styles.userName} numberOfLines={1}>{displayName}</Text>
               <View style={styles.idBadge}>

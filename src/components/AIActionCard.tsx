@@ -27,6 +27,7 @@ function ArtisanMiniCard({
       <Avatar
         name={artisan.name}
         uri={optimizedPhotoUrl(artisan.profile_picture)}
+        gender={artisan.gender}
         size={36}
         borderRadius={radius.sm}
         verified={artisan.is_verified}
@@ -127,6 +128,7 @@ export default function AIActionCard({
             <Avatar
               name={data.name}
               uri={optimizedPhotoUrl(data.profile_picture)}
+              gender={data.gender}
               size={50}
               borderRadius={radius.lg}
               verified={!!data.is_verified}

@@ -85,7 +85,7 @@ export default function ProfileScreen() {
 
         {/* Header Profile Section */}
         <Animated.View entering={FadeInUp.duration(400)} style={styles.header}>
-          <Avatar name={displayName} uri={user?.profile_picture} size={96} borderRadius={30} />
+          <Avatar name={displayName} uri={user?.profile_picture} gender={user?.gender} size={96} borderRadius={30} />
           <Text style={styles.name}>{displayName}</Text>
           <Text style={styles.email}>{user?.email || 'email@example.com'}</Text>
           <Badge

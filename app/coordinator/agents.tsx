@@ -83,7 +83,7 @@ export default function CoordinatorAgentList() {
 
         return (
             <View style={styles.card}>
-                <Avatar name={name} size={44} />
+                <Avatar name={name} gender={item.gender} size={44} />
                 <View style={styles.info}>
                     <Text style={styles.name} numberOfLines={1}>{name}</Text>
                     <Text style={styles.email} numberOfLines={1}>{item.email}</Text>

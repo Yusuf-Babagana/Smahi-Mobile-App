@@ -72,7 +72,7 @@ export default function AgentProfileScreen() {
 
                 {/* Profile Header */}
                 <View style={styles.profileHeader}>
-                    <Avatar name={displayName} uri={user?.profile_picture} size={96} borderRadius={30} />
+                    <Avatar name={displayName} uri={user?.profile_picture} gender={user?.gender} size={96} borderRadius={30} />
                     <Text style={styles.name}>{displayName}</Text>
                     <Text style={styles.role}>{t('Verified Field Agent')}</Text>
                     <Text style={styles.location}>{user?.lga_details?.name}, {user?.state_details?.name}</Text>

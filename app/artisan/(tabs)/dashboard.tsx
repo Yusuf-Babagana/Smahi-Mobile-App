@@ -288,7 +288,7 @@ export default function ArtisanDashboard() {
         <SafeAreaView edges={['top']}>
           <View style={styles.headerContent}>
             <TouchableOpacity onPress={() => router.push('/artisan/profile')} accessibilityRole="button">
-              <Avatar name={displayName} uri={profilePicUrl} size={46} />
+              <Avatar name={displayName} uri={profilePicUrl} gender={user?.gender} size={46} />
             </TouchableOpacity>
 
             <View style={styles.headerText}>
@@ -382,7 +382,7 @@ export default function ArtisanDashboard() {
                 return (
                   <View key={req.id ?? i} style={[styles.requestCard, i > 0 && { marginTop: space.md }]}>
                     <View style={styles.requestHead}>
-                      <Avatar name={clientName} uri={getImageUrl(client.profile_picture)} size={44} />
+                      <Avatar name={clientName} uri={getImageUrl(client.profile_picture)} gender={client.gender} size={44} />
                       <View style={styles.requestHeadText}>
                         <Text style={styles.requestName} numberOfLines={1}>{clientName}</Text>
                         {metaParts.length > 0 ? (
@@ -439,7 +439,7 @@ export default function ArtisanDashboard() {
                 return (
                   <View key={job.id ?? i} style={[styles.requestCard, i > 0 && { marginTop: space.md }]}>
                     <View style={styles.requestHead}>
-                      <Avatar name={clientName} uri={getImageUrl(client.profile_picture)} size={44} />
+                      <Avatar name={clientName} uri={getImageUrl(client.profile_picture)} gender={client.gender} size={44} />
                       <View style={styles.requestHeadText}>
                         <Text style={styles.requestName} numberOfLines={1}>{clientName}</Text>
                         {job.location ? (

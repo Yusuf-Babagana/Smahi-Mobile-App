@@ -519,7 +519,7 @@ export default function ClientHomeScreen() {
                   accessibilityLabel={railName}
                   style={({ pressed }) => [styles.railCard, pressed && { opacity: 0.85 }]}
                 >
-                  <Avatar name={railName} uri={a.profile_picture} size={48} borderRadius={16} verified />
+                  <Avatar name={railName} uri={a.profile_picture} gender={u.gender} size={48} borderRadius={16} verified />
                   <Text style={styles.railName} numberOfLines={1}>{railName}</Text>
                   <Text style={styles.railTrade} numberOfLines={1}>
                     {i18n.language === 'ha' && a.category_name_ha ? a.category_name_ha : (a.profession_name || a.category_name || t('Artisan'))}

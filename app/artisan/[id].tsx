@@ -225,7 +225,7 @@ export default function ArtisanProfileRoom() {
         {/* Overlapping head card */}
         <View style={styles.headCard}>
           <View style={styles.headTop}>
-            <Avatar name={displayName} uri={profilePic} size={72} borderRadius={22} verified={isVerified} online={!!artisan.is_online} />
+            <Avatar name={displayName} uri={profilePic} gender={artisan?.user_details?.gender || artisan?.user?.gender} size={72} borderRadius={22} verified={isVerified} online={!!artisan.is_online} />
             <View style={styles.headInfo}>
               <Text style={styles.name} numberOfLines={1}>{displayName}</Text>
               <Text style={styles.trade} numberOfLines={1}>{professionName}</Text>

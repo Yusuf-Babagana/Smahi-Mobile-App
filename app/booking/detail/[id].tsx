@@ -241,7 +241,7 @@ export default function BookingDetailScreen() {
         {/* Artisan card */}
         <Pressable style={styles.card} onPress={viewArtisanProfile} accessibilityRole="button">
           <View style={styles.artisanRow}>
-            <Avatar name={name} uri={artisanUser.profile_picture} size={52} borderRadius={14} />
+            <Avatar name={name} uri={artisanUser.profile_picture} gender={artisanUser.gender} size={52} borderRadius={14} />
             <View style={styles.artisanInfo}>
               <Text style={styles.artisanName} numberOfLines={1}>{name}</Text>
               <Text style={styles.artisanTrade} numberOfLines={1}>

@@ -176,6 +176,7 @@ export default function ChatListScreen() {
                     <Avatar
                         name={displayName}
                         uri={avatar}
+                        gender={other.gender}
                         size={50}
                         online={!!(other.is_online || other.online)}
                     />
@@ -230,7 +231,7 @@ export default function ChatListScreen() {
                     activeOpacity={0.7}
                 >
                     <View>
-                        <Avatar name={displayName} uri={avatar} size={50} />
+                        <Avatar name={displayName} uri={avatar} gender={item.gender} size={50} />
                         <View style={styles.newBadge}>
                             <MaterialIcons name="add" size={12} color="#FFF" />
                         </View>

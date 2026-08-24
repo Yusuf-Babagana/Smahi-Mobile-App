@@ -15,7 +15,7 @@ import { useAuth } from "@/src/contexts/AuthContext";
 import ContactList from "@/src/components/ContactList";
 import { color, font, radius, shadow, space, type } from '@/constants/theme';
 import { useTranslation } from 'react-i18next';
-import { useToast, useConfirm, LanguagePickerField } from '@/src/components/ui';
+import { useToast, useConfirm, LanguagePickerField, GenderField } from '@/src/components/ui';
 
 import { API_URL as BASE_URL, CLOUDINARY_CLOUD_NAME as CLOUD_NAME } from '@/src/constants/env';
 
@@ -37,6 +37,9 @@ export default function ArtisanProfileScreen() {
     // translated into (backend: User.preferred_language). Separate from
     // the app's own UI language.
     const [preferredLanguage, setPreferredLanguage] = useState("");
+    // Optional — powers a male/female fallback Avatar in place of initials
+    // when there's no photo. Blank for every account that hasn't set it.
+    const [gender, setGender] = useState<'' | 'male' | 'female'>('');
 
     useEffect(() => {
         loadData();
@@ -64,6 +67,7 @@ export default function ArtisanProfileScreen() {
             setUser(response.data);
             setPortfolioImages(response.data.portfolio_images || []);
             setPreferredLanguage(response.data.preferred_language || "");
+            setGender(response.data.gender || "");
 
         } catch (error) {
             console.error(error);
@@ -176,6 +180,19 @@ export default function ArtisanProfileScreen() {
         } catch (error) {
             setPreferredLanguage(previous);
             showToast(t('Failed to update message language. Please try again.'), { type: 'error' });
+        }
+    };
+
+    const handleGenderChange = async (value: '' | 'male' | 'female') => {
+        const previous = gender;
+        setGender(value); // optimistic
+        try {
+            await authAPI.updateProfile({ gender: value });
+            await storage.updateCurrentUser({ gender: value });
+            setUser((prev: any) => ({ ...prev, gender: value }));
+        } catch (error) {
+            setGender(previous);
+            showToast(t('Failed to update. Please try again.'), { type: 'error' });
         }
     };
 
@@ -293,6 +310,12 @@ export default function ArtisanProfileScreen() {
                 {/* Message language */}
                 <Animated.View entering={FadeInDown.delay(350)} style={styles.section}>
                     <LanguagePickerField value={preferredLanguage} onChange={handleLanguageChange} />
+                </Animated.View>
+
+                {/* Gender — optional, powers a male/female fallback avatar
+                    in place of initials when there's no profile picture. */}
+                <Animated.View entering={FadeInDown.delay(375)} style={styles.section}>
+                    <GenderField value={gender} onChange={handleGenderChange} />
                 </Animated.View>
 
                 {/* Portfolio */}

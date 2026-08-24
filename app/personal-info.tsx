@@ -13,7 +13,7 @@ import { authAPI } from "@/src/api/client";
 import { storage } from "@/src/utils/storage";
 import { useAuth } from "@/src/contexts/AuthContext";
 import { color, font, radius, shadow, space } from "@/constants/theme";
-import { useToast, LanguagePickerField } from "@/src/components/ui";
+import { useToast, LanguagePickerField, GenderField } from "@/src/components/ui";
 
 // Editable account fields — matches the backend UserUpdateSerializer
 // (auth/profile/ PATCH accepts first_name, last_name, phone_number, address).
@@ -33,6 +33,9 @@ export default function PersonalInfoScreen() {
     // translated into (backend: User.preferred_language). Separate from
     // the app's own UI language (LanguageToggle.tsx).
     const [preferredLanguage, setPreferredLanguage] = useState("");
+    // Optional — powers a male/female fallback Avatar in place of initials
+    // when there's no photo. Blank for every account that hasn't set it.
+    const [gender, setGender] = useState<'' | 'male' | 'female'>('');
 
     // --- Account deletion (Play Store data-safety requirement) ---
     const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
@@ -49,6 +52,7 @@ export default function PersonalInfoScreen() {
                 setPhone(user.phone_number || "");
                 setAddress(user.address || "");
                 setPreferredLanguage(user.preferred_language || "");
+                setGender((user.gender as '' | 'male' | 'female') || "");
             }
             setLoading(false);
         });
@@ -67,6 +71,7 @@ export default function PersonalInfoScreen() {
                 phone_number: phone.trim(),
                 address: address.trim(),
                 preferred_language: preferredLanguage,
+                gender,
             };
             await authAPI.updateProfile(payload);
             await storage.updateCurrentUser(payload);
@@ -148,6 +153,7 @@ export default function PersonalInfoScreen() {
                         <Field label={t('Address')} value={address} onChangeText={setAddress} />
 
                         <LanguagePickerField value={preferredLanguage} onChange={setPreferredLanguage} />
+                        <GenderField value={gender} onChange={setGender} />
 
                         <Pressable
                             onPress={handleSave}

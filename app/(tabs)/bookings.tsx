@@ -116,7 +116,7 @@ export default function BookingsTab() {
     return (
       <View style={styles.card}>
         <View style={styles.cardTop}>
-          <Avatar name={name} uri={artisanUser.profile_picture} size={44} />
+          <Avatar name={name} uri={artisanUser.profile_picture} gender={artisanUser.gender} size={44} />
           <View style={styles.cardInfo}>
             <Text style={styles.cardName} numberOfLines={1}>{name}</Text>
             <Text style={styles.cardJob} numberOfLines={1}>{job}</Text>

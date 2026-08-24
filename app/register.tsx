@@ -21,7 +21,7 @@ import CustomPicker from '@/src/components/CustomPicker';
 import ServiceCategoryPicker from '@/src/components/ServiceCategoryPicker';
 import { DEFAULT_OTHER_ICONS } from '@/src/constants/professionIcons';
 import { color, font, radius, space, type } from '@/constants/theme';
-import { Button, Input, StepHeader, useToast, useConfirm } from '@/src/components/ui';
+import { Button, GenderField, Input, StepHeader, useToast, useConfirm } from '@/src/components/ui';
 import '@/src/i18n'; // Ensure i18n is initialized
 
 // Define expanded roles locally for this screen
@@ -58,6 +58,9 @@ export default function RegisterScreen() {
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [phone, setPhone] = useState('');
+  // Optional — never required to complete registration; powers a male/
+  // female fallback avatar in place of initials when there's no photo.
+  const [gender, setGender] = useState<'' | 'male' | 'female'>('');
   const [role, setRole] = useState<ExpandedRole>('client');
   const [loading, setLoading] = useState(false);
   const [errors, setErrors] = useState<{ [key: string]: string }>({});
@@ -190,6 +193,7 @@ export default function RegisterScreen() {
         password,
         role,
         phone_number: phone,
+        gender: gender || undefined,
         category_id: role === 'artisan' && selectedService !== '__custom__' ? selectedService : undefined,
         custom_category_name: role === 'artisan' && selectedService === '__custom__' ? customCategoryName.trim() : undefined,
         custom_category_icon: role === 'artisan' && selectedService === '__custom__' ? customIcon || undefined : undefined,
@@ -387,6 +391,11 @@ export default function RegisterScreen() {
                   error={errors.name}
                   icon="person-outline"
                 />
+
+                {/* Optional — shows a male/female icon in place of initials
+                    wherever this account's avatar appears without a photo. */}
+                <GenderField value={gender} onChange={setGender} />
+
                 <Input
                   label={t('Email address')}
                   placeholder="yusuf@example.com"

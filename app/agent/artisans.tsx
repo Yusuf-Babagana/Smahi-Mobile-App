@@ -77,7 +77,7 @@ export default function AgentArtisanList() {
                 accessibilityRole="button"
                 accessibilityLabel={name}
             >
-                <Avatar name={name} uri={person.profile_picture} size={48} verified={!!person.is_verified} />
+                <Avatar name={name} uri={person.profile_picture} gender={person.gender} size={48} verified={!!person.is_verified} />
 
                 <View style={styles.info}>
                     <Text style={styles.name} numberOfLines={1}>{name}</Text>

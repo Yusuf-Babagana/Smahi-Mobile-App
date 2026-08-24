@@ -75,7 +75,7 @@ export const ArtisanCard = React.memo(function ArtisanCard({
       style={({ pressed }) => [styles.card, pressed && styles.cardPressed, style]}
     >
       <View style={styles.topRow}>
-        <Avatar name={displayName} uri={photo} size={56} borderRadius={radius.xl} verified={isVerified} online={!!artisan.is_online} />
+        <Avatar name={displayName} uri={photo} gender={userObj.gender || artisan.gender} size={56} borderRadius={radius.xl} verified={isVerified} online={!!artisan.is_online} />
         <View style={styles.info}>
           <Text style={styles.name} numberOfLines={1}>
             {displayName}
