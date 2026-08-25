@@ -830,7 +830,7 @@ export default function ClientHomeScreen() {
                   approved map design. */}
               <Marker
                 coordinate={{ latitude: location.latitude, longitude: location.longitude }}
-                anchor={{ x: 0.5, y: 0.6 }}
+                anchor={{ x: 0.5, y: 0.7 }}
               >
                 <View style={styles.youAreHereWrap}>
                   <MaterialIcons name="location-on" size={34} color={color.brand600} />
@@ -952,7 +952,7 @@ export default function ClientHomeScreen() {
                 style={({ pressed }) => [styles.mapRow, pressed && { opacity: 0.85 }]}
                 accessibilityRole="button"
               >
-                <Avatar name={displayName} uri={item.profile_picture} gender={u.gender} size={52} borderRadius={26} />
+                <Avatar name={displayName} uri={item.profile_picture} gender={u.gender} size={56} borderRadius={28} />
                 <View style={styles.mapRowInfo}>
                   <Text style={styles.mapRowName} numberOfLines={1}>{displayName} ({professionName})</Text>
                   <Text style={styles.mapRowSubtitle} numberOfLines={1}>{item.bio || professionName}</Text>
@@ -962,14 +962,13 @@ export default function ClientHomeScreen() {
                     <Text style={styles.mapRowReviews}>
                       ({item.total_reviews ?? item.review_count ?? 0} {t('reviews')})
                     </Text>
-                    {hasDistance && (
-                      <>
-                        <Text style={styles.mapRowDot}>·</Text>
-                        <MaterialIcons name="place" size={12} color={color.brand600} />
-                        <Text style={styles.mapRowDistance}>{item.distance.toFixed(1)} {t('km away')}</Text>
-                      </>
-                    )}
                   </View>
+                  {hasDistance && (
+                    <View style={styles.mapRowMetaLine}>
+                      <MaterialIcons name="place" size={12} color={color.brand600} />
+                      <Text style={styles.mapRowDistance}>{item.distance.toFixed(1)} {t('km away')}</Text>
+                    </View>
+                  )}
                 </View>
                 <Pressable
                   onPress={() => phone && Linking.openURL(`tel:${phone}`)}
@@ -1345,7 +1344,7 @@ const styles = StyleSheet.create({
   // approved map design.
   flex: { flex: 1 },
   mapWrap: {
-    height: 260,
+    height: 210,
     backgroundColor: color.surfaceSunken,
     marginTop: space.md,
     marginBottom: space.md,
@@ -1402,6 +1401,7 @@ const styles = StyleSheet.create({
     padding: space.md,
     marginBottom: space.md,
     gap: space.md,
+    ...shadow.e1,
   },
   mapRowInfo: { flex: 1 },
   mapRowName: { fontFamily: font.extrabold, fontSize: 14.5, color: color.ink900 },
@@ -1409,7 +1409,6 @@ const styles = StyleSheet.create({
   mapRowMetaLine: { flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 5 },
   mapRowRating: { fontFamily: font.extrabold, fontSize: 12.5, color: color.ink900 },
   mapRowReviews: { fontFamily: font.medium, fontSize: 11.5, color: color.ink400 },
-  mapRowDot: { fontFamily: font.bold, fontSize: 12, color: color.ink300 },
   mapRowDistance: { fontFamily: font.extrabold, fontSize: 11.5, color: color.brand600 },
   mapRowCallBtn: {
     width: 40,
