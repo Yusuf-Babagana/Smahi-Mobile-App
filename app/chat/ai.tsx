@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import {
   View, Text, FlatList, TextInput, TouchableOpacity,
-  StyleSheet, Pressable, ActivityIndicator, Platform, Keyboard,
+  StyleSheet, Pressable, ActivityIndicator, Platform, Keyboard, Linking,
 } from 'react-native';
 // Native-insets KeyboardAvoidingView in real builds, manual keyboard-height
 // fallback in Expo Go (see src/components/Keyboard.tsx for why).
@@ -9,7 +9,6 @@ import { KeyboardAvoidingView } from '@/src/components/Keyboard';
 import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
-import axios from 'axios';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Audio } from 'expo-av';
 import * as Clipboard from 'expo-clipboard';
@@ -20,7 +19,8 @@ import {
   requestSpeechPermissions, startSpeechRecognition,
   stopSpeechRecognition, abortSpeechRecognition
 } from '@/src/utils/speechRecognition';
-import { BACKEND_URL } from '@/src/constants/env';
+import apiClient from '@/src/api/config';
+import { bookingAPI } from '@/src/api/client';
 import { color, font, radius, shadow, space, touch } from '@/constants/theme';
 import { translateText } from '@/src/utils/translation';
 import { AIAction } from '@/src/types';
@@ -49,6 +49,33 @@ const SUGGESTED_PROMPTS = [
   'What can you help me with?',
   'Help me write a message',
 ];
+
+// Feature 10 (Booking + Actions) needs the model to resolve "book this
+// mechanic"/"call Ahmed" to a real artisan_id across conversation TURNS —
+// but each turn rebuilds `messages` from this screen's own plain
+// {role, text} history, and the visible reply text ("Ahmed is 1.2 km
+// away...") never actually contains the numeric id that was in that
+// turn's tool result. Without this, book_artisan/open_chat_with_artisan/
+// call_artisan would have no reliable id to resolve on a later turn.
+// Appends a compact, invisible-to-the-user id hint onto a bot message's
+// own content before it's sent back as conversation history, so the
+// model can still see "Ahmed Bello -> id 42" on the next turn even
+// though the chat bubble itself never shows that.
+function apiContentFor(message: Message): string {
+  if (message.role !== 'bot' || !message.action) return message.text;
+  const a = message.action;
+  let candidates: { name: string; id: number; user_id: number }[] = [];
+  if (a.type === 'search_results' || a.type === 'category_filter') {
+    candidates = a.data.results.map((r) => ({ name: r.name, id: r.id, user_id: r.user_id }));
+  } else if (a.type === 'artisan_profile' && a.data.found && a.data.id != null && a.data.user_id != null) {
+    candidates = [{ name: a.data.name, id: a.data.id, user_id: a.data.user_id }];
+  } else if (a.type === 'start_booking' || a.type === 'contact_artisan') {
+    candidates = [{ name: a.data.name, id: a.data.id, user_id: a.data.user_id }];
+  }
+  if (candidates.length === 0) return message.text;
+  const hint = candidates.map((c) => `${c.name} -> artisan_id ${c.id}`).join(', ');
+  return `${message.text}\n\n[internal, not shown to user: ${hint}]`;
+}
 
 export default function AIChatScreen() {
   const router = useRouter();
@@ -187,6 +214,52 @@ export default function AIChatScreen() {
     });
   }, [router]);
 
+  // --- Feature 10 (Booking + Actions): the AI actually performing an
+  // action, not just describing one. ---
+
+  // ArtisanProfile.id — opens the existing booking screen pre-selected;
+  // the user still picks a date/time and confirms there themselves (the
+  // AI never invents those on their behalf).
+  const handleStartBooking = useCallback((artisanProfileId: number) => {
+    router.push({ pathname: '/booking/[artisanId]', params: { artisanId: String(artisanProfileId) } });
+  }, [router]);
+
+  // The only place that actually mutates a booking for this feature —
+  // reuses the same PATCH endpoint the app's own cancel button already
+  // uses (already permission-checked server-side), never a bespoke AI
+  // mutation path.
+  const handleConfirmCancel = useCallback(async (bookingId: number): Promise<boolean> => {
+    try {
+      await bookingAPI.updateBooking(bookingId, { status: 'cancelled' });
+      showToast(t('Booking cancelled.'), { type: 'success' });
+      return true;
+    } catch (err: any) {
+      const message = err?.response?.data?.cancellation_reason?.[0]
+        || err?.response?.data?.status?.[0]
+        || t('Could not cancel this booking. Please try again.');
+      showToast(message, { type: 'error' });
+      return false;
+    }
+  }, [showToast, t]);
+
+  const handleViewBooking = useCallback((bookingId: number) => {
+    router.push(`/booking/detail/${bookingId}`);
+  }, [router]);
+
+  const handleContactArtisan = useCallback((
+    recipientUserId: number, method: 'chat' | 'call', name: string, phone: string
+  ) => {
+    if (method === 'call') {
+      if (!phone) {
+        showToast(t("This artisan's phone number isn't available."), { type: 'info' });
+        return;
+      }
+      Linking.openURL(`tel:${phone}`);
+    } else {
+      router.push({ pathname: '/chat/[id]', params: { id: 'new', name, recipientId: recipientUserId } });
+    }
+  }, [router, showToast, t]);
+
   // Speaks a bot reply aloud (Voice AI, feature 7) — only ever called for
   // an exchange that itself started as a voice question. Picks the TTS
   // language from the app's own EN/HA toggle as a simple, already-set
@@ -221,11 +294,15 @@ export default function AIChatScreen() {
     try {
       const apiMessages = updatedMessages.map(m => ({
         role: m.role === 'bot' ? 'assistant' as const : 'user' as const,
-        content: m.text,
+        content: apiContentFor(m),
       }));
 
-      const res = await axios.post(
-        `${BACKEND_URL}/api/ai/chat/`,
+      // apiClient (not raw axios) — attaches the logged-in user's JWT, so
+      // the backend actually knows who's asking. Without this, book/
+      // cancel/track/status actions (feature 10) have no client account
+      // to act on, and every request looked anonymous even when logged in.
+      const res = await apiClient.post(
+        'ai/chat/',
         {
           messages: apiMessages,
           // Omitted entirely (not sent as null/0) when location permission
@@ -379,6 +456,10 @@ export default function AIChatScreen() {
             onNavigate={handleNavigate}
             onSearchLocal={handleSearchLocal}
             onCategoryLocal={handleCategoryLocal}
+            onStartBooking={handleStartBooking}
+            onConfirmCancel={handleConfirmCancel}
+            onViewBooking={handleViewBooking}
+            onContactArtisan={handleContactArtisan}
           />
         )}
       </View>

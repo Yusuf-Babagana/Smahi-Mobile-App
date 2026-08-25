@@ -197,8 +197,62 @@ export interface AINavigationAction {
   data: { screen: string; route: string };
 }
 
+// --- Feature 10 (Booking + Actions) — the AI actually performing an
+// action through the backend, not just describing one. See
+// core/views.py AIChatView._execute_tool for the matching Python shapes. ---
+
+export interface AIBookingSummary {
+  id: number;
+  artisan_name: string;
+  /** ArtisanProfile.id — what /artisan/[id] and /booking/detail/[id] are keyed on. */
+  artisan_profile_id: number | null;
+  category: string;
+  status: string;
+  scheduled_date: string | null;
+}
+
+export interface AIStartBookingAction {
+  type: 'start_booking';
+  data: AIArtisanResult;
+}
+
+export interface AIConfirmCancelAction {
+  type: 'confirm_cancel';
+  data: AIBookingSummary;
+}
+
+export interface AITrackBookingAction {
+  type: 'track_booking';
+  data: AIBookingSummary & {
+    live_latitude: number | null;
+    live_longitude: number | null;
+    live_location_updated_at: string | null;
+  };
+}
+
+export interface AIBookingStatusAction {
+  type: 'booking_status';
+  data: AIBookingSummary;
+}
+
+export interface AIContactArtisanAction {
+  type: 'contact_artisan';
+  data: AIArtisanResult & { method: 'chat' | 'call'; phone_number: string };
+}
+
+export interface AIActionErrorAction {
+  type: 'action_error';
+  data: { reason: string };
+}
+
 export type AIAction =
   | AISearchActionResult
   | AICategoryFilterAction
   | AIArtisanProfileAction
-  | AINavigationAction;
+  | AINavigationAction
+  | AIStartBookingAction
+  | AIConfirmCancelAction
+  | AITrackBookingAction
+  | AIBookingStatusAction
+  | AIContactArtisanAction
+  | AIActionErrorAction;

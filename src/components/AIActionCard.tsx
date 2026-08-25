@@ -1,8 +1,10 @@
-import React from 'react';
-import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
+import React, { useState } from 'react';
+import { View, Text, StyleSheet, TouchableOpacity, ActivityIndicator } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
 import { color, font, radius, shadow, space } from '@/constants/theme';
-import { AIAction, AIArtisanResult } from '@/src/types';
+import {
+  AIAction, AIArtisanResult, AIConfirmCancelAction, AITrackBookingAction, AIBookingStatusAction,
+} from '@/src/types';
 import { resolveProfessionIcon } from '@/src/constants/professionIcons';
 import { optimizedPhotoUrl } from '@/src/utils/photo';
 import { Avatar } from '@/src/components/ui';
@@ -18,6 +20,16 @@ interface AIActionCardProps {
   onNavigate: (route: string) => void;
   onSearchLocal: (query: string) => void;
   onCategoryLocal: (categoryId: number, categoryName: string) => void;
+  // Feature 10 (Booking + Actions) — the AI actually performing an action,
+  // not just describing one.
+  onStartBooking: (artisanProfileId: number) => void;
+  /** Actually cancels via the existing, already-permission-checked booking
+   * endpoint (bookingAPI.updateBooking) — resolves true on success. */
+  onConfirmCancel: (bookingId: number) => Promise<boolean>;
+  onViewBooking: (bookingId: number) => void;
+  // recipientUserId is a User.id (chat is between two Users), unlike
+  // every id elsewhere in this file — see the call site for why.
+  onContactArtisan: (recipientUserId: number, method: 'chat' | 'call', name: string, phone: string) => void;
 }
 
 function ArtisanMiniCard({
@@ -61,14 +73,108 @@ function ArtisanMiniCard({
   );
 }
 
+const BOOKING_STATUS_LABELS: Record<string, string> = {
+  pending: 'Pending', confirmed: 'Accepted', in_progress: 'In progress',
+  completed: 'Completed', cancelled: 'Cancelled',
+};
+const BOOKING_STATUS_COLORS: Record<string, string> = {
+  pending: color.warn600, confirmed: color.brand600, in_progress: color.brand600,
+  completed: color.accent600, cancelled: color.danger600,
+};
+
+/** Shared card for confirm_cancel/track_booking/booking_status (feature
+ * 10) — all three operate on one existing booking, differing only in
+ * which button/detail line shows. Cancel's own confirm tap is the ONLY
+ * place that actually mutates anything: it calls the passed-in
+ * onConfirmCancel (the app's existing, already-permission-checked booking
+ * endpoint), never the AI backend directly. */
+function BookingStatusCard({
+  action,
+  onConfirmCancel,
+  onViewBooking,
+}: {
+  action: AIConfirmCancelAction | AITrackBookingAction | AIBookingStatusAction;
+  onConfirmCancel: (bookingId: number) => Promise<boolean>;
+  onViewBooking: (bookingId: number) => void;
+}) {
+  const [cancelling, setCancelling] = useState(false);
+  const [cancelled, setCancelled] = useState(false);
+  const { data } = action;
+  const effectiveStatus = cancelled ? 'cancelled' : data.status;
+
+  const handleConfirmCancel = async () => {
+    setCancelling(true);
+    const ok = await onConfirmCancel(data.id);
+    setCancelling(false);
+    if (ok) setCancelled(true);
+  };
+
+  return (
+    <View style={styles.actionContainer}>
+      <View style={styles.profileCard}>
+        <View style={styles.bookingStatusRow}>
+          <Text style={styles.profileName} numberOfLines={1}>{data.artisan_name}</Text>
+          <View style={[styles.statusBadge, { backgroundColor: (BOOKING_STATUS_COLORS[effectiveStatus] || color.ink400) + '1A' }]}>
+            <Text style={[styles.statusBadgeText, { color: BOOKING_STATUS_COLORS[effectiveStatus] || color.ink400 }]}>
+              {BOOKING_STATUS_LABELS[effectiveStatus] || effectiveStatus}
+            </Text>
+          </View>
+        </View>
+        {!!data.category && <Text style={styles.profileCategory}>{data.category}</Text>}
+        {action.type === 'track_booking' && (
+          <Text style={styles.bookingMetaText}>
+            {action.data.live_latitude != null
+              ? 'Live location available — open the booking to view the map.'
+              : 'Waiting for the artisan\'s live location to start updating.'}
+          </Text>
+        )}
+
+        {action.type === 'confirm_cancel' && !cancelled ? (
+          <TouchableOpacity
+            style={styles.dangerBtn}
+            onPress={handleConfirmCancel}
+            disabled={cancelling}
+            activeOpacity={0.7}
+          >
+            {cancelling ? <ActivityIndicator color="#FFF" size="small" /> : (
+              <>
+                <Text style={styles.viewProfileBtnText}>Confirm Cancel</Text>
+                <MaterialIcons name="cancel" size={16} color="#FFF" />
+              </>
+            )}
+          </TouchableOpacity>
+        ) : (
+          <TouchableOpacity
+            style={styles.viewProfileBtn}
+            onPress={() => onViewBooking(data.id)}
+            activeOpacity={0.7}
+          >
+            <Text style={styles.viewProfileBtnText}>View Booking</Text>
+            <MaterialIcons name="arrow-forward" size={16} color="#FFF" />
+          </TouchableOpacity>
+        )}
+      </View>
+    </View>
+  );
+}
+
 export default function AIActionCard({
   action,
   onArtisanPress,
   onNavigate,
   onSearchLocal,
   onCategoryLocal,
+  onStartBooking,
+  onConfirmCancel,
+  onViewBooking,
+  onContactArtisan,
 }: AIActionCardProps) {
   if (!action) return null;
+
+  // --- action_error: no card — the AI's own text reply already explains
+  // why (auth required, no matching booking, ambiguous match, etc.) using
+  // the reason it received in the tool result. ---
+  if (action.type === 'action_error') return null;
 
   // --- Navigation action ---
   if (action.type === 'navigation') {
@@ -175,6 +281,107 @@ export default function AIActionCard({
           </TouchableOpacity>
         </View>
       </View>
+    );
+  }
+
+  // --- Start booking (feature 10) — pre-selects the artisan on the
+  // existing booking screen; the AI never invents a date/time/description,
+  // the user still fills and confirms the actual form themselves. ---
+  if (action.type === 'start_booking') {
+    const { data } = action;
+    return (
+      <View style={styles.actionContainer}>
+        <View style={styles.profileCard}>
+          <View style={styles.profileHeader}>
+            <Avatar
+              name={data.name}
+              uri={optimizedPhotoUrl(data.profile_picture)}
+              gender={data.gender}
+              size={50}
+              borderRadius={radius.lg}
+              verified={!!data.is_verified}
+              style={{ marginRight: space.md }}
+            />
+            <View style={styles.profileInfo}>
+              <Text style={styles.profileName}>{data.name}</Text>
+              <View style={styles.profileCategoryRow}>
+                <MaterialIcons
+                  name={resolveProfessionIcon(data.category_material_icon, data.category)}
+                  size={12}
+                  color={color.ink400}
+                />
+                <Text style={styles.profileCategory}>{data.category || 'Artisan'}</Text>
+              </View>
+            </View>
+          </View>
+          <TouchableOpacity
+            style={styles.viewProfileBtn}
+            onPress={() => data.id && onStartBooking(data.id)}
+            activeOpacity={0.7}
+          >
+            <Text style={styles.viewProfileBtnText}>Continue to Booking</Text>
+            <MaterialIcons name="event-available" size={16} color="#FFF" />
+          </TouchableOpacity>
+        </View>
+      </View>
+    );
+  }
+
+  // --- Contact artisan: chat or call (feature 10) ---
+  if (action.type === 'contact_artisan') {
+    const { data } = action;
+    const isCall = data.method === 'call';
+    return (
+      <View style={styles.actionContainer}>
+        <View style={styles.profileCard}>
+          <View style={styles.profileHeader}>
+            <Avatar
+              name={data.name}
+              uri={optimizedPhotoUrl(data.profile_picture)}
+              gender={data.gender}
+              size={50}
+              borderRadius={radius.lg}
+              verified={!!data.is_verified}
+              style={{ marginRight: space.md }}
+            />
+            <View style={styles.profileInfo}>
+              <Text style={styles.profileName}>{data.name}</Text>
+              <View style={styles.profileCategoryRow}>
+                <MaterialIcons
+                  name={resolveProfessionIcon(data.category_material_icon, data.category)}
+                  size={12}
+                  color={color.ink400}
+                />
+                <Text style={styles.profileCategory}>{data.category || 'Artisan'}</Text>
+              </View>
+            </View>
+          </View>
+          <TouchableOpacity
+            style={styles.viewProfileBtn}
+            // user_id, not id (ArtisanProfile.id) — chat is between two
+            // Users, same distinction the rest of the app already draws
+            // (see the onArtisanPress comment above for why these must
+            // never be confused).
+            onPress={() => onContactArtisan(data.user_id, data.method, data.name, data.phone_number)}
+            activeOpacity={0.7}
+          >
+            <Text style={styles.viewProfileBtnText}>{isCall ? 'Call Now' : 'Open Chat'}</Text>
+            <MaterialIcons name={isCall ? 'call' : 'chat-bubble-outline'} size={16} color="#FFF" />
+          </TouchableOpacity>
+        </View>
+      </View>
+    );
+  }
+
+  // --- Cancel confirmation / live tracking / status (feature 10) — all
+  // three operate on an existing booking, so they share one card shape. ---
+  if (action.type === 'confirm_cancel' || action.type === 'track_booking' || action.type === 'booking_status') {
+    return (
+      <BookingStatusCard
+        action={action}
+        onConfirmCancel={onConfirmCancel}
+        onViewBooking={onViewBooking}
+      />
     );
   }
 
@@ -393,6 +600,42 @@ const styles = StyleSheet.create({
     fontFamily: font.bold,
     fontSize: 14,
     color: '#FFF',
+  },
+
+  // --- Booking status card (confirm_cancel / track_booking / booking_status) ---
+  bookingStatusRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: space.sm,
+    marginBottom: 4,
+  },
+  statusBadge: {
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: radius.full,
+  },
+  statusBadgeText: {
+    fontFamily: font.extrabold,
+    fontSize: 10.5,
+    textTransform: 'uppercase',
+  },
+  bookingMetaText: {
+    fontFamily: font.medium,
+    fontSize: 12.5,
+    color: color.ink400,
+    marginTop: space.sm,
+    marginBottom: space.md,
+  },
+  dangerBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    backgroundColor: color.danger600,
+    borderRadius: radius.md,
+    paddingVertical: space.md,
+    marginTop: space.md,
   },
 
   // --- Empty state ---
