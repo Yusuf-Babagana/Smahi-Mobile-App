@@ -13,6 +13,7 @@ import axios from 'axios';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Audio } from 'expo-av';
 import * as Clipboard from 'expo-clipboard';
+import * as Speech from 'expo-speech';
 import { useTranslation } from 'react-i18next';
 
 import {
@@ -51,7 +52,7 @@ const SUGGESTED_PROMPTS = [
 
 export default function AIChatScreen() {
   const router = useRouter();
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const { show: showToast } = useToast();
   const confirm = useConfirm();
   // Lets the AI's artisan results carry a real distance instead of never
@@ -61,6 +62,12 @@ export default function AIChatScreen() {
   const [inputText, setInputText] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [isRecording, setIsRecording] = useState(false);
+  // Voice AI (feature 7): a reply is only spoken aloud when the question
+  // that prompted it was itself asked by voice — typed questions stay
+  // text-only, matching how a real voice assistant behaves. Tracks which
+  // bot message is currently being read out, so its bubble can show a
+  // "speaking" indicator with tap-to-stop.
+  const [speakingMessageId, setSpeakingMessageId] = useState<string | null>(null);
   // Measured (not hardcoded) so the iOS keyboard offset always matches this
   // screen's actual header, however tall it ends up being.
   const [headerHeight, setHeaderHeight] = useState(0);
@@ -82,7 +89,7 @@ export default function AIChatScreen() {
         }
       } catch {}
     })();
-    return () => { abortSpeechRecognition(); };
+    return () => { abortSpeechRecognition(); Speech.stop(); };
   }, []);
 
   useEffect(() => {
@@ -107,7 +114,10 @@ export default function AIChatScreen() {
       setIsRecording(false);
       const transcript = await stopSpeechRecognition();
       if (transcript) {
-        setInputText(transcript);
+        // Auto-send — feature 7 (Voice AI) is a talk-and-get-an-answer
+        // flow, not dictation-then-review. Marks this exchange as
+        // fromVoice so the reply is spoken back, not just shown as text.
+        sendMessage(transcript, { fromVoice: true });
       } else {
         // ___NO_API_KEY___/___QUOTA_ERROR___ are internal sentinels from
         // stopSpeechRecognition() — neither is meaningful to a user, both
@@ -126,6 +136,10 @@ export default function AIChatScreen() {
       showToast('Microphone permission is needed to use voice input.', { type: 'error' });
       return;
     }
+
+    // Don't talk over the user while they're about to ask something new.
+    Speech.stop();
+    setSpeakingMessageId(null);
 
     try {
       const { sound } = await Audio.Sound.createAsync(require('@/assets/sounds/sent.wav'));
@@ -173,9 +187,30 @@ export default function AIChatScreen() {
     });
   }, [router]);
 
-  const sendMessage = async (overrideText?: string) => {
+  // Speaks a bot reply aloud (Voice AI, feature 7) — only ever called for
+  // an exchange that itself started as a voice question. Picks the TTS
+  // language from the app's own EN/HA toggle as a simple, already-set
+  // proxy for which language the reply is actually in.
+  const speakReply = useCallback((messageId: string, text: string) => {
+    Speech.stop();
+    setSpeakingMessageId(messageId);
+    Speech.speak(text, {
+      language: i18n.language === 'ha' ? 'ha-NG' : 'en-US',
+      onDone: () => setSpeakingMessageId((id) => (id === messageId ? null : id)),
+      onStopped: () => setSpeakingMessageId((id) => (id === messageId ? null : id)),
+      onError: () => setSpeakingMessageId((id) => (id === messageId ? null : id)),
+    });
+  }, [i18n.language]);
+
+  const stopSpeaking = useCallback(() => {
+    Speech.stop();
+    setSpeakingMessageId(null);
+  }, []);
+
+  const sendMessage = async (overrideText?: string, options?: { fromVoice?: boolean }) => {
     const text = (overrideText ?? inputText).trim();
     if (!text || isLoading) return;
+    const fromVoice = !!options?.fromVoice;
 
     setInputText('');
     const userMsg: Message = { id: Date.now().toString(), role: 'user', text };
@@ -203,21 +238,25 @@ export default function AIChatScreen() {
 
       const reply = res.data.reply || 'Sorry, I could not generate a response.';
       const action: AIAction | undefined = res.data.action || undefined;
+      const botMsgId = (Date.now() + 1).toString();
 
       setMessages(prev => [...prev, {
-        id: (Date.now() + 1).toString(),
+        id: botMsgId,
         role: 'bot',
         text: reply,
         action,
       }]);
+      if (fromVoice) speakReply(botMsgId, reply);
     } catch (err: any) {
       const errorText = err.response?.status === 429
         ? 'Too many requests. Please wait a moment and try again.'
         : err.response?.status === 503
           ? 'AI service is not configured yet.'
           : 'Sorry, I could not process your request. Please try again.';
+      const errorMsgId = (Date.now() + 1).toString();
+      if (fromVoice) speakReply(errorMsgId, errorText);
       setMessages(prev => [...prev, {
-        id: (Date.now() + 1).toString(),
+        id: errorMsgId,
         role: 'bot',
         text: errorText,
       }]);
@@ -236,6 +275,7 @@ export default function AIChatScreen() {
       destructive: true,
     });
     if (!ok) return;
+    stopSpeaking();
     setMessages([WELCOME_MESSAGE]);
     setTranslatedMap({});
     AsyncStorage.removeItem(MESSAGES_KEY).catch(() => {});
@@ -318,6 +358,17 @@ export default function AIChatScreen() {
                 <MaterialIcons name="content-copy" size={12} color={color.ink400} />
                 <Text style={styles.translateText}>{t('Copy')}</Text>
               </TouchableOpacity>
+              {speakingMessageId === item.id && (
+                <TouchableOpacity
+                  onPress={stopSpeaking}
+                  style={styles.translateBtn}
+                  accessibilityRole="button"
+                  accessibilityLabel={t('Stop speaking')}
+                >
+                  <MaterialIcons name="volume-up" size={13} color={color.brand600} />
+                  <Text style={[styles.translateText, { color: color.brand600 }]}>{t('Stop')}</Text>
+                </TouchableOpacity>
+              )}
             </View>
           )}
         </View>
