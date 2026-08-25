@@ -15,6 +15,7 @@ import { openDirections } from '@/src/utils/directions';
 import { BACKEND_URL } from '@/src/constants/env';
 import { color, font, radius, shadow, space, type } from '@/constants/theme';
 import { Avatar, Badge, Chip, useToast } from '@/src/components/ui';
+import { resolveProfessionIcon } from '@/src/constants/professionIcons';
 
 // --- Helper: Local Distance Calculation (Haversine) ---
 const calculateLocalDistance = (lat1: any, lon1: any, lat2: any, lon2: any) => {
@@ -240,7 +241,14 @@ export default function ArtisanProfileRoom() {
             <Avatar name={displayName} uri={profilePic} gender={artisan?.user_details?.gender || artisan?.user?.gender} size={72} borderRadius={22} verified={isVerified} online={!!artisan.is_online} />
             <View style={styles.headInfo}>
               <Text style={styles.name} numberOfLines={1}>{displayName}</Text>
-              <Text style={styles.trade} numberOfLines={1}>{professionName}</Text>
+              <View style={styles.tradeRow}>
+                <MaterialIcons
+                  name={resolveProfessionIcon(artisan?.category_material_icon, professionName)}
+                  size={13}
+                  color={color.brand600}
+                />
+                <Text style={styles.trade} numberOfLines={1}>{professionName}</Text>
+              </View>
               <View style={styles.headBadges}>
                 {isVerified && (
                   <Badge label={t('ID verified')} status="verified" icon="verified" />
@@ -427,7 +435,8 @@ const styles = StyleSheet.create({
   headTop: { flexDirection: 'row', alignItems: 'center' },
   headInfo: { flex: 1, marginLeft: space.md },
   name: { ...type.titleMd },
-  trade: { fontFamily: font.bold, fontSize: 13, color: color.ink400, marginTop: 2 },
+  tradeRow: { flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 2 },
+  trade: { fontFamily: font.bold, fontSize: 13, color: color.ink400 },
   headBadges: { flexDirection: 'row', gap: 6, marginTop: 8, flexWrap: 'wrap' },
   responseRow: { flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 8 },
   responseText: { fontFamily: font.bold, fontSize: 12, color: color.ink400 },
