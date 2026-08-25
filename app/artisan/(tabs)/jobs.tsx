@@ -48,6 +48,14 @@ export default function ArtisanJobsTab() {
   const [cancelReason, setCancelReason] = useState('');
   const [submittingCancel, setSubmittingCancel] = useState(false);
 
+  // "Mark done" now collects the price actually agreed with the client
+  // off-app — without this, total_cost never gets set at all, so "Total
+  // spent" (client) and this artisan's own earnings stat stay ₦0 forever
+  // regardless of how many real jobs are completed.
+  const [markDoneId, setMarkDoneId] = useState<number | null>(null);
+  const [finalPrice, setFinalPrice] = useState('');
+  const [submittingMarkDone, setSubmittingMarkDone] = useState(false);
+
   const load = useCallback(async () => {
     try {
       const user = await authAPI.getProfile();
@@ -158,15 +166,29 @@ export default function ArtisanJobsTab() {
     }
   };
 
-  const confirmMarkDone = async (bookingId: number) => {
-    const ok = await confirm({
-      title: t('Mark job as done'),
-      message: t('This completes the booking and adds it to your jobs done. Continue?'),
-      confirmLabel: t('Mark done'),
-      cancelLabel: t('Not yet'),
-    });
-    if (ok) {
-      updateStatus(bookingId, 'completed');
+  const confirmMarkDone = (bookingId: number) => {
+    setFinalPrice('');
+    setMarkDoneId(bookingId);
+  };
+
+  const submitMarkDone = async () => {
+    const amount = finalPrice.trim();
+    if (!amount || isNaN(Number(amount)) || Number(amount) < 0) {
+      showToast(t('Enter the amount agreed with the client.'), { type: 'warn' });
+      return;
+    }
+    if (markDoneId == null) return;
+    setSubmittingMarkDone(true);
+    try {
+      await bookingAPI.updateBooking(markDoneId, { status: 'completed', total_cost: amount });
+      setMarkDoneId(null);
+      setFinalPrice('');
+      await load();
+      showToast(t('Job marked as done.'), { type: 'success' });
+    } catch {
+      showToast(t('Could not mark this job as done. Please try again.'), { type: 'error' });
+    } finally {
+      setSubmittingMarkDone(false);
     }
   };
 
@@ -364,6 +386,51 @@ export default function ArtisanJobsTab() {
           </View>
         </View>
       </Modal>
+
+      <Modal
+        visible={markDoneId !== null}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setMarkDoneId(null)}
+      >
+        <View style={styles.modalBackdrop}>
+          <View style={styles.modalCard}>
+            <Text style={styles.modalTitle}>{t('Mark job as done')}</Text>
+            <Text style={styles.modalSubtitle}>
+              {t('Enter the amount you agreed with the client for this job.')}
+            </Text>
+
+            <View style={styles.priceInputRow}>
+              <Text style={styles.priceCurrency}>₦</Text>
+              <TextInput
+                style={styles.priceInput}
+                placeholder="0"
+                placeholderTextColor={color.ink300}
+                value={finalPrice}
+                onChangeText={setFinalPrice}
+                keyboardType="numeric"
+                autoFocus
+              />
+            </View>
+
+            <View style={styles.modalActions}>
+              <Button
+                title={t('Cancel')}
+                variant="secondary"
+                onPress={() => setMarkDoneId(null)}
+                disabled={submittingMarkDone}
+                style={{ flex: 1 }}
+              />
+              <Button
+                title={t('Mark done')}
+                onPress={submitMarkDone}
+                loading={submittingMarkDone}
+                style={{ flex: 1 }}
+              />
+            </View>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -502,4 +569,21 @@ const styles = StyleSheet.create({
     minHeight: 90,
   },
   modalActions: { flexDirection: 'row', gap: space.md, marginTop: space.lg },
+  priceInputRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: color.border,
+    borderRadius: radius.md,
+    paddingHorizontal: space.md,
+    gap: 6,
+  },
+  priceCurrency: { fontFamily: font.extrabold, fontSize: 18, color: color.ink600 },
+  priceInput: {
+    flex: 1,
+    paddingVertical: space.md,
+    fontFamily: font.extrabold,
+    fontSize: 18,
+    color: color.ink900,
+  },
 });

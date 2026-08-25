@@ -259,7 +259,7 @@ export const bookingAPI = {
     return response.data;
   },
 
-  updateBooking: async (bookingId: number, data: { status: string; cancellation_reason?: string }) => {
+  updateBooking: async (bookingId: number, data: { status: string; cancellation_reason?: string; total_cost?: string | number }) => {
     const response = await apiClient.patch(`bookings/${bookingId}/`, data);
     return response.data;
   },
