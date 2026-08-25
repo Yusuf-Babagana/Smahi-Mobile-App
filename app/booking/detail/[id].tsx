@@ -21,6 +21,28 @@ import { Avatar, Badge, BookingTimeline, Button, useToast, useConfirm } from '@/
 
 const resolvePhotoUrl = (raw: string) => (raw?.startsWith('http') ? raw : `${BACKEND_URL}${raw}`);
 
+// Straight-line distance, same free/no-extra-infra approach already used
+// for "Get Directions" (deep-link to native maps rather than a paid
+// Directions API) — not a road-following distance, but enough for "how
+// far away is the artisan right now" during live tracking.
+function haversineKm(lat1: number, lon1: number, lat2: number, lon2: number): number {
+  const R = 6371;
+  const dLat = (lat2 - lat1) * (Math.PI / 180);
+  const dLon = (lon2 - lon1) * (Math.PI / 180);
+  const a =
+    Math.sin(dLat / 2) ** 2 +
+    Math.cos(lat1 * (Math.PI / 180)) * Math.cos(lat2 * (Math.PI / 180)) * Math.sin(dLon / 2) ** 2;
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+}
+
+// A rough ETA from that straight-line distance and an assumed average
+// city driving speed — deliberately approximate (labeled "~" in the UI),
+// not a real routing-engine estimate.
+const ASSUMED_AVG_SPEED_KMH = 25;
+function estimateEtaMinutes(distanceKm: number): number {
+  return Math.max(1, Math.round((distanceKm / ASSUMED_AVG_SPEED_KMH) * 60));
+}
+
 function timelineStep(status: string) {
   switch (status) {
     case 'pending': return 0;
@@ -240,6 +262,10 @@ export default function BookingDetailScreen() {
   const liveLat = booking.live_latitude != null ? parseFloat(booking.live_latitude) : null;
   const liveLon = booking.live_longitude != null ? parseFloat(booking.live_longitude) : null;
   const showLiveMap = booking.status === 'in_progress' && liveLat != null && liveLon != null;
+  const liveDistanceKm = (showLiveMap && myLocation)
+    ? haversineKm(myLocation.latitude, myLocation.longitude, liveLat as number, liveLon as number)
+    : null;
+  const etaMinutes = liveDistanceKm != null ? estimateEtaMinutes(liveDistanceKm) : null;
 
   return (
     <View style={styles.container}>
@@ -289,7 +315,14 @@ export default function BookingDetailScreen() {
         {/* Artisan card */}
         <Pressable style={styles.card} onPress={viewArtisanProfile} accessibilityRole="button">
           <View style={styles.artisanRow}>
-            <Avatar name={name} uri={artisanUser.profile_picture} gender={artisanUser.gender} size={52} borderRadius={14} />
+            <Avatar
+              name={name}
+              uri={artisanUser.profile_picture}
+              gender={artisanUser.gender}
+              size={52}
+              borderRadius={14}
+              verified={!!artisanUser.is_verified}
+            />
             <View style={styles.artisanInfo}>
               <Text style={styles.artisanName} numberOfLines={1}>{name}</Text>
               <Text style={styles.artisanTrade} numberOfLines={1}>
@@ -300,13 +333,53 @@ export default function BookingDetailScreen() {
           </View>
         </Pressable>
 
-        {/* Live tracking — artisan's position while the job is under way */}
+        {/* Live tracking — feature 9: photo/name/profession/verification,
+            distance remaining, ETA, live map (+ Route/Call/Chat already
+            covered by this screen's footer buttons), all in one place
+            while the job is under way. */}
         {showLiveMap && (
           <View style={[styles.card, styles.mapCard]}>
             <View style={styles.mapCardHeader}>
               <View style={styles.liveDot} />
-              <Text style={styles.sectionTitle}>{t('Live location')}</Text>
+              <Text style={styles.sectionTitle}>{t('Professional is on the way')}</Text>
             </View>
+
+            <View style={styles.liveArtisanRow}>
+              <Avatar
+                name={name}
+                uri={artisanUser.profile_picture}
+                gender={artisanUser.gender}
+                size={44}
+                borderRadius={22}
+                verified={!!artisanUser.is_verified}
+              />
+              <View style={styles.liveArtisanInfo}>
+                <Text style={styles.liveArtisanName} numberOfLines={1}>{name}</Text>
+                <Text style={styles.liveArtisanTrade} numberOfLines={1}>
+                  {artisanObj.profession_name || artisanObj.category_name || t('Artisan')}
+                </Text>
+              </View>
+              <Pressable onPress={openChat} style={styles.liveIconBtn} accessibilityRole="button" accessibilityLabel={t('Chat')}>
+                <MaterialIcons name="chat-bubble-outline" size={18} color={color.brand600} />
+              </Pressable>
+              <Pressable onPress={callArtisan} style={styles.liveIconBtn} accessibilityRole="button" accessibilityLabel={t('Call')}>
+                <MaterialIcons name="call" size={18} color={color.brand600} />
+              </Pressable>
+            </View>
+
+            {liveDistanceKm != null && (
+              <View style={styles.liveMetaRow}>
+                <View style={styles.liveMetaItem}>
+                  <MaterialIcons name="social-distance" size={14} color={color.ink400} />
+                  <Text style={styles.liveMetaText}>{liveDistanceKm.toFixed(1)} {t('km away')}</Text>
+                </View>
+                <View style={styles.liveMetaItem}>
+                  <MaterialIcons name="schedule" size={14} color={color.ink400} />
+                  <Text style={styles.liveMetaText}>~{etaMinutes} {t('min')}</Text>
+                </View>
+              </View>
+            )}
+
             <MapView
               style={styles.map}
               initialRegion={{
@@ -678,6 +751,32 @@ const styles = StyleSheet.create({
   liveDot: {
     width: 8, height: 8, borderRadius: 4, backgroundColor: color.danger600,
   },
+  liveArtisanRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: space.sm,
+    paddingHorizontal: space.lg,
+    paddingBottom: space.md,
+  },
+  liveArtisanInfo: { flex: 1 },
+  liveArtisanName: { fontFamily: font.extrabold, fontSize: 14.5, color: color.ink900 },
+  liveArtisanTrade: { fontFamily: font.bold, fontSize: 12, color: color.ink400, marginTop: 1 },
+  liveIconBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: color.brand100,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  liveMetaRow: {
+    flexDirection: 'row',
+    gap: space.lg,
+    paddingHorizontal: space.lg,
+    paddingBottom: space.md,
+  },
+  liveMetaItem: { flexDirection: 'row', alignItems: 'center', gap: 4 },
+  liveMetaText: { fontFamily: font.bold, fontSize: 12.5, color: color.ink600 },
   map: { width: '100%', height: 180 },
   footerBtnDanger: {
     flex: 1,
