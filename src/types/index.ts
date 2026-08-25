@@ -155,7 +155,9 @@ export interface AIArtisanResult {
    * explicitly picked an icon for it — see resolveProfessionIcon(). */
   category_material_icon: string;
   rating: number;
+  total_reviews: number;
   is_verified: boolean;
+  is_available: boolean;
   /** Absolute or relative URL; null when the artisan has no photo uploaded. */
   profile_picture: string | null;
   /** '' | 'male' | 'female' — used for a fallback Avatar icon when there's no photo. */
@@ -184,7 +186,9 @@ export interface AIArtisanProfileAction {
     category?: string;
     category_material_icon?: string;
     rating?: number;
+    total_reviews?: number;
     is_verified?: boolean;
+    is_available?: boolean;
     profile_picture?: string | null;
     gender?: string;
     distance_km?: number | null;

@@ -63,7 +63,10 @@ function ArtisanMiniCard({
       <View style={styles.miniMetaCol}>
         <View style={styles.miniRating}>
           <MaterialIcons name="star" size={12} color={color.star} />
-          <Text style={styles.miniRatingText}>{artisan.rating > 0 ? artisan.rating.toFixed(1) : 'New'}</Text>
+          <Text style={styles.miniRatingText}>
+            {artisan.rating > 0 ? artisan.rating.toFixed(1) : 'New'}
+            {artisan.total_reviews > 0 ? ` (${artisan.total_reviews})` : ''}
+          </Text>
         </View>
         {artisan.distance_km != null && (
           <Text style={styles.miniDistance}>{artisan.distance_km.toFixed(1)} km</Text>
@@ -259,7 +262,10 @@ export default function AIActionCard({
                 {data.rating != null && data.rating > 0 && (
                   <View style={styles.profileRatingRow}>
                     <MaterialIcons name="star" size={14} color={color.star} />
-                    <Text style={styles.profileRating}>{data.rating.toFixed(1)}</Text>
+                    <Text style={styles.profileRating}>
+                      {data.rating.toFixed(1)}
+                      {(data.total_reviews ?? 0) > 0 ? ` (${data.total_reviews})` : ''}
+                    </Text>
                   </View>
                 )}
                 {data.distance_km != null && (
