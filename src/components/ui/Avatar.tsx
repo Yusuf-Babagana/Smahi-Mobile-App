@@ -3,10 +3,20 @@ import { Image, StyleSheet, Text, View, StyleProp, ViewStyle } from 'react-nativ
 import { MaterialIcons } from '@expo/vector-icons';
 import { avatarTones, color, font } from '@/constants/theme';
 
+// Generic placeholder photos for the male/female fallback — used when an
+// account has no uploaded photo but has set a gender. Fixed, verified
+// images (not a random per-render pick) so the same account always shows
+// the same fallback face. Falls through to tonal initials if these fail
+// to load too (e.g. offline) — see the failed/genderPhotoFailed states.
+const GENDER_PLACEHOLDER: Record<'male' | 'female', string> = {
+  male: 'https://i.pravatar.cc/300?img=12',
+  female: 'https://i.pravatar.cc/300?img=5',
+};
+
 interface AvatarProps {
   name?: string;
-  /** Optional photo; falls back to a gender icon (if set) or tonal initials
-   * when missing or on load error. */
+  /** Optional photo; falls back to a generic same-gender placeholder photo
+   * (if gender is set) or tonal initials when missing or on load error. */
   uri?: string | null;
   /** 'male' | 'female' | '' — only used when there's no photo. Blank (the
    * default for every account created before this field existed, and for
@@ -44,11 +54,12 @@ export function Avatar({
   style,
 }: AvatarProps) {
   const [failed, setFailed] = useState(false);
+  const [genderPhotoFailed, setGenderPhotoFailed] = useState(false);
   const tone = toneFor(name || '?');
   const r = borderRadius ?? size / 2;
   const badgeSize = Math.max(16, Math.round(size * 0.34));
   const dotSize = Math.max(10, Math.round(size * 0.26));
-  const genderIcon = gender === 'male' ? 'man' : gender === 'female' ? 'woman' : null;
+  const genderPhoto = gender === 'male' || gender === 'female' ? GENDER_PLACEHOLDER[gender] : null;
 
   return (
     <View style={[{ width: size, height: size }, style]}>
@@ -58,15 +69,12 @@ export function Avatar({
           onError={() => setFailed(true)}
           style={{ width: size, height: size, borderRadius: r, backgroundColor: tone.bg }}
         />
-      ) : genderIcon ? (
-        <View
-          style={[
-            styles.initialsBox,
-            { width: size, height: size, borderRadius: r, backgroundColor: tone.bg },
-          ]}
-        >
-          <MaterialIcons name={genderIcon} size={size * 0.6} color={tone.fg} />
-        </View>
+      ) : genderPhoto && !genderPhotoFailed ? (
+        <Image
+          source={{ uri: genderPhoto }}
+          onError={() => setGenderPhotoFailed(true)}
+          style={{ width: size, height: size, borderRadius: r, backgroundColor: tone.bg }}
+        />
       ) : (
         <View
           style={[
