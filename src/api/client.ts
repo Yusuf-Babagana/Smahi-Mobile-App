@@ -280,6 +280,14 @@ export const bookingAPI = {
     });
     return response.data;
   },
+
+  // Artisan-only, only while status is 'in_progress' — backend rejects
+  // anything else. Powers the client's live tracking map on the booking
+  // detail screen; see app/artisan/(tabs)/jobs.tsx for the periodic caller.
+  updateLiveLocation: async (bookingId: number, latitude: number, longitude: number) => {
+    const response = await apiClient.post(`bookings/${bookingId}/update_location/`, { latitude, longitude });
+    return response.data;
+  },
 };
 
 // --- CATEGORIES (Hierarchical) ---

@@ -1,8 +1,9 @@
-import React, { useCallback, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import {
   ActivityIndicator, Image, Linking, Modal, Pressable, ScrollView,
   StyleSheet, Text, TextInput, View,
 } from 'react-native';
+import MapView, { Marker } from 'react-native-maps';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
@@ -12,6 +13,8 @@ import { useTranslation } from 'react-i18next';
 
 import { bookingAPI, reviewAPI } from '@/src/api/client';
 import { useAuth } from '@/src/contexts/AuthContext';
+import { useLocation } from '@/src/contexts/LocationContext';
+import { openDirections, openDirectionsToAddress } from '@/src/utils/directions';
 import { BACKEND_URL } from '@/src/constants/env';
 import { color, font, radius, shadow, space, type } from '@/constants/theme';
 import { Avatar, Badge, BookingTimeline, Button, useToast, useConfirm } from '@/src/components/ui';
@@ -41,6 +44,7 @@ export default function BookingDetailScreen() {
   const router = useRouter();
   const { t } = useTranslation();
   const { user } = useAuth();
+  const { location: myLocation } = useLocation();
   const { show: showToast } = useToast();
   const confirm = useConfirm();
 
@@ -72,6 +76,20 @@ export default function BookingDetailScreen() {
     useCallback(() => {
       load();
     }, [load])
+  );
+
+  // Live tracking (Map + Location Markers feature): while the job is
+  // 'in_progress', re-fetch the booking every few seconds so the artisan's
+  // live_latitude/live_longitude (pushed by app/artisan/(tabs)/jobs.tsx)
+  // stays fresh on this screen's map. Stops as soon as the status changes
+  // or this screen loses focus — same foreground-only, poll-based approach
+  // chat already uses, no websockets/background tracking involved.
+  useFocusEffect(
+    useCallback(() => {
+      if (booking?.status !== 'in_progress') return;
+      const interval = setInterval(load, 6000);
+      return () => clearInterval(interval);
+    }, [booking?.status, load])
   );
 
   const handleCancel = async () => {
@@ -162,6 +180,33 @@ export default function BookingDetailScreen() {
     if (profileId) router.push(`/artisan/${profileId}`);
   };
 
+  // Route ("Route idan an buƙata"): prefer the artisan's live in_progress
+  // position, then their last saved location, then fall back to the
+  // booking's plain address text — Google's directions endpoint accepts
+  // either. Deep-links to the native maps app rather than drawing an
+  // in-app route (see src/utils/directions.ts for why).
+  const handleGetDirections = () => {
+    const liveLat = booking?.live_latitude != null ? parseFloat(booking.live_latitude) : null;
+    const liveLon = booking?.live_longitude != null ? parseFloat(booking.live_longitude) : null;
+    if (booking?.status === 'in_progress' && liveLat != null && liveLon != null) {
+      openDirections(liveLat, liveLon);
+      return;
+    }
+    const artisanUser = booking?.artisan_details || {};
+    const staticLat = artisanUser.latitude != null ? parseFloat(artisanUser.latitude) : null;
+    const staticLon = artisanUser.longitude != null ? parseFloat(artisanUser.longitude) : null;
+    if (staticLat != null && staticLon != null) {
+      openDirections(staticLat, staticLon);
+      return;
+    }
+    const address = booking?.location || booking?.address;
+    if (address) {
+      openDirectionsToAddress(address);
+    } else {
+      showToast(t("This artisan's location isn't available yet."), { type: 'info' });
+    }
+  };
+
   if (loading) {
     return (
       <View style={styles.center}>
@@ -192,6 +237,9 @@ export default function BookingDetailScreen() {
     ? `${booking.date}${booking.time ? ` · ${booking.time}` : ''}`
     : (booking.created_at || '').slice(0, 10);
   const address = booking.location || booking.address || null;
+  const liveLat = booking.live_latitude != null ? parseFloat(booking.live_latitude) : null;
+  const liveLon = booking.live_longitude != null ? parseFloat(booking.live_longitude) : null;
+  const showLiveMap = booking.status === 'in_progress' && liveLat != null && liveLon != null;
 
   return (
     <View style={styles.container}>
@@ -251,6 +299,42 @@ export default function BookingDetailScreen() {
             <MaterialIcons name="chevron-right" size={22} color={color.ink300} />
           </View>
         </Pressable>
+
+        {/* Live tracking — artisan's position while the job is under way */}
+        {showLiveMap && (
+          <View style={[styles.card, styles.mapCard]}>
+            <View style={styles.mapCardHeader}>
+              <View style={styles.liveDot} />
+              <Text style={styles.sectionTitle}>{t('Live location')}</Text>
+            </View>
+            <MapView
+              style={styles.map}
+              initialRegion={{
+                latitude: liveLat as number,
+                longitude: liveLon as number,
+                latitudeDelta: 0.03,
+                longitudeDelta: 0.03,
+              }}
+              region={{
+                latitude: liveLat as number,
+                longitude: liveLon as number,
+                latitudeDelta: 0.03,
+                longitudeDelta: 0.03,
+              }}
+            >
+              <Marker coordinate={{ latitude: liveLat as number, longitude: liveLon as number }}>
+                <Avatar name={name} uri={artisanUser.profile_picture} gender={artisanUser.gender} size={34} borderRadius={17} />
+              </Marker>
+              {myLocation && (
+                <Marker
+                  coordinate={{ latitude: myLocation.latitude, longitude: myLocation.longitude }}
+                  pinColor={color.brand600}
+                  title={t('You')}
+                />
+              )}
+            </MapView>
+          </View>
+        )}
 
         {/* Booking details card */}
         <View style={styles.card}>
@@ -341,6 +425,14 @@ export default function BookingDetailScreen() {
       {/* Footer actions */}
       {isActive && (
         <SafeAreaView edges={['bottom']} style={styles.footer}>
+          <Pressable
+            onPress={handleGetDirections}
+            style={styles.footerBtnIcon}
+            accessibilityRole="button"
+            accessibilityLabel={t('Get directions')}
+          >
+            <MaterialIcons name="directions" size={22} color={color.brand600} />
+          </Pressable>
           <Pressable onPress={openChat} style={styles.footerBtnSecondary} accessibilityRole="button">
             <MaterialIcons name="chat-bubble-outline" size={20} color={color.brand600} />
             <Text style={styles.footerBtnSecondaryText}>{t('Chat')}</Text>
@@ -565,6 +657,28 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   footerBtnSecondaryText: { fontFamily: font.extrabold, fontSize: 13.5, color: color.brand600 },
+  footerBtnIcon: {
+    width: 48,
+    height: 48,
+    borderRadius: radius.lg,
+    backgroundColor: color.brand100,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+
+  mapCard: { padding: 0, overflow: 'hidden' },
+  mapCardHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: space.sm,
+    paddingHorizontal: space.lg,
+    paddingTop: space.lg,
+    paddingBottom: space.md,
+  },
+  liveDot: {
+    width: 8, height: 8, borderRadius: 4, backgroundColor: color.danger600,
+  },
+  map: { width: '100%', height: 180 },
   footerBtnDanger: {
     flex: 1,
     height: 48,

@@ -25,6 +25,8 @@ import {
   ArtisanCard, Avatar, Chip, EmptyState, LanguagePickerChip, SegmentedControl, SkeletonCard, useToast,
 } from '@/src/components/ui';
 import { recordSearch } from '@/src/utils/recommendations';
+import { resolveProfessionIcon } from '@/src/constants/professionIcons';
+import { openDirections } from '@/src/utils/directions';
 
 const DISTANCE_OPTIONS = [
   { label: '5 km', value: 5 },
@@ -835,36 +837,74 @@ export default function ClientHomeScreen() {
                 </View>
               </Marker>
 
-              {/* Artisan Markers */}
+              {/* Artisan Markers — each professional's own avatar (photo,
+                  gender fallback, or initials) plus a small profession-icon
+                  badge, matching the ArtisanCard/AI-assistant marker style
+                  used everywhere else in the app. */}
               {artisans.map((artisan) => {
                 const lat = artisan?.latitude ?? artisan?.user_details?.latitude;
                 const lon = artisan?.longitude ?? artisan?.user_details?.longitude;
                 if (lat != null && lon != null) {
+                  const parsedLat = parseFloat(lat);
+                  const parsedLon = parseFloat(lon);
+                  // a.profile_picture is the already-resolved absolute URL
+                  // from processArtisans() above — same fields the "Top
+                  // rated near you" rail uses (u.user_details fallback chain
+                  // included), not the raw unprocessed nested value.
+                  const markerUser = artisan.user_details || artisan.user || artisan;
+                  const artisanName = `${markerUser.first_name || ''} ${markerUser.last_name || ''}`.trim() || t('Artisan');
+                  const categoryName = i18n.language === 'ha' && artisan?.category_name_ha
+                    ? artisan.category_name_ha
+                    : (artisan?.category_name || artisan?.category?.name || artisan?.service_category || artisan?.user_details?.service_category || "Artisan");
+                  const hasDistance = typeof artisan.distance === 'number' && artisan.distance !== Infinity;
                   return (
                     <Marker
                       key={artisan.id}
-                      coordinate={{ latitude: parseFloat(lat), longitude: parseFloat(lon) }}
+                      coordinate={{ latitude: parsedLat, longitude: parsedLon }}
                       onCalloutPress={() => openProfile(artisan.id)}
                     >
                       <View style={styles.artisanMarker}>
-                        <View style={styles.markerInner}>
-                          <MaterialIcons name="handyman" size={14} color="#FFF" />
+                        <Avatar
+                          name={artisanName}
+                          uri={artisan.profile_picture}
+                          gender={markerUser.gender}
+                          size={32}
+                          borderRadius={16}
+                        />
+                        <View style={styles.markerBadge}>
+                          <MaterialIcons
+                            name={resolveProfessionIcon(artisan.category_material_icon, categoryName)}
+                            size={10}
+                            color="#FFF"
+                          />
                         </View>
                       </View>
                       <Callout tooltip onPress={() => openProfile(artisan.id)}>
                         <View style={styles.premiumCallout}>
-                          <Text style={styles.calloutName}>{artisan.user_details?.first_name} {artisan.user_details?.last_name}</Text>
+                          <Text style={styles.calloutName}>{artisanName}</Text>
                           <View style={styles.calloutBadge}>
-                            <Text style={styles.calloutBadgeText}>
-                              {i18n.language === 'ha' && artisan?.category_name_ha
-                                ? artisan.category_name_ha
-                                : (artisan?.category_name || artisan?.category?.name || artisan?.service_category || artisan?.user_details?.service_category || "Artisan")}
-                            </Text>
+                            <Text style={styles.calloutBadgeText}>{categoryName}</Text>
                           </View>
                           <View style={styles.calloutRating}>
                             <MaterialIcons name="star" size={10} color={color.star} />
                             <Text style={styles.calloutRatingText}>{artisan.rating || 4.8}</Text>
+                            {hasDistance && (
+                              <>
+                                <Text style={styles.calloutDot}>·</Text>
+                                <Text style={styles.calloutDistance}>{artisan.distance.toFixed(1)} {t('km')}</Text>
+                              </>
+                            )}
                           </View>
+                          <Pressable
+                            onPress={() => openDirections(parsedLat, parsedLon)}
+                            style={styles.calloutDirectionsBtn}
+                            hitSlop={6}
+                            accessibilityRole="button"
+                            accessibilityLabel={t('Get directions')}
+                          >
+                            <MaterialIcons name="directions" size={12} color={color.brand600} />
+                            <Text style={styles.calloutDirectionsText}>{t('Directions')}</Text>
+                          </Pressable>
                           <Text style={styles.calloutAction}>{t('Tap to view profile')}</Text>
                           <View style={styles.calloutTail} />
                         </View>
@@ -1265,18 +1305,25 @@ const styles = StyleSheet.create({
     ...shadow.e2,
   },
   artisanMarker: {
-    padding: 2,
-    borderRadius: radius.md,
+    width: 36,
+    height: 36,
+    borderRadius: 18,
     backgroundColor: '#FFF',
+    padding: 2,
     ...shadow.e2,
     borderColor: 'rgba(0,0,0,0.05)',
     borderWidth: 1,
   },
-  markerInner: {
-    backgroundColor: color.brand900,
-    width: 28,
-    height: 28,
-    borderRadius: 10,
+  markerBadge: {
+    position: 'absolute',
+    bottom: -2,
+    right: -2,
+    width: 16,
+    height: 16,
+    borderRadius: 8,
+    backgroundColor: color.brand600,
+    borderWidth: 1.5,
+    borderColor: '#FFF',
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -1321,6 +1368,19 @@ const styles = StyleSheet.create({
   },
   calloutRating: { flexDirection: 'row', alignItems: 'center', gap: 4 },
   calloutRatingText: { fontFamily: font.extrabold, fontSize: 12, color: color.ink900 },
+  calloutDot: { fontFamily: font.bold, fontSize: 12, color: color.ink300 },
+  calloutDistance: { fontFamily: font.extrabold, fontSize: 11, color: color.brand600 },
+  calloutDirectionsBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    marginTop: 6,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: radius.full,
+    backgroundColor: color.brand100,
+  },
+  calloutDirectionsText: { fontFamily: font.extrabold, fontSize: 10, color: color.brand600 },
   calloutAction: {
     fontFamily: font.extrabold,
     fontSize: 10,

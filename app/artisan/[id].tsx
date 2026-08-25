@@ -11,9 +11,10 @@ import { useTranslation } from 'react-i18next';
 
 import { artisanAPI, favoriteAPI } from '@/src/api/client';
 import { useLocation } from '@/src/contexts/LocationContext';
+import { openDirections } from '@/src/utils/directions';
 import { BACKEND_URL } from '@/src/constants/env';
 import { color, font, radius, shadow, space, type } from '@/constants/theme';
-import { Avatar, Badge, Chip } from '@/src/components/ui';
+import { Avatar, Badge, Chip, useToast } from '@/src/components/ui';
 
 // --- Helper: Local Distance Calculation (Haversine) ---
 const calculateLocalDistance = (lat1: any, lon1: any, lat2: any, lon2: any) => {
@@ -58,6 +59,7 @@ export default function ArtisanProfileRoom() {
   const { id } = useLocalSearchParams();
   const router = useRouter();
   const { location } = useLocation();
+  const { show: showToast } = useToast();
 
   const [artisan, setArtisan] = useState<any>(null);
   const [loading, setLoading] = useState(true);
@@ -118,6 +120,16 @@ export default function ArtisanProfileRoom() {
 
   const handleBook = () => {
     router.push({ pathname: '/booking/[artisanId]', params: { artisanId: String(id) } });
+  };
+
+  // "Route idan an buƙata" — deep-links to the native maps app rather than
+  // drawing an in-app route (see src/utils/directions.ts).
+  const handleGetDirections = () => {
+    if (artisanLat != null && artisanLon != null && !isNaN(parseFloat(artisanLat)) && !isNaN(parseFloat(artisanLon))) {
+      openDirections(parseFloat(artisanLat), parseFloat(artisanLon));
+    } else {
+      showToast(t("This artisan's location isn't available yet."), { type: 'info' });
+    }
   };
 
   const handleToggleFavorite = async () => {
@@ -349,6 +361,14 @@ export default function ArtisanProfileRoom() {
 
       {/* Sticky bottom bar */}
       <SafeAreaView edges={['bottom']} style={styles.footer}>
+        <Pressable
+          style={styles.chatBtn}
+          onPress={handleGetDirections}
+          accessibilityRole="button"
+          accessibilityLabel={t('Get directions')}
+        >
+          <MaterialIcons name="directions" size={22} color={color.brand600} />
+        </Pressable>
         <Pressable
           style={styles.chatBtn}
           onPress={handleMessage}

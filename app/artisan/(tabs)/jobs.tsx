@@ -1,4 +1,4 @@
-import React, { useCallback, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   FlatList, Modal, Pressable, RefreshControl, StyleSheet, Text, TextInput, View,
 } from 'react-native';
@@ -6,6 +6,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { MaterialIcons } from '@expo/vector-icons';
+import * as Location from 'expo-location';
 import { useTranslation } from 'react-i18next';
 
 import { authAPI, bookingAPI } from '@/src/api/client';
@@ -64,6 +65,41 @@ export default function ArtisanJobsTab() {
     useCallback(() => {
       load();
     }, [load])
+  );
+
+  // Kept in sync with `bookings` so the interval below always sees the
+  // current list without needing to be recreated every time it changes.
+  const bookingsRef = useRef<any[]>([]);
+  useEffect(() => { bookingsRef.current = bookings; }, [bookings]);
+
+  useFocusEffect(
+    useCallback(() => {
+      // Foreground-only live location push (Map + Location Markers
+      // feature): while this screen is open and a job is 'in_progress',
+      // periodically send this artisan's current position so the client's
+      // booking detail screen can show them moving toward the job. Stops
+      // the moment this screen loses focus or nothing is in_progress —
+      // matches the foreground-only scope decided for this feature (no
+      // background tracking, no extra Play Store review needed).
+      const interval = setInterval(async () => {
+        const inProgress = bookingsRef.current.filter((b) => b.status === 'in_progress');
+        if (inProgress.length === 0) return;
+        try {
+          const { status: permStatus } = await Location.getForegroundPermissionsAsync();
+          if (permStatus !== 'granted') return;
+          const position = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
+          await Promise.all(inProgress.map((b) =>
+            bookingAPI
+              .updateLiveLocation(b.id, position.coords.latitude, position.coords.longitude)
+              .catch(() => {})
+          ));
+        } catch {
+          // Best-effort — a missed tick just means the client's map doesn't
+          // refresh this cycle; never surface this as an error to the artisan.
+        }
+      }, 15000);
+      return () => clearInterval(interval);
+    }, [])
   );
 
   const handleRefresh = () => {
