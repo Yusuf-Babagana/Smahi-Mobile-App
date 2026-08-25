@@ -267,18 +267,40 @@ export const bookingAPI = {
   // uri is a local file:// URI from expo-image-picker. Uploads one photo
   // per call — the booking flow calls this once per selected photo right
   // after the booking itself is created.
+  //
+  // Uses expo-file-system's uploadAsync, NOT apiClient/axios's FormData —
+  // same fix as uploadProfilePicture above and for the same reason: axios
+  // FormData uploads reliably fail with a bare "Network Error" (no status,
+  // never reaches the server) on this app's RN New Architecture build.
+  // uploadAsync is Expo's own native multipart upload, built specifically
+  // for this, and bypasses axios/fetch/FormData entirely.
   uploadPhoto: async (bookingId: number, uri: string) => {
     const filename = uri.split('/').pop() || 'photo.jpg';
     const match = /\.(\w+)$/.exec(filename);
     const type = match ? `image/${match[1] === 'jpg' ? 'jpeg' : match[1]}` : 'image/jpeg';
 
-    const formData = new FormData();
-    formData.append('image', { uri, name: filename, type } as any);
+    const token = await SecureStore.getItemAsync('accessToken');
+    const result = await FileSystem.uploadAsync(
+      `${API_URL}/bookings/${bookingId}/add_photo/`,
+      uri,
+      {
+        httpMethod: 'POST',
+        uploadType: FileSystem.FileSystemUploadType.MULTIPART,
+        fieldName: 'image',
+        mimeType: type,
+        headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+      }
+    );
 
-    const response = await apiClient.post(`bookings/${bookingId}/add_photo/`, formData, {
-      headers: { 'Content-Type': 'multipart/form-data' },
-    });
-    return response.data;
+    let data: any = {};
+    try { data = JSON.parse(result.body); } catch {}
+
+    if (result.status < 200 || result.status >= 300) {
+      const error: any = new Error(data?.detail || 'Photo upload failed');
+      error.response = { status: result.status, data };
+      throw error;
+    }
+    return data;
   },
 
   // Artisan-only, only while status is 'in_progress' — backend rejects
