@@ -228,7 +228,15 @@ export default function ClientHomeScreen() {
 
     return list.map(artisan => {
       // A. Fix Image URLs
-      let pic = artisan.profile_picture;
+      // ArtisanProfileSerializer (the artisans list endpoint) has NO
+      // top-level profile_picture field at all — only nested under
+      // user_details. Reading artisan.profile_picture alone was always
+      // undefined here, so every consumer of this processed list (the
+      // "Top rated near you" rail, the map markers) silently fell back to
+      // initials/gender icons even when a real photo existed. ArtisanCard
+      // avoided this by checking user_details first — matching that order
+      // here so the fix applies once, centrally, to every consumer.
+      let pic = artisan.profile_picture || artisan.user_details?.profile_picture || artisan.user?.profile_picture;
       if (pic) {
         if (pic.includes('image/upload') && !pic.startsWith('http')) {
           pic = `https://res.cloudinary.com/${CLOUD_NAME}/${pic}`;
