@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import {
   View, Text, StyleSheet, FlatList, TextInput,
-  TouchableOpacity, ActivityIndicator, ScrollView, RefreshControl, Pressable, Linking
+  TouchableOpacity, ActivityIndicator, ScrollView, RefreshControl, Pressable, Linking, Animated
 } from 'react-native';
 import MapView, { Marker, PROVIDER_GOOGLE, Callout } from 'react-native-maps';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -36,6 +36,27 @@ const DISTANCE_OPTIONS = [
 ];
 const CACHE_KEY = 'cached_artisans_list';
 
+// A clean, minimal, on-brand map style (hides POI/transit/admin clutter,
+// mutes road labels, tints water toward the brand palette) — the single
+// biggest lever for making a map "feel" premium instead of a raw default
+// Google Maps tile, the same approach Uber/Airbnb-style map apps use.
+const MAP_STYLE = [
+  { elementType: 'geometry', stylers: [{ color: '#f5f7fa' }] },
+  { elementType: 'labels.icon', stylers: [{ visibility: 'off' }] },
+  { elementType: 'labels.text.fill', stylers: [{ color: '#9aa5b1' }] },
+  { elementType: 'labels.text.stroke', stylers: [{ color: '#f5f7fa' }] },
+  { featureType: 'administrative', elementType: 'geometry', stylers: [{ visibility: 'off' }] },
+  { featureType: 'poi', stylers: [{ visibility: 'off' }] },
+  { featureType: 'poi.park', elementType: 'geometry', stylers: [{ color: '#e3f0e9' }] },
+  { featureType: 'road', elementType: 'geometry', stylers: [{ color: '#ffffff' }] },
+  { featureType: 'road', elementType: 'labels', stylers: [{ visibility: 'off' }] },
+  { featureType: 'road.arterial', elementType: 'geometry', stylers: [{ color: '#e7ebf0' }] },
+  { featureType: 'road.highway', elementType: 'geometry', stylers: [{ color: '#dde3ea' }] },
+  { featureType: 'road.highway', elementType: 'geometry.stroke', stylers: [{ color: '#c9d4e0' }] },
+  { featureType: 'transit', stylers: [{ visibility: 'off' }] },
+  { featureType: 'water', elementType: 'geometry', stylers: [{ color: '#cfe3fb' }] },
+];
+
 function haversineKm(lat1: number, lon1: number, lat2: number, lon2: number): number {
   const R = 6371;
   const dLat = (lat2 - lat1) * (Math.PI / 180);
@@ -65,6 +86,21 @@ export default function ClientHomeScreen() {
   const { show: showToast } = useToast();
   const { location, isLoading: locationLoading, errorMsg: locationError, requestLocationPermission } = useLocation();
   const aiParams = useLocalSearchParams<{ aiSearch?: string; aiCategoryId?: string; aiCategoryName?: string }>();
+
+  // --- Map polish: ref for programmatic camera moves (auto-fit, recenter),
+  // a looping pulse animation for the "You are here" marker, and a
+  // ready-flag since fitToCoordinates can only run once the native map view
+  // actually exists. ---
+  const mapRef = useRef<MapView>(null);
+  const [mapReady, setMapReady] = useState(false);
+  const pulseAnim = useRef(new Animated.Value(0)).current;
+  useEffect(() => {
+    const loop = Animated.loop(
+      Animated.timing(pulseAnim, { toValue: 1, duration: 1800, useNativeDriver: true })
+    );
+    loop.start();
+    return () => loop.stop();
+  }, [pulseAnim]);
 
   // --- State ---
   const [artisans, setArtisans] = useState<any[]>([]);
@@ -98,6 +134,37 @@ export default function ClientHomeScreen() {
   const [isVoiceSearching, setIsVoiceSearching] = useState(false);
   const [isTranscribing, setIsTranscribing] = useState(false);
   const [searchFocused, setSearchFocused] = useState(false);
+
+  // Auto-fit the camera to frame the user + every visible artisan marker,
+  // instead of a fixed zoom level regardless of how spread out they are —
+  // re-runs whenever the artisan list changes so the frame stays accurate.
+  useEffect(() => {
+    if (viewMode !== 'map' || !mapReady || !location || !mapRef.current) return;
+    const coords = [{ latitude: location.latitude, longitude: location.longitude }];
+    for (const artisan of artisans) {
+      const lat = artisan?.latitude ?? artisan?.user_details?.latitude;
+      const lon = artisan?.longitude ?? artisan?.user_details?.longitude;
+      if (lat != null && lon != null) {
+        coords.push({ latitude: parseFloat(lat), longitude: parseFloat(lon) });
+      }
+    }
+    if (coords.length > 1) {
+      mapRef.current.fitToCoordinates(coords, {
+        edgePadding: { top: 50, right: 50, bottom: 50, left: 50 },
+        animated: true,
+      });
+    }
+  }, [viewMode, mapReady, location, artisans]);
+
+  const recenterMap = useCallback(() => {
+    if (!location || !mapRef.current) return;
+    mapRef.current.animateToRegion({
+      latitude: location.latitude,
+      longitude: location.longitude,
+      latitudeDelta: 0.05,
+      longitudeDelta: 0.05,
+    }, 500);
+  }, [location]);
 
   // --- 1. FETCH LOCATION DATA (States & LGAs) ---
   const fetchLocations = async () => {
@@ -825,8 +892,11 @@ export default function ClientHomeScreen() {
         <View style={styles.mapWrap}>
           {location ? (
             <MapView
+              ref={mapRef}
               style={styles.map}
               provider={PROVIDER_GOOGLE}
+              customMapStyle={MAP_STYLE}
+              onMapReady={() => setMapReady(true)}
               initialRegion={{
                 latitude: location.latitude,
                 longitude: location.longitude,
@@ -834,13 +904,26 @@ export default function ClientHomeScreen() {
                 longitudeDelta: 0.05,
               }}
             >
-              {/* Client Marker — a pin + "You are here" label, matching the
-                  approved map design. */}
+              {/* Client Marker — a pin + "You are here" label over a softly
+                  pulsing radar ring, the same real-time-location cue
+                  Google Maps/Uber use, rather than a static pin.
+                  tracksViewChanges is on by default for this one marker
+                  only (it's the single animated marker; every other
+                  artisan marker below explicitly turns it off for perf). */}
               <Marker
                 coordinate={{ latitude: location.latitude, longitude: location.longitude }}
                 anchor={{ x: 0.5, y: 0.7 }}
               >
                 <View style={styles.youAreHereWrap}>
+                  <Animated.View
+                    style={[
+                      styles.pulseRing,
+                      {
+                        opacity: pulseAnim.interpolate({ inputRange: [0, 1], outputRange: [0.45, 0] }),
+                        transform: [{ scale: pulseAnim.interpolate({ inputRange: [0, 1], outputRange: [0.4, 1.8] }) }],
+                      },
+                    ]}
+                  />
                   <MaterialIcons name="location-on" size={34} color={color.brand600} />
                   <View style={styles.youAreHerePill}>
                     <Text style={styles.youAreHereText}>{t('You are here')}</Text>
@@ -872,6 +955,7 @@ export default function ClientHomeScreen() {
                       key={artisan.id}
                       coordinate={{ latitude: parsedLat, longitude: parsedLon }}
                       onCalloutPress={() => openProfile(artisan.id)}
+                      tracksViewChanges={false}
                     >
                       <View style={styles.artisanMarker}>
                         <Avatar
@@ -937,6 +1021,21 @@ export default function ClientHomeScreen() {
               )}
             </View>
           )}
+
+          {/* Recenter FAB — snaps the camera back to the user's own
+              location, the standard map-app affordance once someone has
+              panned/zoomed away exploring nearby markers. */}
+          {location && (
+            <Pressable
+              onPress={recenterMap}
+              style={styles.recenterBtn}
+              accessibilityRole="button"
+              accessibilityLabel={t('Recenter on my location')}
+              hitSlop={6}
+            >
+              <MaterialIcons name="my-location" size={20} color={color.brand600} />
+            </Pressable>
+          )}
         </View>
 
         {/* Nearby artisans — shown below the map itself (not instead of
@@ -992,6 +1091,13 @@ export default function ClientHomeScreen() {
           }}
           contentContainerStyle={styles.mapListContent}
           showsVerticalScrollIndicator={false}
+          ListHeaderComponent={
+            artisans.length > 0 ? (
+              <Text style={styles.mapListHeading}>
+                {t('{{count}} professionals nearby', { count: artisans.length })}
+              </Text>
+            ) : null
+          }
           ListEmptyComponent={
             !isLoading ? (
               <EmptyState
@@ -1360,6 +1466,18 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
   },
   map: { width: '100%', height: '100%' },
+  recenterBtn: {
+    position: 'absolute',
+    bottom: 12,
+    right: 12,
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    backgroundColor: '#FFF',
+    alignItems: 'center',
+    justifyContent: 'center',
+    ...shadow.e2,
+  },
   mapCenter: { flex: 1, justifyContent: 'center', alignItems: 'center', gap: space.md },
   mapCenterText: { fontFamily: font.bold, marginTop: 4, color: color.ink400, textAlign: 'center', paddingHorizontal: space.xl },
   retryBtn: {
@@ -1374,8 +1492,19 @@ const styles = StyleSheet.create({
   },
   retryBtnText: { fontFamily: font.extrabold, fontSize: 13, color: '#FFF' },
 
-  // "You are here" client marker — pin + label pill, matching the design.
+  // "You are here" client marker — pin + label pill, matching the design,
+  // plus a softly pulsing radar ring behind the pin for a real-time feel.
   youAreHereWrap: { alignItems: 'center' },
+  pulseRing: {
+    position: 'absolute',
+    top: 0,
+    left: '50%',
+    marginLeft: -17,
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    backgroundColor: color.brand600,
+  },
   youAreHerePill: {
     backgroundColor: color.brand600,
     paddingHorizontal: 10,
@@ -1399,6 +1528,7 @@ const styles = StyleSheet.create({
 
   // Nearby-artisans list under the map
   mapListContent: { paddingHorizontal: space.xl, paddingBottom: space.xxl },
+  mapListHeading: { ...type.heading, marginBottom: space.md },
   mapRow: {
     flexDirection: 'row',
     alignItems: 'center',
