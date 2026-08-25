@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import {
   View, Text, StyleSheet, FlatList, TextInput,
-  TouchableOpacity, ActivityIndicator, ScrollView, RefreshControl, Pressable
+  TouchableOpacity, ActivityIndicator, ScrollView, RefreshControl, Pressable, Linking
 } from 'react-native';
 import MapView, { Marker, PROVIDER_GOOGLE, Callout } from 'react-native-maps';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -25,7 +25,6 @@ import {
   ArtisanCard, Avatar, Chip, EmptyState, LanguagePickerChip, SegmentedControl, SkeletonCard, useToast,
 } from '@/src/components/ui';
 import { recordSearch } from '@/src/utils/recommendations';
-import { resolveProfessionIcon } from '@/src/constants/professionIcons';
 import { openDirections } from '@/src/utils/directions';
 
 const DISTANCE_OPTIONS = [
@@ -814,6 +813,7 @@ export default function ClientHomeScreen() {
       </View>
 
       {viewMode === 'map' ? (
+        <View style={styles.flex}>
         <View style={styles.mapWrap}>
           {location ? (
             <MapView
@@ -826,21 +826,23 @@ export default function ClientHomeScreen() {
                 longitudeDelta: 0.05,
               }}
             >
-              {/* Client Marker */}
+              {/* Client Marker — a pin + "You are here" label, matching the
+                  approved map design. */}
               <Marker
                 coordinate={{ latitude: location.latitude, longitude: location.longitude }}
-                title={t('Your Location')}
-                pinColor={color.brand600}
+                anchor={{ x: 0.5, y: 0.6 }}
               >
-                <View style={styles.pulseContainer}>
-                  <View style={styles.pulseDot} />
+                <View style={styles.youAreHereWrap}>
+                  <MaterialIcons name="location-on" size={34} color={color.brand600} />
+                  <View style={styles.youAreHerePill}>
+                    <Text style={styles.youAreHereText}>{t('You are here')}</Text>
+                  </View>
                 </View>
               </Marker>
 
               {/* Artisan Markers — each professional's own avatar (photo,
-                  gender fallback, or initials) plus a small profession-icon
-                  badge, matching the ArtisanCard/AI-assistant marker style
-                  used everywhere else in the app. */}
+                  gender fallback, or initials), matching the approved map
+                  design's plain circular pins. */}
               {artisans.map((artisan) => {
                 const lat = artisan?.latitude ?? artisan?.user_details?.latitude;
                 const lon = artisan?.longitude ?? artisan?.user_details?.longitude;
@@ -868,16 +870,9 @@ export default function ClientHomeScreen() {
                           name={artisanName}
                           uri={artisan.profile_picture}
                           gender={markerUser.gender}
-                          size={32}
-                          borderRadius={16}
+                          size={40}
+                          borderRadius={20}
                         />
-                        <View style={styles.markerBadge}>
-                          <MaterialIcons
-                            name={resolveProfessionIcon(artisan.category_material_icon, categoryName)}
-                            size={10}
-                            color="#FFF"
-                          />
-                        </View>
                       </View>
                       <Callout tooltip onPress={() => openProfile(artisan.id)}>
                         <View style={styles.premiumCallout}>
@@ -935,6 +930,74 @@ export default function ClientHomeScreen() {
             </View>
           )}
         </View>
+
+        {/* Nearby artisans — shown below the map itself (not instead of
+            it), matching the approved map design: compact rows with a
+            direct call button, sorted the same way the map's own markers
+            and the plain list view already are (nearest first). */}
+        <FlatList
+          data={artisans}
+          keyExtractor={(item) => item.id.toString()}
+          renderItem={({ item }) => {
+            const u = item.user_details || item.user || item;
+            const displayName = `${u.first_name || ''} ${u.last_name || ''}`.trim() || t('Artisan');
+            const professionName = i18n.language === 'ha' && item?.category_name_ha
+              ? item.category_name_ha
+              : (item?.profession_name || item?.category_name || t('Artisan'));
+            const hasDistance = typeof item.distance === 'number' && item.distance !== Infinity;
+            const phone = item.phone || u.phone_number;
+            return (
+              <Pressable
+                onPress={() => openProfile(item.id)}
+                style={({ pressed }) => [styles.mapRow, pressed && { opacity: 0.85 }]}
+                accessibilityRole="button"
+              >
+                <Avatar name={displayName} uri={item.profile_picture} gender={u.gender} size={52} borderRadius={26} />
+                <View style={styles.mapRowInfo}>
+                  <Text style={styles.mapRowName} numberOfLines={1}>{displayName} ({professionName})</Text>
+                  <Text style={styles.mapRowSubtitle} numberOfLines={1}>{item.bio || professionName}</Text>
+                  <View style={styles.mapRowMetaLine}>
+                    <MaterialIcons name="star" size={13} color={color.star} />
+                    <Text style={styles.mapRowRating}>{item.rating || 4.8}</Text>
+                    <Text style={styles.mapRowReviews}>
+                      ({item.total_reviews ?? item.review_count ?? 0} {t('reviews')})
+                    </Text>
+                    {hasDistance && (
+                      <>
+                        <Text style={styles.mapRowDot}>·</Text>
+                        <MaterialIcons name="place" size={12} color={color.brand600} />
+                        <Text style={styles.mapRowDistance}>{item.distance.toFixed(1)} {t('km away')}</Text>
+                      </>
+                    )}
+                  </View>
+                </View>
+                <Pressable
+                  onPress={() => phone && Linking.openURL(`tel:${phone}`)}
+                  style={styles.mapRowCallBtn}
+                  accessibilityRole="button"
+                  accessibilityLabel={t('Call')}
+                  hitSlop={8}
+                >
+                  <MaterialIcons name="call" size={20} color={color.brand600} />
+                </Pressable>
+              </Pressable>
+            );
+          }}
+          contentContainerStyle={styles.mapListContent}
+          showsVerticalScrollIndicator={false}
+          ListEmptyComponent={
+            !isLoading ? (
+              <EmptyState
+                icon="search-off"
+                title={t('No artisans found in this area.')}
+                message={t('Try changing your category or search query.')}
+                actionLabel={t('Clear filters')}
+                onAction={handleClearFilters}
+              />
+            ) : null
+          }
+        />
+      </View>
       ) : (
         <View style={{ flex: 1 }}>
           {isLoading ? (
@@ -1277,8 +1340,18 @@ const styles = StyleSheet.create({
     fontSize: 13,
   },
 
-  // Map
-  mapWrap: { flex: 1, backgroundColor: color.surfaceSunken, marginTop: space.md },
+  // Map — a fixed-height card with a scrollable list of nearby artisans
+  // below it (not a full-screen map instead of the list), matching the
+  // approved map design.
+  flex: { flex: 1 },
+  mapWrap: {
+    height: 260,
+    backgroundColor: color.surfaceSunken,
+    marginTop: space.md,
+    marginBottom: space.md,
+    borderRadius: radius.xl,
+    overflow: 'hidden',
+  },
   map: { width: '100%', height: '100%' },
   mapCenter: { flex: 1, justifyContent: 'center', alignItems: 'center', gap: space.md },
   mapCenterText: { fontFamily: font.bold, marginTop: 4, color: color.ink400, textAlign: 'center', paddingHorizontal: space.xl },
@@ -1294,38 +1367,57 @@ const styles = StyleSheet.create({
   },
   retryBtnText: { fontFamily: font.extrabold, fontSize: 13, color: '#FFF' },
 
-  pulseContainer: { width: 30, height: 30, justifyContent: 'center', alignItems: 'center' },
-  pulseDot: {
-    width: 14,
-    height: 14,
-    borderRadius: 7,
+  // "You are here" client marker — pin + label pill, matching the design.
+  youAreHereWrap: { alignItems: 'center' },
+  youAreHerePill: {
     backgroundColor: color.brand600,
-    borderWidth: 3,
-    borderColor: '#FFF',
+    paddingHorizontal: 10,
+    paddingVertical: 3,
+    borderRadius: radius.full,
+    marginTop: -6,
     ...shadow.e2,
   },
+  youAreHereText: { fontFamily: font.extrabold, fontSize: 10, color: '#FFF' },
+
   artisanMarker: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
     backgroundColor: '#FFF',
     padding: 2,
     ...shadow.e2,
     borderColor: 'rgba(0,0,0,0.05)',
     borderWidth: 1,
   },
-  markerBadge: {
-    position: 'absolute',
-    bottom: -2,
-    right: -2,
-    width: 16,
-    height: 16,
-    borderRadius: 8,
-    backgroundColor: color.brand600,
-    borderWidth: 1.5,
-    borderColor: '#FFF',
-    justifyContent: 'center',
+
+  // Nearby-artisans list under the map
+  mapListContent: { paddingHorizontal: space.xl, paddingBottom: space.xxl },
+  mapRow: {
+    flexDirection: 'row',
     alignItems: 'center',
+    backgroundColor: color.surface,
+    borderRadius: radius.lg,
+    borderWidth: 1,
+    borderColor: '#EEF2F8',
+    padding: space.md,
+    marginBottom: space.md,
+    gap: space.md,
+  },
+  mapRowInfo: { flex: 1 },
+  mapRowName: { fontFamily: font.extrabold, fontSize: 14.5, color: color.ink900 },
+  mapRowSubtitle: { fontFamily: font.medium, fontSize: 12.5, color: color.ink400, marginTop: 2 },
+  mapRowMetaLine: { flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 5 },
+  mapRowRating: { fontFamily: font.extrabold, fontSize: 12.5, color: color.ink900 },
+  mapRowReviews: { fontFamily: font.medium, fontSize: 11.5, color: color.ink400 },
+  mapRowDot: { fontFamily: font.bold, fontSize: 12, color: color.ink300 },
+  mapRowDistance: { fontFamily: font.extrabold, fontSize: 11.5, color: color.brand600 },
+  mapRowCallBtn: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: color.brand100,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   premiumCallout: {
     backgroundColor: '#FFF',
