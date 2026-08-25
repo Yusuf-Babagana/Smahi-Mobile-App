@@ -3,14 +3,20 @@ import { Image, StyleSheet, Text, View, StyleProp, ViewStyle } from 'react-nativ
 import { MaterialIcons } from '@expo/vector-icons';
 import { avatarTones, color, font } from '@/constants/theme';
 
-// Generic placeholder photos for the male/female fallback — used when an
-// account has no uploaded photo but has set a gender. Fixed, verified
-// images (not a random per-render pick) so the same account always shows
-// the same fallback face. Falls through to tonal initials if these fail
-// to load too (e.g. offline) — see the failed/genderPhotoFailed states.
+// Generic African man/woman placeholder photos for the gender fallback —
+// used when an account has no uploaded photo but has set a gender, to
+// match this app's audience (Nigeria / northern Nigeria) instead of a
+// mismatched ethnicity. Fixed, individually verified images (not a random
+// per-render pick, and not pravatar.cc — its set turned out to include at
+// least one photo resembling a recognizable public figure, a real risk
+// for a shipped app regardless of ethnicity match) so the same account
+// always shows the same fallback face. randomuser.me is a long-established
+// service built specifically for generic dummy-user photos. Falls through
+// to tonal initials if these fail to load too (e.g. offline) — see the
+// failed/genderPhotoFailed states.
 const GENDER_PLACEHOLDER: Record<'male' | 'female', string> = {
-  male: 'https://i.pravatar.cc/300?img=12',
-  female: 'https://i.pravatar.cc/300?img=5',
+  male: 'https://randomuser.me/api/portraits/men/91.jpg',
+  female: 'https://randomuser.me/api/portraits/women/6.jpg',
 };
 
 interface AvatarProps {
