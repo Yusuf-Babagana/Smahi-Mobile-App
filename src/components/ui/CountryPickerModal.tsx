@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { View, Text, Pressable, Modal, FlatList, TextInput, StyleSheet } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useTranslation } from 'react-i18next';
@@ -28,6 +28,20 @@ interface CountryPickerModalProps {
 export function CountryPickerModal({ visible, value, countries, onSelect, onClose, title }: CountryPickerModalProps) {
   const { t } = useTranslation();
   const [query, setQuery] = useState('');
+  const inputRef = useRef<TextInput>(null);
+
+  // Deliberately NOT autoFocus — on Android, a TextInput trying to focus
+  // (and pull up the IME) while this Modal's own "slide" entrance
+  // animation is still mid-transition is a known source of exactly the
+  // instability being fixed here (the Dialog window's bounds aren't
+  // settled yet, so the OS can end up confused about where touches/back
+  // events should go once typing starts). Focusing only after the
+  // animation has had time to finish avoids that race entirely.
+  useEffect(() => {
+    if (!visible) return;
+    const timer = setTimeout(() => inputRef.current?.focus(), 400);
+    return () => clearTimeout(timer);
+  }, [visible]);
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -50,6 +64,7 @@ export function CountryPickerModal({ visible, value, countries, onSelect, onClos
           <View style={styles.searchBox}>
             <MaterialIcons name="search" size={18} color={color.ink400} />
             <TextInput
+              ref={inputRef}
               style={styles.searchInput}
               placeholder={t('Search country…')}
               placeholderTextColor={color.ink300}
@@ -57,7 +72,6 @@ export function CountryPickerModal({ visible, value, countries, onSelect, onClos
               onChangeText={setQuery}
               autoCapitalize="none"
               autoCorrect={false}
-              autoFocus
             />
             {query.length > 0 && (
               <Pressable onPress={() => setQuery('')} accessibilityRole="button" accessibilityLabel={t('Clear search')} hitSlop={8}>
