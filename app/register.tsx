@@ -385,7 +385,7 @@ export default function RegisterScreen() {
               <View style={styles.formSection}>
                 <Input
                   label={t('Full name')}
-                  placeholder="Saidu Abdulmalik"
+                  placeholder={t('Enter your full name')}
                   value={name}
                   onChangeText={setName}
                   error={errors.name}
@@ -398,7 +398,7 @@ export default function RegisterScreen() {
 
                 <Input
                   label={t('Email address')}
-                  placeholder="yusuf@example.com"
+                  placeholder={t('Enter your email address')}
                   value={email}
                   onChangeText={setEmail}
                   keyboardType="email-address"
