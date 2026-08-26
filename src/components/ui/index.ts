@@ -24,3 +24,6 @@ export { LanguagePickerModal } from './LanguagePickerModal';
 export { CountryPickerField } from './CountryPickerField';
 export { CountryPickerModal } from './CountryPickerModal';
 export type { CountryOption } from './CountryPickerModal';
+export { SearchablePickerField } from './SearchablePickerField';
+export { SearchablePickerModal } from './SearchablePickerModal';
+export type { SearchablePickerItem } from './SearchablePickerModal';

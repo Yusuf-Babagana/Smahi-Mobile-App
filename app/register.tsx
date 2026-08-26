@@ -21,7 +21,7 @@ import CustomPicker from '@/src/components/CustomPicker';
 import ServiceCategoryPicker from '@/src/components/ServiceCategoryPicker';
 import { DEFAULT_OTHER_ICONS } from '@/src/constants/professionIcons';
 import { color, font, radius, space, type } from '@/constants/theme';
-import { Button, CountryPickerField, GenderField, Input, StepHeader, useToast, useConfirm } from '@/src/components/ui';
+import { Button, CountryPickerField, GenderField, Input, SearchablePickerField, StepHeader, useToast, useConfirm } from '@/src/components/ui';
 import '@/src/i18n'; // Ensure i18n is initialized
 
 // Define expanded roles locally for this screen
@@ -500,7 +500,15 @@ export default function RegisterScreen() {
                   <CountryPickerField label={t('Country')} placeholder={t('Select Country')} value={selectedCountry} onValueChange={setSelectedCountry} countries={countries} />
                   <View style={styles.row}>
                     <View style={{ flex: 1, marginRight: 8 }}>
-                      <CustomPicker label={t('State')} placeholder={t('State')} value={selectedState} onValueChange={setSelectedState} items={states.map(s => ({ label: s.name, value: s.id.toString() }))} />
+                      <SearchablePickerField
+                        label={t('State')}
+                        placeholder={t('State')}
+                        searchPlaceholder={t('Search state…')}
+                        value={selectedState}
+                        onValueChange={setSelectedState}
+                        items={states}
+                        disabled={!selectedCountry}
+                      />
                     </View>
                     <View style={{ flex: 1, marginLeft: 8 }}>
                       <CustomPicker label={t('LGA')} placeholder={t('City / LGA')} value={selectedLga} onValueChange={setSelectedLga} items={lgas.map(l => ({ label: l.name, value: l.id.toString() }))} />
