@@ -7,11 +7,6 @@
     "icon": "./assets/images/smahi.png",
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
-    "splash": {
-      "image": "./assets/images/smahi.png",
-      "resizeMode": "contain",
-      "backgroundColor": "#007BFF"
-    },
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.smahi.app",
@@ -46,6 +41,15 @@
       "expo-localization",
       "expo-speech-recognition",
       "expo-file-system",
+      [
+        "expo-splash-screen",
+        {
+          "image": "./assets/images/smahi.png",
+          "imageWidth": 200,
+          "resizeMode": "contain",
+          "backgroundColor": "#007BFF"
+        }
+      ],
       [
         "expo-location",
         {
