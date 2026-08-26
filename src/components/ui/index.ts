@@ -21,3 +21,6 @@ export { LanguagePickerField } from './LanguagePickerField';
 export { GenderField } from './GenderField';
 export { LanguagePickerChip } from './LanguagePickerChip';
 export { LanguagePickerModal } from './LanguagePickerModal';
+export { CountryPickerField } from './CountryPickerField';
+export { CountryPickerModal } from './CountryPickerModal';
+export type { CountryOption } from './CountryPickerModal';

@@ -21,7 +21,7 @@ import CustomPicker from '@/src/components/CustomPicker';
 import ServiceCategoryPicker from '@/src/components/ServiceCategoryPicker';
 import { DEFAULT_OTHER_ICONS } from '@/src/constants/professionIcons';
 import { color, font, radius, space, type } from '@/constants/theme';
-import { Button, GenderField, Input, StepHeader, useToast, useConfirm } from '@/src/components/ui';
+import { Button, CountryPickerField, GenderField, Input, StepHeader, useToast, useConfirm } from '@/src/components/ui';
 import '@/src/i18n'; // Ensure i18n is initialized
 
 // Define expanded roles locally for this screen
@@ -497,7 +497,7 @@ export default function RegisterScreen() {
 
                 <View style={styles.sectionCard}>
                   <Text style={styles.cardTitle}>{t('Location details')}</Text>
-                  <CustomPicker label={t('Country')} placeholder={t('Select Country')} value={selectedCountry} onValueChange={setSelectedCountry} items={countries.map(c => ({ label: c.name, value: c.id.toString() }))} />
+                  <CountryPickerField label={t('Country')} placeholder={t('Select Country')} value={selectedCountry} onValueChange={setSelectedCountry} countries={countries} />
                   <View style={styles.row}>
                     <View style={{ flex: 1, marginRight: 8 }}>
                       <CustomPicker label={t('State')} placeholder={t('State')} value={selectedState} onValueChange={setSelectedState} items={states.map(s => ({ label: s.name, value: s.id.toString() }))} />
