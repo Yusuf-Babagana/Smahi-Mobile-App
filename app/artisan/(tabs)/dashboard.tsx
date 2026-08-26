@@ -292,7 +292,12 @@ export default function ArtisanDashboard() {
             </TouchableOpacity>
 
             <View style={styles.headerText}>
-              <Text style={styles.nameLabel} numberOfLines={1}>Sannu, {displayName}</Text>
+              {/* "greeting" is the same i18n key Home/Welcome already use
+                  ("Welcome" / Hausa "Barka da zuwa") — was hardcoded Hausa
+                  "Sannu" here before, ignoring the EN/HA toggle entirely.
+                  displayName itself was already dynamic (getDisplayName()
+                  above), never a fixed example name. */}
+              <Text style={styles.nameLabel} numberOfLines={1}>{t('greeting')} {displayName}</Text>
               <Text style={styles.tradeLabel} numberOfLines={1}>
                 {serviceCategory}{lgaName ? ` · ${lgaName}` : ''}
               </Text>
