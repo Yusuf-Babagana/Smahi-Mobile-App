@@ -112,7 +112,13 @@ export const authAPI = {
       gender: data.gender || undefined,
       country: data.country,
       state: data.state,
-      lga: data.lga
+      lga: data.lga,
+      // Best-effort GPS captured during registration (feature 8) —
+      // undefined (omitted, not sent as 0,0) when there's no fix yet or
+      // permission was denied; UserRegistrationSerializer accepts both
+      // as optional.
+      latitude: data.latitude,
+      longitude: data.longitude,
     };
 
     // Artisan category: either an existing category ID or a custom name

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   KeyboardAvoidingView,
   Platform,
@@ -16,8 +16,8 @@ import { MaterialIcons } from '@expo/vector-icons';
 import { useTranslation } from 'react-i18next';
 
 import { authAPI, locationAPI, categoryAPI, paymentAPI } from '@/src/api/client';
+import { useLocation } from '@/src/contexts/LocationContext';
 import { UserRole } from '@/src/types';
-import CustomPicker from '@/src/components/CustomPicker';
 import ServiceCategoryPicker from '@/src/components/ServiceCategoryPicker';
 import { DEFAULT_OTHER_ICONS } from '@/src/constants/professionIcons';
 import { color, font, radius, space, type } from '@/constants/theme';
@@ -87,6 +87,21 @@ export default function RegisterScreen() {
   const [selectedCountry, setSelectedCountry] = useState('');
   const [selectedState, setSelectedState] = useState('');
   const [selectedLga, setSelectedLga] = useState('');
+
+  // Captures the device's real GPS fix during registration itself (best-
+  // effort — never blocks registration if permission is denied or there's
+  // no fix yet) so a new artisan is immediately findable by every
+  // distance-based feature (nearest-search, the map, live tracking)
+  // instead of only becoming findable whenever they first open their
+  // dashboard and grant location permission there.
+  const { location: gpsLocation, requestLocationPermission } = useLocation();
+  const locationRequested = useRef(false);
+  useEffect(() => {
+    if (currentStep === 4 && !locationRequested.current) {
+      locationRequested.current = true;
+      requestLocationPermission();
+    }
+  }, [currentStep]);
 
   // Access token from the registration response, kept in memory so the
   // payment step can authenticate without depending on SecureStore timing.
@@ -199,7 +214,13 @@ export default function RegisterScreen() {
         custom_category_icon: role === 'artisan' && selectedService === '__custom__' ? customIcon || undefined : undefined,
         country: selectedCountry,
         state: selectedState,
-        lga: selectedLga
+        lga: selectedLga,
+        // Best-effort — undefined (omitted entirely, not sent as 0,0) if
+        // permission was denied or no fix arrived in time; the dashboard's
+        // own location sync (app/artisan/(tabs)/dashboard.tsx) still picks
+        // this up on first visit either way.
+        latitude: gpsLocation?.latitude,
+        longitude: gpsLocation?.longitude,
       });
       setRegAccessToken(regResponse?.tokens?.access || null);
 
@@ -497,6 +518,11 @@ export default function RegisterScreen() {
 
                 <View style={styles.sectionCard}>
                   <Text style={styles.cardTitle}>{t('Location details')}</Text>
+                  <Text style={styles.locationHint}>
+                    {role === 'artisan'
+                      ? t("We'll also use your device's location so clients can find you nearby — you may see a permission request.")
+                      : t("We'll also use your device's location to show you nearby services — you may see a permission request.")}
+                  </Text>
                   <CountryPickerField label={t('Country')} placeholder={t('Select Country')} value={selectedCountry} onValueChange={setSelectedCountry} countries={countries} />
                   <View style={styles.row}>
                     <View style={{ flex: 1, marginRight: 8 }}>
@@ -511,7 +537,15 @@ export default function RegisterScreen() {
                       />
                     </View>
                     <View style={{ flex: 1, marginLeft: 8 }}>
-                      <CustomPicker label={t('LGA')} placeholder={t('City / LGA')} value={selectedLga} onValueChange={setSelectedLga} items={lgas.map(l => ({ label: l.name, value: l.id.toString() }))} />
+                      <SearchablePickerField
+                        label={t('LGA')}
+                        placeholder={t('City / LGA')}
+                        searchPlaceholder={t('Search LGA…')}
+                        value={selectedLga}
+                        onValueChange={setSelectedLga}
+                        items={lgas}
+                        disabled={!selectedState}
+                      />
                     </View>
                   </View>
                   {(errors.country || errors.state || errors.lga) && (
@@ -802,6 +836,10 @@ const styles = StyleSheet.create({
     padding: space.lg,
   },
   cardTitle: { fontFamily: font.extrabold, fontSize: 15, color: color.ink900, marginBottom: space.md },
+  locationHint: {
+    fontFamily: font.medium, fontSize: 12.5, lineHeight: 18, color: color.ink400,
+    marginTop: -space.sm, marginBottom: space.lg,
+  },
   row: { flexDirection: 'row' },
 
   // STEP 5 — payment
