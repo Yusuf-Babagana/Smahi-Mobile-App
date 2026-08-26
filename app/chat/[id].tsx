@@ -121,6 +121,25 @@ export default function ChatRoomScreen() {
                     }
                     return prev;
                 });
+
+                // Read/unread status must be persisted server-side (not just
+                // held in this screen's state) — this was the actual bug:
+                // nothing anywhere ever called mark_as_read, so a message's
+                // is_read never left False in the database. That's why the
+                // conversation list's badge could never clear, and why a
+                // message read once could reappear as unread later — it was
+                // never really marked read in the first place. Runs on every
+                // poll (not just on mount) so a message that arrives while
+                // this screen is already open also gets marked read promptly,
+                // and it's a cheap no-op server-side when there's nothing new
+                // to mark. Guarded by the same AppState check above the poll
+                // already uses, so this never fires while backgrounded.
+                const hasUnreadFromOther = sorted.some((m: any) =>
+                    !m.is_read && currentUserIdRef.current && Number(m.sender) !== currentUserIdRef.current
+                );
+                if (hasUnreadFromOther) {
+                    chatAPI.markAsRead(convId).catch(() => {});
+                }
             } catch (error) { console.log("Fetch messages err:", error); }
         };
 
@@ -232,7 +251,11 @@ export default function ChatRoomScreen() {
                     mine={isMe}
                     timestamp={new Date(item.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                     delivered={isMe && !item.is_temp}
-                    seen={!!(item.seen || item.is_seen || item.read)}
+                    // The real field is is_read (Message.is_read on the
+                    // backend) — this was checking seen/is_seen/read, none
+                    // of which exist on the API response, so the double-tick
+                    // "seen" state could never actually show.
+                    seen={isMe && !!item.is_read}
                     originalText={item.original_text}
                     isTranslated={!!item.is_translated}
                     sourceLanguage={item.original_language}
