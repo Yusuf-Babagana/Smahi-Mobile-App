@@ -2,6 +2,7 @@ import React, { useMemo, useState } from 'react';
 import { View, Text, Pressable, Modal, FlatList, TextInput, StyleSheet } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useTranslation } from 'react-i18next';
+import { KeyboardAvoidingView } from '@/src/components/Keyboard';
 import { color, font, radius, space } from '@/constants/theme';
 
 export interface SearchablePickerItem {
@@ -44,10 +45,17 @@ export function SearchablePickerModal({
 
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={handleClose}>
-      <Pressable style={styles.overlay} onPress={handleClose} accessibilityRole="none">
-        <Pressable style={styles.sheet} onPress={() => {}}>
-          <View style={styles.handle} />
-          <Text style={styles.title}>{title ?? t('Select')}</Text>
+      {/* This app runs Android edge-to-edge (app.json), which breaks React
+          Native's own built-in KeyboardAvoidingView measurement — the
+          keyboard covers the search box/list without this custom, OS-event-
+          driven one (see src/components/Keyboard.tsx; same fix already
+          used by app/chat/[id].tsx and app/chat/ai.tsx). "padding" is the
+          only behavior that works on both platforms here. */}
+      <KeyboardAvoidingView behavior="padding" style={styles.flex}>
+        <Pressable style={styles.overlay} onPress={handleClose} accessibilityRole="none">
+          <Pressable style={styles.sheet} onPress={() => {}}>
+            <View style={styles.handle} />
+            <Text style={styles.title}>{title ?? t('Select')}</Text>
 
           <View style={styles.searchBox}>
             <MaterialIcons name="search" size={18} color={color.ink400} />
@@ -94,12 +102,14 @@ export function SearchablePickerModal({
             }}
           />
         </Pressable>
-      </Pressable>
+        </Pressable>
+      </KeyboardAvoidingView>
     </Modal>
   );
 }
 
 const styles = StyleSheet.create({
+  flex: { flex: 1 },
   overlay: { flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(11,31,63,0.55)' },
   sheet: {
     backgroundColor: color.surface, borderTopLeftRadius: radius.xxl, borderTopRightRadius: radius.xxl,

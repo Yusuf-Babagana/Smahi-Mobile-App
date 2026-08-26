@@ -140,7 +140,7 @@ export default function LoginScreen() {
           <Animated.View entering={FadeInDown.delay(140).duration(350)} style={styles.card}>
             <Input
               label={t('Email address')}
-              placeholder="name@example.com"
+              placeholder={t('Enter your email address')}
               value={email}
               onChangeText={setEmail}
               keyboardType="email-address"

@@ -156,7 +156,7 @@ export default function ForgotPasswordScreen() {
                             <View style={styles.formBlock}>
                                 <Input
                                     label={t('Email address')}
-                                    placeholder="name@example.com"
+                                    placeholder={t('Enter your email address')}
                                     value={email}
                                     onChangeText={(v) => { setEmail(v); if (error) setError(null); }}
                                     keyboardType="email-address"

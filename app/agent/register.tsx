@@ -126,7 +126,7 @@ export default function AgentRegisterScreen() {
 
                     <Input
                         label={t('First name')}
-                        placeholder="e.g. Ibrahim"
+                        placeholder={t("Enter the artisan's first name")}
                         value={formData.first_name}
                         onChangeText={v => setFormData({ ...formData, first_name: v })}
                         icon="person-outline"
@@ -134,7 +134,7 @@ export default function AgentRegisterScreen() {
                     />
                     <Input
                         label={t('Last name')}
-                        placeholder="e.g. Musa"
+                        placeholder={t("Enter the artisan's last name")}
                         value={formData.last_name}
                         onChangeText={v => setFormData({ ...formData, last_name: v })}
                         icon="person-outline"
@@ -151,7 +151,7 @@ export default function AgentRegisterScreen() {
                     />
                     <Input
                         label={t('Email (optional)')}
-                        placeholder="artisan@gmail.com"
+                        placeholder={t('Enter their email address')}
                         keyboardType="email-address"
                         autoCapitalize="none"
                         value={formData.email}
