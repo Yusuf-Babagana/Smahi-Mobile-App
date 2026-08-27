@@ -1,4 +1,4 @@
-import React, { createContext, useState, useEffect, useContext } from 'react';
+import React, { createContext, useState, useEffect, useContext, useCallback, useMemo } from 'react';
 import * as Location from 'expo-location';
 
 interface LocationData {
@@ -20,13 +20,18 @@ export const LocationProvider = ({ children }: { children: React.ReactNode }) =>
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
-  const requestLocationPermission = async () => {
+  // useCallback (and the Provider's value itself in useMemo, below) so
+  // consumers of useLocation() only re-render when location/errorMsg/
+  // isLoading actually change, not on every unrelated re-render of
+  // whatever ancestor happens to re-render this provider — it wraps the
+  // entire app in app/_layout.tsx.
+  const requestLocationPermission = useCallback(async () => {
     setIsLoading(true);
     setErrorMsg(null);
     try {
       // 1. Ask the user for permission to use their device GPS
       let { status } = await Location.requestForegroundPermissionsAsync();
-      
+
       if (status !== 'granted') {
         setErrorMsg('Permission to access location was denied. Please enable it in your phone settings.');
         setIsLoading(false);
@@ -42,13 +47,13 @@ export const LocationProvider = ({ children }: { children: React.ReactNode }) =>
         latitude: currentLocation.coords.latitude,
         longitude: currentLocation.coords.longitude,
       });
-      
+
     } catch (error) {
       setErrorMsg('Ensure your device GPS is turned on and try again.');
     } finally {
       setIsLoading(false);
     }
-  };
+  }, []);
 
   // Permission is requested on demand (e.g. the home screen calls
   // requestLocationPermission() right before its first location-based
@@ -60,8 +65,13 @@ export const LocationProvider = ({ children }: { children: React.ReactNode }) =>
 
   if (errorMsg) console.log("CURRENT GPS ERROR:", errorMsg);
 
+  const value = useMemo(
+    () => ({ location, errorMsg, isLoading, requestLocationPermission }),
+    [location, errorMsg, isLoading, requestLocationPermission]
+  );
+
   return (
-    <LocationContext.Provider value={{ location, errorMsg, isLoading, requestLocationPermission }}>
+    <LocationContext.Provider value={value}>
       {children}
     </LocationContext.Provider>
   );

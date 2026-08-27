@@ -1,4 +1,4 @@
-import React, { createContext, useState, useEffect, useContext, useRef } from 'react';
+import React, { createContext, useState, useEffect, useContext, useRef, useCallback, useMemo } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as SecureStore from 'expo-secure-store';
 import { User, LoginCredentials } from '../types';
@@ -64,7 +64,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         }
     };
 
-    const login = async ({ email, password }: LoginCredentials): Promise<User> => {
+    // Wrapped in useCallback (and the Provider's value itself in useMemo,
+    // below) so consumers of useAuth() — nearly every dashboard/profile
+    // screen in the app — only re-render when `user`/`loading` actually
+    // change, not on every unrelated re-render of whatever ancestor
+    // happens to re-render this provider (this wraps the entire app in
+    // app/_layout.tsx, so that was a real, broad source of unnecessary
+    // re-renders, not a theoretical one).
+    const login = useCallback(async ({ email, password }: LoginCredentials): Promise<User> => {
         // 1. Call API
         const response = await authAPI.login(email, password);
         const loggedInUser = response.user;
@@ -79,9 +86,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         // or handle it here if needed. Assuming authAPI.login handles token storage via client.ts mechanism
 
         return loggedInUser;
-    };
+    }, []);
 
-    const logout = async () => {
+    const logout = useCallback(async () => {
         try {
             // Best-effort, bounded to 2s — stop this device from receiving
             // pushes for the account that's about to log out. Must run
@@ -104,25 +111,30 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         } catch (error) {
             console.error("Logout failed", error);
         }
-    };
+    }, [router]);
 
-    const setAuthUser = async (nextUser: User) => {
+    const setAuthUser = useCallback(async (nextUser: User) => {
         sessionExpiredHandledRef.current = false; // fresh session — allow a future expiry to be handled again
         setUser(nextUser);
         await AsyncStorage.setItem('user', JSON.stringify(nextUser));
-    };
+    }, []);
 
-    const updateUser = (userData: Partial<User>) => {
+    const updateUser = useCallback((userData: Partial<User>) => {
         setUser(prev => {
             if (!prev) return null;
             const updated = { ...prev, ...userData };
             AsyncStorage.setItem('user', JSON.stringify(updated)).catch(console.error);
             return updated;
         });
-    };
+    }, []);
+
+    const value = useMemo(
+        () => ({ user, loading, login, logout, updateUser, setAuthUser }),
+        [user, loading, login, logout, updateUser, setAuthUser]
+    );
 
     return (
-        <AuthContext.Provider value={{ user, loading, login, logout, updateUser, setAuthUser }}>
+        <AuthContext.Provider value={value}>
             {children}
         </AuthContext.Provider>
     );
