@@ -11,12 +11,21 @@ import { MaterialIcons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import { useTranslation } from 'react-i18next';
 
-import { artisanAPI, bookingAPI } from '@/src/api/client';
+import { artisanAPI } from '@/src/api/client';
 import { storage } from '@/src/utils/storage';
 import { color, font, radius, shadow, space, type } from '@/constants/theme';
 import { Avatar, Button, StepHeader, useToast } from '@/src/components/ui';
+import { enqueue, processQueue, getQueue, dismissItem } from '@/src/utils/offlineQueue';
+import { syncSubmitters } from '@/src/utils/syncSubmitters';
 
 const TIME_SLOTS = ['08:00', '09:30', '11:00', '13:00', '15:00', '16:30'];
+
+// A completed booking request must not depend on network 100% — see
+// src/utils/offlineQueue.ts. Submitting queues the request first (so it
+// can no longer be lost to a failed network call), then attempts to sync
+// immediately; app/_layout.tsx's OfflineSyncManager picks up anything that
+// couldn't sync right away the moment connectivity returns.
+const QUEUE_TYPE = 'service_booking';
 
 function buildDays(t: (k: string) => string) {
   const days: { date: Date; iso: string; label: string; weekday: string }[] = [];
@@ -43,6 +52,10 @@ export default function BookingFlow() {
   const [step, setStep] = useState(1);
   const [submitted, setSubmitted] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  // true when the request had to be queued for later (no network at
+  // submit time) rather than actually reaching the server just now —
+  // the success screen's wording changes to reflect that honestly.
+  const [queuedOffline, setQueuedOffline] = useState(false);
 
   const [artisan, setArtisan] = useState<any>(null);
 
@@ -98,46 +111,61 @@ export default function BookingFlow() {
       // The route param is the ArtisanProfile id; the bookings endpoint keys
       // artisans by USER id, which lives on the fetched profile ('user').
       const artisanUserId = artisan?.user ?? artisan?.user_details?.id ?? Number(artisanId);
-      const booking = await bookingAPI.createBooking({
+      const payload = {
         artisan: Number(artisanUserId),
         date: selectedDate,
         time: selectedTime,
         description,
         location: address,
-      });
+        photos, // local URIs — uploaded by the submitter after the booking exists
+      };
 
-      // Photos upload one at a time, after the booking exists. Best-effort:
-      // the booking itself already succeeded, so a photo failure shouldn't
-      // block the success screen -- but the user still needs to know if
-      // their photo(s) didn't actually make it, rather than assuming the
-      // artisan can see something that was never uploaded.
-      let failedPhotoCount = 0;
-      if (photos.length > 0 && booking?.id) {
-        for (const uri of photos) {
-          try {
-            await bookingAPI.uploadPhoto(booking.id, uri);
-          } catch (photoError) {
-            console.log('Photo upload failed:', photoError);
-            failedPhotoCount++;
-          }
+      // Queue first, then attempt a sync right away — this is what makes
+      // the request safe even if network drops mid-submit: the instant
+      // it's queued, this data can no longer be lost to a failed request,
+      // only retried automatically later if this immediate attempt
+      // doesn't succeed (see src/utils/offlineQueue.ts).
+      const queued = await enqueue(QUEUE_TYPE, payload);
+      await processQueue(syncSubmitters);
+      const items = await getQueue(QUEUE_TYPE);
+      const synced = items.find(i => i.id === queued.id);
+
+      if (synced?.status === 'server_verified') {
+        const failedPhotoCount = synced.serverResult?.failedPhotoCount || 0;
+        if (failedPhotoCount > 0) {
+          showToast(
+            t('Your booking request was sent, but {{count}} photo(s) could not be attached.', { count: failedPhotoCount }),
+            { type: 'warn' }
+          );
         }
+        setQueuedOffline(false);
+        setSubmitted(true);
+      } else if (synced?.status === 'failed') {
+        // A real rejection from the server (a validation error, not a
+        // network problem) — surface it immediately, same friendly parsing
+        // this screen always used. Not worth keeping in the sync queue
+        // once shown — the next submit attempt queues a fresh item.
+        let serverMessage: string | undefined;
+        try {
+          const parsed = JSON.parse(synced.lastError || '');
+          serverMessage = typeof parsed === 'object'
+            ? (Object.values(parsed).flat().find((v) => typeof v === 'string') as string | undefined)
+            : undefined;
+        } catch {
+          // lastError wasn't JSON (a network-level message, not server
+          // validation) — fall through to the generic message below.
+        }
+        showToast(serverMessage || t('Failed to send booking request.'), { type: 'error' });
+        await dismissItem(queued.id);
+      } else {
+        // Still pending_sync — no usable network right now. Nothing is
+        // lost: the request is safely queued and will sync on its own the
+        // moment connectivity returns (app/_layout.tsx's OfflineSyncManager).
+        setQueuedOffline(true);
+        setSubmitted(true);
       }
-
-      if (failedPhotoCount > 0) {
-        showToast(
-          t('Your booking request was sent, but {{count}} photo(s) could not be attached.', { count: failedPhotoCount }),
-          { type: 'warn' }
-        );
-      }
-
-      setSubmitted(true);
     } catch (error: any) {
-      console.log('BOOKING ERROR:', error?.response?.data || error);
-      const data = error?.response?.data;
-      const serverMessage = data && typeof data === 'object'
-        ? Object.values(data).flat().find((v) => typeof v === 'string') as string | undefined
-        : undefined;
-      showToast(serverMessage || t('Failed to send booking request.'), { type: 'error' });
+      showToast(t('Could not save this booking — please try again.'), { type: 'error' });
     } finally {
       setSubmitting(false);
     }
@@ -153,12 +181,14 @@ export default function BookingFlow() {
       <SafeAreaView style={styles.container}>
         <StatusBar style="dark" />
         <View style={styles.successWrap}>
-          <Animated.View entering={ZoomIn.duration(350)} style={styles.successDisc}>
-            <MaterialIcons name="check" size={44} color="#FFF" />
+          <Animated.View entering={ZoomIn.duration(350)} style={[styles.successDisc, queuedOffline && { backgroundColor: color.warn600 }]}>
+            <MaterialIcons name={queuedOffline ? 'cloud-off' : 'check'} size={44} color="#FFF" />
           </Animated.View>
-          <Text style={styles.successTitle}>{t('Booking sent!')}</Text>
+          <Text style={styles.successTitle}>{queuedOffline ? t('Booking saved') : t('Booking sent!')}</Text>
           <Text style={styles.successBody}>
-            {t('{{name}} will confirm your request shortly.', { name: artisanName, defaultValue: `${artisanName} will confirm your request shortly.` })}
+            {queuedOffline
+              ? t("No network right now — this request is saved on your device and will be sent to {{name}} automatically once you're back online.", { name: artisanName })
+              : t('{{name}} will confirm your request shortly.', { name: artisanName, defaultValue: `${artisanName} will confirm your request shortly.` })}
           </Text>
           <View style={styles.successChip}>
             <MaterialIcons name="event" size={15} color={color.brand600} />

@@ -1,7 +1,7 @@
 // app/_layout.tsx
 
 import "react-native-reanimated";
-import React, { useEffect } from "react";
+import React, { useEffect, useRef } from "react";
 import { useFonts } from "expo-font";
 import {
   Manrope_400Regular,
@@ -33,6 +33,8 @@ import { PushNotificationManager } from '@/src/components/PushNotificationManage
 import { LocationProvider } from '@/src/contexts/LocationContext';
 import { ToastProvider, useToast } from '@/src/components/ui/Toast';
 import { ConfirmProvider } from '@/src/components/ui/Dialog';
+import { startAutoSync, subscribeToQueue, QueueItemStatus } from '@/src/utils/offlineQueue';
+import { syncSubmitters } from '@/src/utils/syncSubmitters';
 import '@/src/locales/i18n';
 
 
@@ -53,6 +55,47 @@ function OfflineNotice() {
       });
     }
   }, [networkState.isConnected, networkState.isInternetReachable, show]);
+
+  return null;
+}
+
+// Registers every offline-queue "type" this app knows how to sync, and
+// re-attempts them the moment the device regains network (see
+// src/utils/offlineQueue.ts). Lives app-wide (not just on the agent
+// registration screen) so a queued item still syncs even if the agent has
+// already navigated away or the app was reopened after being killed.
+function OfflineSyncManager() {
+  const { show } = useToast();
+  const prevStatuses = useRef<Record<string, QueueItemStatus>>({});
+
+  useEffect(() => {
+    return startAutoSync(syncSubmitters);
+  }, []);
+
+  // Best-effort toast the moment a queued item's fate is decided — purely
+  // a nice-to-have while the app happens to be open; the Pending Sync
+  // status view (agent/dashboard) is the source of truth either way.
+  useEffect(() => {
+    return subscribeToQueue((items) => {
+      for (const item of items) {
+        const prev = prevStatuses.current[item.id];
+        if (prev && prev !== item.status) {
+          if (item.status === 'server_verified') {
+            if (item.type === 'service_booking') {
+              show('Synced: a queued booking request ✅', { type: 'success' });
+            } else {
+              const name = [item.payload?.first_name, item.payload?.last_name].filter(Boolean).join(' ');
+              show(`Synced: ${name || 'a queued registration'} ✅`, { type: 'success' });
+            }
+          } else if (item.status === 'failed') {
+            const what = item.type === 'service_booking' ? 'booking request' : 'registration';
+            show(`A queued ${what} could not be synced — check Pending Sync.`, { type: 'error' });
+          }
+        }
+        prevStatuses.current[item.id] = item.status;
+      }
+    });
+  }, [show]);
 
   return null;
 }
@@ -119,6 +162,7 @@ export default function RootLayout() {
                 <ToastProvider>
                 <ConfirmProvider>
                 <OfflineNotice />
+                <OfflineSyncManager />
                 <StatusBar style={colorScheme === "dark" ? "light" : "dark"} />
 
                 <Stack screenOptions={{ contentStyle: { backgroundColor: theme.colors.background } }}>

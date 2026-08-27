@@ -12,6 +12,8 @@ import { bookingAPI } from '@/src/api/client';
 import { color, font, radius, space, type } from '@/constants/theme';
 import { Avatar, Badge, BookingTimeline, EmptyState, SkeletonCard } from '@/src/components/ui';
 import type { BadgeStatus } from '@/src/components/ui';
+import { useOfflineQueue, processQueue } from '@/src/utils/offlineQueue';
+import { syncSubmitters } from '@/src/utils/syncSubmitters';
 
 type FilterValue = 'active' | 'completed' | 'cancelled';
 
@@ -43,6 +45,9 @@ export default function BookingsTab() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [filter, setFilter] = useState<FilterValue>('active');
+  // Booking requests saved locally while offline — see
+  // src/utils/offlineQueue.ts and app/booking/[artisanId].tsx.
+  const { counts: syncCounts } = useOfflineQueue('service_booking');
 
   const load = useCallback(async () => {
     try {
@@ -66,6 +71,9 @@ export default function BookingsTab() {
   const handleRefresh = () => {
     setRefreshing(true);
     load();
+    // Doubles as "try syncing any saved-offline booking requests now" —
+    // an easy manual nudge rather than waiting for the automatic retry.
+    processQueue(syncSubmitters).catch(() => {});
   };
 
   const stats = useMemo(() => {
@@ -206,6 +214,15 @@ export default function BookingsTab() {
         })}
       </View>
 
+      {syncCounts.pending_sync > 0 && (
+        <View style={styles.syncBanner}>
+          <MaterialIcons name="cloud-off" size={16} color={color.warn600} />
+          <Text style={styles.syncBannerText}>
+            {t('{{count}} booking request(s) saved offline — will send automatically once you\'re back online.', { count: syncCounts.pending_sync })}
+          </Text>
+        </View>
+      )}
+
       {loading ? (
         <View style={styles.skeletonWrap}>
           <SkeletonCard />
@@ -284,6 +301,23 @@ const styles = StyleSheet.create({
     paddingHorizontal: space.xl,
     marginTop: space.lg,
     marginBottom: space.sm,
+  },
+  syncBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: color.warn100,
+    borderRadius: radius.md,
+    padding: space.md,
+    marginHorizontal: space.xl,
+    marginBottom: space.sm,
+  },
+  syncBannerText: {
+    flex: 1,
+    fontFamily: font.bold,
+    fontSize: 12.5,
+    lineHeight: 18,
+    color: color.warn600,
   },
   filterChip: {
     height: 36,

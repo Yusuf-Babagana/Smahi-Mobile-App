@@ -16,6 +16,8 @@ import { useAuth } from '@/src/contexts/AuthContext';
 import { EmailVerificationBanner } from '@/src/components/EmailVerificationBanner';
 import { color, font, radius, shadow, space, type } from '@/constants/theme';
 import { Avatar, useConfirm } from '@/src/components/ui';
+import { useOfflineQueue, processQueue } from '@/src/utils/offlineQueue';
+import { syncSubmitters } from '@/src/utils/syncSubmitters';
 
 export default function AgentDashboard() {
   const router = useRouter();
@@ -23,6 +25,10 @@ export default function AgentDashboard() {
   const confirm = useConfirm();
 
   const { user, logout } = useAuth();
+  // Offline-first field registration (app/agent/register.tsx): how many
+  // artisan registrations this device has queued locally, confirmed by
+  // the server, or need attention — see src/utils/offlineQueue.ts.
+  const { counts: syncCounts } = useOfflineQueue('agent_register_artisan');
 
   const [stats, setStats] = useState({
     total_artisans: 0,
@@ -72,6 +78,10 @@ export default function AgentDashboard() {
   const onRefresh = useCallback(() => {
     setRefreshing(true);
     fetchDashboardData();
+    // Pull-to-refresh doubles as "try syncing pending registrations now" —
+    // an easy manual nudge for an agent who knows they just regained
+    // signal, rather than waiting for the next automatic attempt.
+    processQueue(syncSubmitters).catch(() => {});
   }, []);
 
   // --- SUB-COMPONENTS ---
@@ -209,6 +219,43 @@ export default function AgentDashboard() {
       >
 
         <EmailVerificationBanner />
+
+        {/* SYNC STATUS — offline-first field registration. Only shown once
+            this device has actually queued something, so a fresh install
+            with no history isn't cluttered with an all-zero card. */}
+        {syncCounts.total > 0 && (
+          <View style={styles.syncCard}>
+            <View style={styles.syncHeaderRow}>
+              <MaterialIcons
+                name={syncCounts.pending_sync > 0 ? 'cloud-off' : 'cloud-done'}
+                size={18}
+                color={syncCounts.pending_sync > 0 ? color.warn600 : color.accent600}
+              />
+              <Text style={styles.syncTitle}>{t('Registration sync status')}</Text>
+            </View>
+            <View style={styles.syncCountsRow}>
+              <View style={styles.syncCountBox}>
+                <Text style={[styles.syncCountValue, { color: color.warn600 }]}>{syncCounts.pending_sync}</Text>
+                <Text style={styles.syncCountLabel}>{t('Pending sync')}</Text>
+              </View>
+              <View style={styles.syncCountBox}>
+                <Text style={[styles.syncCountValue, { color: color.accent600 }]}>{syncCounts.server_verified}</Text>
+                <Text style={styles.syncCountLabel}>{t('Server confirmed')}</Text>
+              </View>
+              {syncCounts.failed > 0 && (
+                <View style={styles.syncCountBox}>
+                  <Text style={[styles.syncCountValue, { color: color.danger600 }]}>{syncCounts.failed}</Text>
+                  <Text style={styles.syncCountLabel}>{t('Needs attention')}</Text>
+                </View>
+              )}
+            </View>
+            {syncCounts.pending_sync > 0 && (
+              <Text style={styles.syncHint}>
+                {t("These registrations are saved on this device and will sync automatically once you're back online.")}
+              </Text>
+            )}
+          </View>
+        )}
 
         {/* QUICK ACTIONS — 2×2 grid of white cards with tonal icon tiles */}
         <Text style={styles.sectionTitle}>{t('Agent actions')}</Text>
@@ -379,6 +426,23 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#EEF2F8',
   },
+
+  syncCard: {
+    backgroundColor: color.surface,
+    borderRadius: radius.xl,
+    padding: space.lg,
+    borderWidth: 1,
+    borderColor: '#EEF2F8',
+    marginTop: space.lg,
+  },
+  syncHeaderRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: space.md },
+  syncTitle: { fontFamily: font.extrabold, fontSize: 14, color: color.ink900 },
+  syncCountsRow: { flexDirection: 'row', gap: space.xl },
+  syncCountBox: { flex: 1 },
+  syncCountValue: { fontFamily: font.extrabold, fontSize: 22 },
+  syncCountLabel: { fontFamily: font.medium, fontSize: 12, color: color.ink400, marginTop: 2 },
+  syncHint: { fontFamily: font.medium, fontSize: 12.5, color: color.ink400, marginTop: space.md, lineHeight: 18 },
+
   statRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: space.md },
   iconBox: {
     width: 40,
