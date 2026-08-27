@@ -71,7 +71,15 @@ export const NotificationProvider = ({ children }: { children: React.ReactNode }
             } catch (error) { /* Silent fail */ }
         };
 
-        const interval = setInterval(checkMessages, 6000); // Poll every 6 seconds
+        // Widened from 6s to 12s (Aug 2026): this poll runs globally, on
+        // every screen, for the entire time the app is foregrounded — not
+        // just while a chat is open (app/chat/index.tsx and app/chat/[id].tsx
+        // poll separately, on top of this one, only while those screens are
+        // actually visible). Being the one poll every user always has
+        // running, it was the single biggest contributor to request volume
+        // against PythonAnywhere's free-tier daily CPU-seconds quota. A new-
+        // message toast arriving up to 12s late is an acceptable trade.
+        const interval = setInterval(checkMessages, 12000);
         return () => clearInterval(interval);
     }, [currentUserId]);
 

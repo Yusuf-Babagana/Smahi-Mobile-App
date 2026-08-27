@@ -144,7 +144,12 @@ export default function ChatRoomScreen() {
         };
 
         fetchMessages();
-        const interval = setInterval(fetchMessages, 4000); // Polling every 4s
+        // Widened from 4s to 6s (Aug 2026): the PythonAnywhere free-tier
+        // daily CPU-seconds quota was getting exhausted, tarpitting every
+        // request app-wide for the rest of the day. 4s per open chat screen
+        // was ~900 req/hour on its own; 6s still feels instant to a human
+        // typing but cuts that by a third.
+        const interval = setInterval(fetchMessages, 6000);
         return () => clearInterval(interval);
     }, []); // ⚡ EMPTY ARRAY to prevent 500 req/min loops!
 

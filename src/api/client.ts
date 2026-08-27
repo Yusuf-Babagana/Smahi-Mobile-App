@@ -16,6 +16,45 @@ const getData = (response: any) => {
   return response.data;
 };
 
+// --- Local cache for near-static reference data (countries/states/LGAs/
+// categories) ---
+// These lists barely ever change, but were being re-fetched from the
+// network every time e.g. the registration screen mounted or a picker
+// opened. Even on the upgraded PythonAnywhere plan, every request still
+// pays a real, mostly-fixed network+TLS round-trip cost (~1-2s) before any
+// server processing even starts — the cheapest way to make this feel fast
+// is to skip that request entirely when a recent-enough copy is already on
+// the device. Falls back to the given fetcher (and to a stale cached copy,
+// if any, rather than failing outright) on any cache error.
+const CACHE_PREFIX = 'smahii_cache_';
+async function getCached<T>(key: string, ttlMs: number, fetcher: () => Promise<T>): Promise<T> {
+  try {
+    const raw = await AsyncStorage.getItem(CACHE_PREFIX + key);
+    if (raw) {
+      const { data, savedAt } = JSON.parse(raw);
+      if (Date.now() - savedAt < ttlMs) return data as T;
+    }
+  } catch {
+    // Corrupt/unavailable cache — fall through to a normal network fetch.
+  }
+  try {
+    const data = await fetcher();
+    AsyncStorage.setItem(CACHE_PREFIX + key, JSON.stringify({ data, savedAt: Date.now() })).catch(() => {});
+    return data;
+  } catch (err) {
+    // Network failed (e.g. briefly offline) — serve a stale cached copy
+    // rather than breaking the picker entirely, if one exists.
+    try {
+      const raw = await AsyncStorage.getItem(CACHE_PREFIX + key);
+      if (raw) return JSON.parse(raw).data as T;
+    } catch {
+      // no stale copy either — fall through to the original error
+    }
+    throw err;
+  }
+}
+const DAY_MS = 24 * 60 * 60 * 1000;
+
 // --- AUTHENTICATION ---
 export const authAPI = {
   login: async (email: string, password: string) => {
@@ -214,19 +253,27 @@ export const authAPI = {
 
 // --- LOCATIONS ---
 export const locationAPI = {
+  // Country/state/LGA data is effectively static (it never changes on any
+  // timescale a user would notice) — cached for a week per key.
   getCountries: async () => {
-    const response = await apiClient.get('locations/countries/');
-    return response.data; 
+    return getCached('countries', 7 * DAY_MS, async () => {
+      const response = await apiClient.get('locations/countries/');
+      return response.data;
+    });
   },
 
   getStates: async (countryId: number) => {
-    const response = await apiClient.get(`locations/states/${countryId}/`);
-    return response.data;
+    return getCached(`states_${countryId}`, 7 * DAY_MS, async () => {
+      const response = await apiClient.get(`locations/states/${countryId}/`);
+      return response.data;
+    });
   },
 
   getLGAs: async (stateId: number) => {
-    const response = await apiClient.get(`locations/lgas/${stateId}/`);
-    return response.data;
+    return getCached(`lgas_${stateId}`, 7 * DAY_MS, async () => {
+      const response = await apiClient.get(`locations/lgas/${stateId}/`);
+      return response.data;
+    });
   },
 
   searchLocations: async (query: string) => {
@@ -330,13 +377,19 @@ export const categoryAPI = {
     }
   },
   getCategoriesFlat: async () => {
-    try {
-      const response = await apiClient.get('categories/all/');
-      return response.data.results ? response.data.results : response.data;
-    } catch (error) {
-      console.error("Error fetching flat categories:", error);
-      throw error;
-    }
+    // Shorter TTL than country/state/LGA (24h, not a week) — new
+    // categories are created on the fly by whoever registers with a
+    // custom profession name (see UserRegistrationSerializer.create), so
+    // this list grows more often than location data does.
+    return getCached('categories_flat', DAY_MS, async () => {
+      try {
+        const response = await apiClient.get('categories/all/');
+        return response.data.results ? response.data.results : response.data;
+      } catch (error) {
+        console.error("Error fetching flat categories:", error);
+        throw error;
+      }
+    });
   },
   searchCategories: async (query: string) => {
     try {

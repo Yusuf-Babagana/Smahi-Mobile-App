@@ -105,7 +105,9 @@ export default function ArtisanJobsTab() {
           // Best-effort — a missed tick just means the client's map doesn't
           // refresh this cycle; never surface this as an error to the artisan.
         }
-      }, 15000);
+      // Widened from 15s to 20s (Aug 2026) — see the matching note in
+      // app/chat/[id].tsx (PythonAnywhere free-tier CPU-seconds quota).
+      }, 20000);
       return () => clearInterval(interval);
     }, [])
   );

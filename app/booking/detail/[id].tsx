@@ -109,7 +109,9 @@ export default function BookingDetailScreen() {
   useFocusEffect(
     useCallback(() => {
       if (booking?.status !== 'in_progress') return;
-      const interval = setInterval(load, 6000);
+      // Widened from 6s to 8s (Aug 2026) — see the matching note in
+      // app/chat/[id].tsx (PythonAnywhere free-tier CPU-seconds quota).
+      const interval = setInterval(load, 8000);
       return () => clearInterval(interval);
     }, [booking?.status, load])
   );

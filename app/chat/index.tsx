@@ -63,12 +63,15 @@ export default function ChatListScreen() {
     );
 
     // Polling (Only when not searching, and only while the app is foregrounded)
+    // Widened from 5s to 8s (Aug 2026) as part of reducing request volume
+    // against PythonAnywhere's free-tier daily CPU-seconds quota — see the
+    // matching note in app/chat/[id].tsx.
     useEffect(() => {
         const interval = setInterval(() => {
             if (searchQuery === '' && !loading && AppState.currentState === 'active') {
                 loadConversations(false);
             }
-        }, 5000);
+        }, 8000);
         return () => clearInterval(interval);
     }, [searchQuery, loading, currentUserId]);
 
