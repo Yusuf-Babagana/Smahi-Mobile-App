@@ -536,6 +536,25 @@ export const artisanAPI = {
   },
 };
 
+// --- BUSINESSES ---
+// Deliberately its own namespace, not folded into artisanAPI — a business
+// is not an artisan (see accounts.serializers.UserRegistrationSerializer's
+// own comment on this). Powers app/business/dashboard.tsx.
+export const businessAPI = {
+  getMyProfile: async () => {
+    const response = await apiClient.get('business/profile/');
+    return response.data;
+  },
+
+  // business_name/category/description/registration_number live on
+  // BusinessProfile, NOT the user account — auth/profile/ silently
+  // ignores these, same reasoning as artisanAPI.updateMyProfile's bio.
+  updateMyProfile: async (data: Record<string, any>) => {
+    const response = await apiClient.patch('business/profile/', data);
+    return response.data;
+  },
+};
+
 // --- REVIEWS ---
 export const reviewAPI = {
   submitReview: async (bookingId: number, rating: number, comment: string) => {

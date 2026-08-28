@@ -7,6 +7,11 @@
 export const ROLE_HOME_ROUTES = {
     client: '/(tabs)/(home)',
     artisan: '/artisan/dashboard',
+    // Deliberately its own dashboard, not the client Home screen's
+    // default fallback — that screen is built around browsing/searching
+    // ARTISAN categories, which is irrelevant to a business owner (see
+    // app/business/dashboard.tsx).
+    business: '/business/dashboard',
     agent: '/agent/dashboard',
     state_coordinator: '/agent/dashboard',
     admin: '/admin/dashboard',
