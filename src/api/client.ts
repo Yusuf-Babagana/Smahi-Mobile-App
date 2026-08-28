@@ -626,13 +626,29 @@ export const agentAPI = {
 // Lives under /api/v1/ — a genuinely new resource, same versioning
 // decision as disputeAPI above.
 export const coordinatorAPI = {
-  getAgents: async (page: number = 1) => {
-    const response = await apiClient.get('v1/coordinator/agents/', { params: { page } });
+  getAgents: async (page: number = 1, params?: { search?: string; lga?: string | number; account_status?: string }) => {
+    const response = await apiClient.get('v1/coordinator/agents/', { params: { page, ...params } });
     return response.data;
   },
 
-  setAgentStatus: async (agentId: number, status: 'active' | 'suspended') => {
+  setAgentStatus: async (agentId: number, status: 'active' | 'suspended' | 'dismissed') => {
     const response = await apiClient.post(`v1/coordinator/agents/${agentId}/status/`, { status });
+    return response.data;
+  },
+
+  // Coordinator-initiated onboarding — the backend generates and returns
+  // a one-time password, same reasoning as agentAPI.registerArtisan
+  // (never send/accept one from the client).
+  createAgent: async (data: any) => {
+    const response = await apiClient.post('v1/coordinator/agents/create/', data);
+    return response.data;
+  },
+
+  // Disputes/escalations connected to the coordinator's own state — see
+  // CoordinatorReportsView. Distinct from disputeAPI (a caller's own
+  // reports only).
+  getReports: async (page: number = 1, params?: { status?: string; category?: string }) => {
+    const response = await apiClient.get('v1/coordinator/reports/', { params: { page, ...params } });
     return response.data;
   },
 };

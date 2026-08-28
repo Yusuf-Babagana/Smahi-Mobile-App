@@ -25,16 +25,23 @@ export default function AgentDashboard() {
   const confirm = useConfirm();
 
   const { user, logout } = useAuth();
-  // Offline-first field registration (app/agent/register.tsx): how many
-  // artisan registrations this device has queued locally, confirmed by
-  // the server, or need attention — see src/utils/offlineQueue.ts.
-  const { counts: syncCounts } = useOfflineQueue('agent_register_artisan');
+  // Offline-first field registration: how many artisan registrations (or,
+  // for a coordinator, agent creations) this device has queued locally,
+  // confirmed by the server, or need attention — see
+  // src/utils/offlineQueue.ts. This dashboard is shared between both
+  // roles, and each uses a different queue type.
+  const isCoordinator = user?.role === 'state_coordinator';
+  const { counts: syncCounts } = useOfflineQueue(isCoordinator ? 'coordinator_create_agent' : 'agent_register_artisan');
 
   const [stats, setStats] = useState({
     total_artisans: 0,
     verified_artisans: 0,
     pending_verification: 0,
     total_clients: 0,
+    // Only ever populated for a state_coordinator — AgentDashboardStatsView
+    // omits these entirely for a plain agent (no one "under" them to count).
+    total_agents: undefined as number | undefined,
+    active_agents: undefined as number | undefined,
   });
   const [refreshing, setRefreshing] = useState(false);
 
@@ -231,7 +238,7 @@ export default function AgentDashboard() {
                 size={18}
                 color={syncCounts.pending_sync > 0 ? color.warn600 : color.accent600}
               />
-              <Text style={styles.syncTitle}>{t('Registration sync status')}</Text>
+              <Text style={styles.syncTitle}>{isCoordinator ? t('Agent creation sync status') : t('Registration sync status')}</Text>
             </View>
             <View style={styles.syncCountsRow}>
               <View style={styles.syncCountBox}>
@@ -277,14 +284,32 @@ export default function AgentDashboard() {
             onPress={() => router.push('/agent/clients')}
           />
           {user?.role === 'state_coordinator' && (
-            <ActionCard
-              title={t('My agents')}
-              subtitle={t('Oversee & manage')}
-              icon="supervisor-account"
-              tileBg={color.accent100}
-              tileFg={color.accent600}
-              onPress={() => router.push('/coordinator/agents')}
-            />
+            <>
+              <ActionCard
+                title={t('My agents')}
+                subtitle={t('Oversee & manage')}
+                icon="supervisor-account"
+                tileBg={color.accent100}
+                tileFg={color.accent600}
+                onPress={() => router.push('/coordinator/agents')}
+              />
+              <ActionCard
+                title={t('Create agent')}
+                subtitle={t('Onboard new')}
+                icon="person-add-alt"
+                tileBg={color.accent100}
+                tileFg={color.accent600}
+                onPress={() => router.push('/coordinator/create-agent')}
+              />
+              <ActionCard
+                title={t('Reports')}
+                subtitle={t('Escalations')}
+                icon="report"
+                tileBg={color.warn100}
+                tileFg={color.warn600}
+                onPress={() => router.push('/coordinator/reports')}
+              />
+            </>
           )}
         </View>
 
@@ -306,6 +331,26 @@ export default function AgentDashboard() {
             tileBg={color.accent100}
             tileFg={color.accent600}
           />
+          {isCoordinator && stats.total_agents !== undefined && (
+            <>
+              <View style={styles.horizontalDivider} />
+              <StatRow
+                title={t('Total agents')}
+                value={stats.total_agents}
+                icon="supervisor-account"
+                tileBg={color.accent100}
+                tileFg={color.accent600}
+              />
+              <View style={styles.horizontalDivider} />
+              <StatRow
+                title={t('Active agents')}
+                value={stats.active_agents ?? 0}
+                icon="check-circle"
+                tileBg={color.accent100}
+                tileFg={color.accent600}
+              />
+            </>
+          )}
         </View>
 
       </ScrollView>

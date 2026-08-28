@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useCallback } from 'react';
-import { View, Text, StyleSheet, FlatList, ActivityIndicator, Pressable } from 'react-native';
+import { View, Text, StyleSheet, FlatList, ActivityIndicator, Pressable, TextInput } from 'react-native';
 import { useRouter, Stack } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
@@ -23,13 +23,14 @@ export default function CoordinatorAgentList() {
     const [page, setPage] = useState(1);
     const [hasMore, setHasMore] = useState(true);
     const [updatingId, setUpdatingId] = useState<number | null>(null);
+    const [searchQuery, setSearchQuery] = useState('');
 
-    const fetchAgents = useCallback(async (pageNumber: number) => {
+    const fetchAgents = useCallback(async (pageNumber: number, search?: string) => {
         try {
             if (pageNumber === 1) setLoading(true);
             else setLoadingMore(true);
 
-            const data = await coordinatorAPI.getAgents(pageNumber);
+            const data = await coordinatorAPI.getAgents(pageNumber, search ? { search } : undefined);
             const newResults = data.results || [];
 
             setAgents(prev => (pageNumber === 1 ? newResults : [...prev, ...newResults]));
@@ -47,8 +48,18 @@ export default function CoordinatorAgentList() {
         if (user) fetchAgents(1);
     }, [user, fetchAgents]);
 
+    // Debounced search — by name, serial/ID, phone number, or LGA (all
+    // handled server-side in one `search` param, see
+    // CoordinatorAgentListView.search_fields).
+    useEffect(() => {
+        const delay = setTimeout(() => {
+            if (user) fetchAgents(1, searchQuery.trim());
+        }, 400);
+        return () => clearTimeout(delay);
+    }, [searchQuery, user, fetchAgents]);
+
     const handleLoadMore = () => {
-        if (!loadingMore && hasMore) fetchAgents(page + 1);
+        if (!loadingMore && hasMore) fetchAgents(page + 1, searchQuery.trim());
     };
 
     const toggleStatus = async (agent: any) => {
@@ -77,9 +88,35 @@ export default function CoordinatorAgentList() {
         }
     };
 
+    // Dismissal is deliberately separate from Suspend — final, per company
+    // rules, and (see CoordinatorAgentStatusView) cannot be undone through
+    // this same reactivate button once set.
+    const dismissAgent = async (agent: any) => {
+        const ok = await confirm({
+            title: t('Dismiss {{name}}?', { name: agent.first_name }),
+            message: t('This is final and cannot be undone from here — they will permanently lose access.'),
+            confirmLabel: t('Dismiss'),
+            destructive: true,
+        });
+        if (!ok) return;
+
+        setUpdatingId(agent.id);
+        try {
+            await coordinatorAPI.setAgentStatus(agent.id, 'dismissed');
+            setAgents(prev => prev.map(a => (a.id === agent.id ? { ...a, account_status: 'dismissed' } : a)));
+        } catch (error) {
+            console.log('Error dismissing agent:', error);
+            showToast(t('Could not dismiss this agent. Please try again.'), { type: 'error' });
+        } finally {
+            setUpdatingId(null);
+        }
+    };
+
     const renderItem = ({ item }: any) => {
         const name = `${item.first_name || ''} ${item.last_name || ''}`.trim();
         const suspended = item.account_status === 'suspended';
+        const dismissed = item.account_status === 'dismissed';
+        const isUpdating = updatingId === item.id;
 
         return (
             <View style={styles.card}>
@@ -87,6 +124,12 @@ export default function CoordinatorAgentList() {
                 <View style={styles.info}>
                     <Text style={styles.name} numberOfLines={1}>{name}</Text>
                     <Text style={styles.email} numberOfLines={1}>{item.email}</Text>
+                    {item.lga_details?.name && (
+                        <View style={styles.lgaRow}>
+                            <MaterialIcons name="place" size={11} color={color.ink400} />
+                            <Text style={styles.lgaText}>{item.lga_details.name}</Text>
+                        </View>
+                    )}
                     <View style={styles.statsRow}>
                         <View style={styles.statChip}>
                             <MaterialIcons name="person-add" size={12} color={color.brand600} />
@@ -101,23 +144,36 @@ export default function CoordinatorAgentList() {
 
                 <View style={styles.actionCol}>
                     <Badge
-                        label={suspended ? t('Suspended') : t('Active')}
-                        bg={suspended ? '#FDECEC' : color.accent100}
-                        fg={suspended ? '#B91C1C' : '#0F766E'}
+                        label={dismissed ? t('Dismissed') : suspended ? t('Suspended') : t('Active')}
+                        bg={dismissed ? '#F1F5F9' : suspended ? '#FDECEC' : color.accent100}
+                        fg={dismissed ? color.ink400 : suspended ? '#B91C1C' : '#0F766E'}
                     />
-                    <Pressable
-                        style={({ pressed }) => [styles.toggleBtn, pressed && { opacity: 0.7 }]}
-                        onPress={() => toggleStatus(item)}
-                        disabled={updatingId === item.id}
-                        accessibilityRole="button"
-                        accessibilityLabel={suspended ? t('Reactivate') : t('Suspend')}
-                    >
-                        {updatingId === item.id ? (
-                            <ActivityIndicator size="small" color={color.ink400} />
-                        ) : (
-                            <Text style={styles.toggleText}>{suspended ? t('Reactivate') : t('Suspend')}</Text>
-                        )}
-                    </Pressable>
+                    {!dismissed && (
+                        <>
+                            <Pressable
+                                style={({ pressed }) => [styles.toggleBtn, pressed && { opacity: 0.7 }]}
+                                onPress={() => toggleStatus(item)}
+                                disabled={isUpdating}
+                                accessibilityRole="button"
+                                accessibilityLabel={suspended ? t('Reactivate') : t('Suspend')}
+                            >
+                                {isUpdating ? (
+                                    <ActivityIndicator size="small" color={color.ink400} />
+                                ) : (
+                                    <Text style={styles.toggleText}>{suspended ? t('Reactivate') : t('Suspend')}</Text>
+                                )}
+                            </Pressable>
+                            <Pressable
+                                style={({ pressed }) => [styles.dismissBtn, pressed && { opacity: 0.7 }]}
+                                onPress={() => dismissAgent(item)}
+                                disabled={isUpdating}
+                                accessibilityRole="button"
+                                accessibilityLabel={t('Dismiss')}
+                            >
+                                <Text style={styles.dismissText}>{t('Dismiss')}</Text>
+                            </Pressable>
+                        </>
+                    )}
                 </View>
             </View>
         );
@@ -142,7 +198,14 @@ export default function CoordinatorAgentList() {
                         <MaterialIcons name="arrow-back" size={20} color={color.ink900} />
                     </Pressable>
                     <Text style={styles.headerTitle}>{t('My agents')}</Text>
-                    <View style={{ width: 40 }} />
+                    <Pressable
+                        onPress={() => router.push('/coordinator/create-agent')}
+                        style={styles.backButton}
+                        accessibilityRole="button"
+                        accessibilityLabel={t('Create agent')}
+                    >
+                        <MaterialIcons name="person-add-alt" size={20} color={color.brand600} />
+                    </Pressable>
                 </View>
             </SafeAreaView>
 
@@ -152,6 +215,24 @@ export default function CoordinatorAgentList() {
                     {t('Agents overseeing')}{' '}
                     <Text style={styles.subHeaderStrong}>{user?.state_details?.name || t('your state')}</Text>
                 </Text>
+            </View>
+
+            <View style={styles.searchBox}>
+                <MaterialIcons name="search" size={18} color={color.ink400} />
+                <TextInput
+                    style={styles.searchInput}
+                    placeholder={t('Search by name, phone, or LGA…')}
+                    placeholderTextColor={color.ink300}
+                    value={searchQuery}
+                    onChangeText={setSearchQuery}
+                    autoCapitalize="none"
+                    autoCorrect={false}
+                />
+                {searchQuery.length > 0 && (
+                    <Pressable onPress={() => setSearchQuery('')} accessibilityRole="button" accessibilityLabel={t('Clear search')} hitSlop={8}>
+                        <MaterialIcons name="close" size={18} color={color.ink400} />
+                    </Pressable>
+                )}
             </View>
 
             {loading ? (
@@ -221,6 +302,13 @@ const styles = StyleSheet.create({
     skeletonWrap: { padding: space.xl },
     listContent: { padding: space.xl, paddingBottom: 50 },
 
+    searchBox: {
+        flexDirection: 'row', alignItems: 'center', gap: space.sm,
+        backgroundColor: color.surface, borderRadius: radius.lg, borderWidth: 1, borderColor: color.border,
+        paddingHorizontal: space.lg, height: 44, marginHorizontal: space.xl, marginTop: space.md,
+    },
+    searchInput: { flex: 1, fontFamily: font.semibold, fontSize: 14, color: color.ink900, paddingVertical: 0 },
+
     card: {
         flexDirection: 'row',
         alignItems: 'center',
@@ -234,6 +322,8 @@ const styles = StyleSheet.create({
     info: { flex: 1, marginHorizontal: space.md },
     name: { fontFamily: font.extrabold, fontSize: 14.5, color: color.ink900 },
     email: { fontFamily: font.bold, fontSize: 12, color: color.ink400, marginTop: 2 },
+    lgaRow: { flexDirection: 'row', alignItems: 'center', gap: 3, marginTop: 2 },
+    lgaText: { fontFamily: font.bold, fontSize: 11, color: color.ink400 },
     statsRow: { flexDirection: 'row', gap: space.sm, marginTop: 6 },
     statChip: {
         flexDirection: 'row',
@@ -257,4 +347,14 @@ const styles = StyleSheet.create({
         alignItems: 'center',
     },
     toggleText: { fontFamily: font.extrabold, fontSize: 11, color: color.ink600 },
+    dismissBtn: {
+        paddingHorizontal: 10,
+        paddingVertical: 6,
+        borderRadius: radius.md,
+        borderWidth: 1,
+        borderColor: '#FCA5A5',
+        minWidth: 76,
+        alignItems: 'center',
+    },
+    dismissText: { fontFamily: font.extrabold, fontSize: 11, color: '#B91C1C' },
 });

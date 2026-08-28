@@ -1,4 +1,4 @@
-import { agentAPI, bookingAPI } from '@/src/api/client';
+import { agentAPI, bookingAPI, coordinatorAPI } from '@/src/api/client';
 import type { Submitter } from './offlineQueue';
 
 // One shared registry of "how to actually send this queue item to the
@@ -9,6 +9,9 @@ import type { Submitter } from './offlineQueue';
 export const syncSubmitters: Record<string, Submitter> = {
   agent_register_artisan: (payload, clientRequestId) =>
     agentAPI.registerArtisan({ ...payload, client_request_id: clientRequestId }),
+
+  coordinator_create_agent: (payload, clientRequestId) =>
+    coordinatorAPI.createAgent({ ...payload, client_request_id: clientRequestId }),
 
   // photos are local file URIs, not something the booking-creation
   // endpoint itself accepts — uploaded as a best-effort follow-up here
