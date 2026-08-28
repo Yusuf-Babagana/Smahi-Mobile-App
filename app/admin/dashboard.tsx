@@ -1,7 +1,7 @@
 import React, { useCallback, useState } from 'react';
 import { View, Text, StyleSheet, ScrollView, RefreshControl, Pressable } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useFocusEffect } from 'expo-router';
+import { useFocusEffect, useRouter } from 'expo-router';
 import { MaterialIcons } from '@expo/vector-icons';
 import { StatusBar } from 'expo-status-bar';
 import { useTranslation } from 'react-i18next';
@@ -12,14 +12,20 @@ import { useAuth } from '@/src/contexts/AuthContext';
 import { color, font, radius, shadow, space } from '@/constants/theme';
 import { StatTile, EmptyState, SkeletonCard, useConfirm } from '@/src/components/ui';
 
-// This screen is read-only monitoring, on purpose — every privileged
-// action (suspend a user, approve a verification, moderate a review,
-// resolve a dispute) lives in Django Admin, session-authenticated and
-// entirely separate from the mobile JWT surface. A lost or unlocked
-// phone can never be used to take a destructive action, because this
-// screen has no write path to take one with.
+// This dashboard is read-only monitoring, with ONE deliberate exception:
+// Coordinator management (app/admin/coordinators.tsx, app/admin/
+// create-coordinator.tsx) — Admin creating/suspending/dismissing state
+// coordinators in-app, mirroring Coordinator-creates-Agent one level up
+// the hierarchy, so the whole Admin:Coordinator:Agent chain is
+// self-sufficient without needing Django Admin/server access for routine
+// growth. Every OTHER privileged action (approve a verification,
+// moderate a review, resolve a dispute, suspend an artisan/client) still
+// lives only in Django Admin, session-authenticated and separate from the
+// mobile JWT surface — this was a conscious, narrow trade: a lost or
+// unlocked phone can now create/suspend a coordinator, but nothing else.
 export default function AdminDashboard() {
   const { t } = useTranslation();
+  const router = useRouter();
   const { user, logout } = useAuth();
   const confirm = useConfirm();
 
@@ -89,7 +95,7 @@ export default function AdminDashboard() {
           <View style={styles.readOnlyBanner}>
             <MaterialIcons name="visibility" size={14} color="rgba(255,255,255,0.85)" />
             <Text style={styles.readOnlyText}>
-              {t('Monitoring only — suspend, verify, and moderate from Django Admin')}
+              {t('Monitoring only — verify, moderate, and manage artisans/clients from Django Admin')}
             </Text>
           </View>
         </SafeAreaView>
@@ -141,6 +147,26 @@ export default function AdminDashboard() {
                 <StatTile icon="groups" value={stats.total_clients} label={t('Clients')} />
                 <StatTile icon="badge" value={stats.total_agents} label={t('Agents')} />
               </View>
+            </Animated.View>
+
+            {/* Coordinator management — the one write path this
+                dashboard has, see the file's own top comment. */}
+            <Animated.View entering={FadeInDown.delay(80).duration(350)}>
+              <Pressable
+                style={({ pressed }) => [styles.navCard, pressed && { opacity: 0.85 }]}
+                onPress={() => router.push('/admin/coordinators')}
+                accessibilityRole="button"
+                accessibilityLabel={t('Manage coordinators')}
+              >
+                <View style={styles.navCardIconTile}>
+                  <MaterialIcons name="map" size={22} color={color.brand600} />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.navCardTitle}>{t('Coordinators')}</Text>
+                  <Text style={styles.navCardSubtitle}>{t('Create, suspend, or dismiss state coordinators')}</Text>
+                </View>
+                <MaterialIcons name="chevron-right" size={22} color={color.ink300} />
+              </Pressable>
             </Animated.View>
 
             {/* Verification */}
@@ -300,6 +326,25 @@ const styles = StyleSheet.create({
   sectionTitle: { fontFamily: font.extrabold, fontSize: 14, color: color.ink900, marginBottom: space.md, marginTop: space.sm },
 
   statsGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: space.md, marginBottom: space.xl },
+
+  navCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: space.md,
+    backgroundColor: color.surface,
+    borderRadius: radius.xl,
+    padding: space.lg,
+    borderWidth: 1,
+    borderColor: '#EEF2F8',
+    marginBottom: space.xl,
+    ...shadow.e1,
+  },
+  navCardIconTile: {
+    width: 44, height: 44, borderRadius: radius.lg,
+    backgroundColor: color.brand100, alignItems: 'center', justifyContent: 'center',
+  },
+  navCardTitle: { fontFamily: font.extrabold, fontSize: 14.5, color: color.ink900 },
+  navCardSubtitle: { fontFamily: font.medium, fontSize: 12, color: color.ink400, marginTop: 2 },
 
   card: {
     backgroundColor: color.surface,

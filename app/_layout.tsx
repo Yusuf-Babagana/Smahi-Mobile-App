@@ -184,6 +184,8 @@ export default function RootLayout() {
                   <Stack.Screen name="coordinator/create-agent" options={{ headerShown: false }} />
                   <Stack.Screen name="coordinator/reports" options={{ headerShown: false }} />
                   <Stack.Screen name="admin/dashboard" options={{ headerShown: false }} />
+                  <Stack.Screen name="admin/coordinators" options={{ headerShown: false }} />
+                  <Stack.Screen name="admin/create-coordinator" options={{ headerShown: false }} />
 
                   {/* ✅ 3. Add Chat & Profile Screens */}
                   <Stack.Screen name="artisan-profile" options={{ headerShown: false }} />

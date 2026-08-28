@@ -632,7 +632,26 @@ export const adminAPI = {
       console.error('Admin All Users Error:', error);
       throw error;
     }
-  }
+  },
+
+  // Coordinator management — the one deliberate exception to this
+  // dashboard's otherwise read-only design (see app/admin/dashboard.tsx's
+  // own comment): Admin creates Coordinators the same way Coordinators
+  // create Agents, keeping the whole hierarchy self-sufficient in-app.
+  getCoordinators: async (page: number = 1, params?: { search?: string; state?: string | number; account_status?: string }) => {
+    const response = await apiClient.get('/admin/coordinators/', { params: { page, ...params } });
+    return response.data;
+  },
+
+  createCoordinator: async (data: any) => {
+    const response = await apiClient.post('/admin/coordinators/create/', data);
+    return response.data;
+  },
+
+  setCoordinatorStatus: async (coordinatorId: number, status: 'active' | 'suspended' | 'dismissed') => {
+    const response = await apiClient.post(`/admin/coordinators/${coordinatorId}/status/`, { status });
+    return response.data;
+  },
 };
 
 // Note: a `ticketAPI` used to live here, calling /core/tickets/ — a Django
