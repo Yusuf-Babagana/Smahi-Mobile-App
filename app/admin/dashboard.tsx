@@ -167,6 +167,22 @@ export default function AdminDashboard() {
                 </View>
                 <MaterialIcons name="chevron-right" size={22} color={color.ink300} />
               </Pressable>
+
+              <Pressable
+                style={({ pressed }) => [styles.navCard, pressed && { opacity: 0.85 }]}
+                onPress={() => router.push('/admin/users')}
+                accessibilityRole="button"
+                accessibilityLabel={t('Manage all users')}
+              >
+                <View style={styles.navCardIconTile}>
+                  <MaterialIcons name="manage-accounts" size={22} color={color.brand600} />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.navCardTitle}>{t('All users')}</Text>
+                  <Text style={styles.navCardSubtitle}>{t('View, edit, or deactivate any account')}</Text>
+                </View>
+                <MaterialIcons name="chevron-right" size={22} color={color.ink300} />
+              </Pressable>
             </Animated.View>
 
             {/* Verification */}

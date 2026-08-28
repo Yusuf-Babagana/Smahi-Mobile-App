@@ -5,7 +5,11 @@ import { useTranslation } from 'react-i18next';
 import { color, font, radius, space } from '@/constants/theme';
 
 export interface SearchablePickerItem {
-  id: number;
+  // Almost always numeric (locations/categories), but a caller occasionally
+  // has a fixed, non-numeric option set (e.g. app/admin/user-detail.tsx's
+  // role/status pickers) — every internal use already goes through
+  // String(item.id), so widening this is safe for every existing caller.
+  id: number | string;
   name: string;
 }
 

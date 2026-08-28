@@ -624,14 +624,30 @@ export const adminAPI = {
       throw error;
     }
   },
-  getAllUsers: async () => {
-    try {
-      const response = await apiClient.get('/admin/users/');
-      return getData(response);
-    } catch (error) {
-      console.error('Admin All Users Error:', error);
-      throw error;
-    }
+  // Full User CRUD — the second deliberate exception to this dashboard's
+  // otherwise read-only design (see app/admin/dashboard.tsx's own
+  // comment), built specifically so Admin can view/edit/deactivate any
+  // account directly from the app instead of needing Django Admin.
+  getUsers: async (page: number = 1, params?: { search?: string; role?: string; account_status?: string; state?: string | number }) => {
+    const response = await apiClient.get('/admin/users/', { params: { page, ...params } });
+    return response.data;
+  },
+
+  getUser: async (userId: number) => {
+    const response = await apiClient.get(`/admin/users/${userId}/`);
+    return response.data;
+  },
+
+  updateUser: async (userId: number, data: any) => {
+    const response = await apiClient.patch(`/admin/users/${userId}/`, data);
+    return response.data;
+  },
+
+  // Always a soft-delete server-side (is_active=false, account_status=
+  // 'inactive') — never a real row deletion. See AdminUserDetailView's
+  // own docstring for why.
+  deactivateUser: async (userId: number) => {
+    await apiClient.delete(`/admin/users/${userId}/`);
   },
 
   // Coordinator management — the one deliberate exception to this
