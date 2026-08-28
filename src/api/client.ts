@@ -177,6 +177,22 @@ export const authAPI = {
       }
     }
 
+    // Business: same category_id/custom_category_name mechanic as
+    // artisan above (server-side, Category.category_type='business' keeps
+    // these from ever mixing with the artisan profession list), plus the
+    // business's own name. This branch was missing entirely at first —
+    // exactly the same silent-drop bug latitude/longitude had before —
+    // caught before ever reaching production this time.
+    if (data.role === 'business') {
+      payload.business_name = data.business_name;
+      if (data.custom_category_name) {
+        payload.custom_category_name = data.custom_category_name;
+        payload.category_id = null;
+      } else if (data.category_id) {
+        payload.category_id = Number(data.category_id);
+      }
+    }
+
     const response = await apiClient.post('auth/register/', payload);
     if (response.data.tokens) {
       await SecureStore.setItemAsync('accessToken', response.data.tokens.access);
@@ -387,6 +403,21 @@ export const categoryAPI = {
         return response.data.results ? response.data.results : response.data;
       } catch (error) {
         console.error("Error fetching flat categories:", error);
+        throw error;
+      }
+    });
+  },
+  // Business types (Hospital, Hotel, Grocery Store, etc.) — a completely
+  // separate list from artisan professions above (Category.category_type
+  // server-side), so this gets its own cache key too — sharing
+  // 'categories_flat' would mix the two lists together on-device.
+  getBusinessCategoriesFlat: async () => {
+    return getCached('categories_flat_business', DAY_MS, async () => {
+      try {
+        const response = await apiClient.get('categories/all/', { params: { type: 'business' } });
+        return response.data.results ? response.data.results : response.data;
+      } catch (error) {
+        console.error("Error fetching flat business categories:", error);
         throw error;
       }
     });

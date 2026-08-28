@@ -80,6 +80,15 @@ export default function RegisterScreen() {
   // pick an icon for their custom profession explicitly instead of leaving
   // it to the app's keyword-guessed default (professionIcon()).
   const [customIcon, setCustomIcon] = useState('');
+
+  // Business registration — deliberately separate from artisan (a
+  // business isn't an individual tradesperson): its own name and its own
+  // category list (Category.category_type='business' server-side, never
+  // mixed with the artisan profession list above).
+  const [businessName, setBusinessName] = useState('');
+  const [businessCategories, setBusinessCategories] = useState<any[]>([]);
+  const [selectedBusinessCategory, setSelectedBusinessCategory] = useState('');
+  const [customBusinessCategoryName, setCustomBusinessCategoryName] = useState('');
   const [countries, setCountries] = useState<any[]>([]);
   const [states, setStates] = useState<any[]>([]);
   const [lgas, setLgas] = useState<any[]>([]);
@@ -123,6 +132,18 @@ export default function RegisterScreen() {
       mapped.push({ label: 'Other (type below…)', value: '__custom__' });
       setServices(mapped);
     }).catch(err => console.error("❌ CATEGORIES ERROR:", err));
+
+    // Business types (Hospital, Hotel, Grocery Store, etc.) — a completely
+    // separate list from the artisan professions above, never mixed
+    // together (see Category.category_type server-side).
+    categoryAPI.getBusinessCategoriesFlat().then(data => {
+      const mapped = data.map((cat: any) => ({
+        label: cat.name,
+        value: cat.id.toString()
+      }));
+      mapped.push({ label: 'Other (type below…)', value: '__custom__' });
+      setBusinessCategories(mapped);
+    }).catch(err => console.error("❌ BUSINESS CATEGORIES ERROR:", err));
   }, []);
 
   useEffect(() => {
@@ -170,6 +191,14 @@ export default function RegisterScreen() {
           newErrors['customCategory'] = "Enter your profession";
         }
       }
+      if (role === 'business') {
+        if (!businessName.trim()) newErrors['businessName'] = "Enter your business name";
+        if (!selectedBusinessCategory) {
+          newErrors['businessCategory'] = "Select your business type";
+        } else if (selectedBusinessCategory === '__custom__' && !customBusinessCategoryName.trim()) {
+          newErrors['customBusinessCategory'] = "Enter your business type";
+        }
+      }
     }
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
@@ -209,9 +238,16 @@ export default function RegisterScreen() {
         role,
         phone_number: phone,
         gender: gender || undefined,
-        category_id: role === 'artisan' && selectedService !== '__custom__' ? selectedService : undefined,
-        custom_category_name: role === 'artisan' && selectedService === '__custom__' ? customCategoryName.trim() : undefined,
+        category_id:
+          role === 'artisan' && selectedService !== '__custom__' ? selectedService :
+          role === 'business' && selectedBusinessCategory !== '__custom__' ? selectedBusinessCategory :
+          undefined,
+        custom_category_name:
+          role === 'artisan' && selectedService === '__custom__' ? customCategoryName.trim() :
+          role === 'business' && selectedBusinessCategory === '__custom__' ? customBusinessCategoryName.trim() :
+          undefined,
         custom_category_icon: role === 'artisan' && selectedService === '__custom__' ? customIcon || undefined : undefined,
+        business_name: role === 'business' ? businessName.trim() : undefined,
         country: selectedCountry,
         state: selectedState,
         lga: selectedLga,
@@ -455,6 +491,7 @@ export default function RegisterScreen() {
               <View style={styles.formSection}>
                 <RoleCard title={t('Hire artisans')} subtitle={t('Find verified professionals near you')} icon="search" selected={role === 'client'} onPress={() => setRole('client')} />
                 <RoleCard title={t('Work as an artisan')} subtitle={t('Offer services & earn')} icon="handyman" selected={role === 'artisan'} onPress={() => setRole('artisan')} />
+                <RoleCard title={t('Register a business')} subtitle={t('Hospital, hotel, shop & more')} icon="storefront" selected={role === 'business'} onPress={() => setRole('business')} />
                 <RoleCard title={t('Field agent')} subtitle={t('Register artisans (approval required)')} icon="badge" selected={role === 'agent'} onPress={() => setRole('agent')} />
                 <RoleCard title={t('State coordinator')} subtitle={t('Manage state operations (approval required)')} icon="map" selected={role === 'state_coordinator'} onPress={() => setRole('state_coordinator')} />
 
@@ -516,10 +553,46 @@ export default function RegisterScreen() {
                   </View>
                 )}
 
+                {role === 'business' && (
+                  <View style={styles.sectionCard}>
+                    <Text style={styles.cardTitle}>{t('Your business')}</Text>
+                    <Input
+                      label={t('Business name')}
+                      placeholder={t('e.g. Amina Grocery Store')}
+                      value={businessName}
+                      onChangeText={setBusinessName}
+                      icon="storefront"
+                      error={errors.businessName}
+                      containerStyle={{ marginBottom: space.md }}
+                    />
+                    <ServiceCategoryPicker
+                      label={t('Business type')}
+                      placeholder={t('Select business type')}
+                      value={selectedBusinessCategory}
+                      onValueChange={(val) => { setSelectedBusinessCategory(val); setCustomBusinessCategoryName(''); }}
+                      items={businessCategories}
+                    />
+                    {errors.businessCategory && <Text style={styles.errorText}>{errors.businessCategory}</Text>}
+
+                    {selectedBusinessCategory === '__custom__' && (
+                      <View style={{ marginTop: space.md }}>
+                        <Input
+                          label={t('Your business type')}
+                          placeholder={t('e.g. Furniture Showroom')}
+                          value={customBusinessCategoryName}
+                          onChangeText={setCustomBusinessCategoryName}
+                          icon="edit"
+                          error={errors.customBusinessCategory}
+                        />
+                      </View>
+                    )}
+                  </View>
+                )}
+
                 <View style={styles.sectionCard}>
                   <Text style={styles.cardTitle}>{t('Location details')}</Text>
                   <Text style={styles.locationHint}>
-                    {role === 'artisan'
+                    {role === 'artisan' || role === 'business'
                       ? t("We'll also use your device's location so clients can find you nearby — you may see a permission request.")
                       : t("We'll also use your device's location to show you nearby services — you may see a permission request.")}
                   </Text>
