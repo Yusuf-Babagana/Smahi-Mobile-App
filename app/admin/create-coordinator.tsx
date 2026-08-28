@@ -86,7 +86,15 @@ export default function AdminCreateCoordinatorScreen() {
                 setFormData({ first_name: '', last_name: '', email: '', phone: '', country: formData.country, state: formData.state });
             }
         } catch (error: any) {
-            const msg = error.response?.data ? JSON.stringify(error.response.data) : t('Could not create this coordinator.');
+            // AdminCreateCoordinatorView's own errors (e.g. "This state
+            // already has a coordinator...") come back as a plain
+            // {error: "..."} string — show that directly rather than a
+            // raw JSON blob. Falls back to the generic message for
+            // anything else unexpected.
+            const data = error.response?.data;
+            const msg = typeof data?.error === 'string' ? data.error
+                : data ? JSON.stringify(data)
+                : t('Could not create this coordinator.');
             showToast(msg, { type: 'error' });
         } finally {
             setLoading(false);
