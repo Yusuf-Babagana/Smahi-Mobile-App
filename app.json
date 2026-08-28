@@ -49,7 +49,6 @@
       "expo-router",
       "expo-web-browser",
       "expo-localization",
-      "expo-speech-recognition",
       "expo-file-system",
       [
         "expo-splash-screen",
