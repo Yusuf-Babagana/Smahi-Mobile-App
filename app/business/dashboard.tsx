@@ -11,6 +11,7 @@ import { useTranslation } from 'react-i18next';
 import { businessAPI } from '@/src/api/client';
 import { useAuth } from '@/src/contexts/AuthContext';
 import { EmailVerificationBanner } from '@/src/components/EmailVerificationBanner';
+import { NotificationBell } from '@/src/components/NotificationBell';
 import { color, font, radius, shadow, space, type } from '@/constants/theme';
 import { Avatar, Badge, Button, Input, useConfirm } from '@/src/components/ui';
 import type { BadgeStatus } from '@/src/components/ui';
@@ -116,10 +117,31 @@ export default function BusinessDashboard() {
         <SafeAreaView edges={['top', 'left', 'right']}>
           <View style={styles.topBar}>
             <Text style={styles.brandName}>S-MAHII {t('Business')}</Text>
-            <Pressable style={styles.logoutButton} onPress={handleLogout} accessibilityRole="button" accessibilityLabel={t('Log Out')}>
-              <MaterialIcons name="logout" size={16} color="#FECACA" />
-              <Text style={styles.logoutText}>{t('Exit')}</Text>
-            </Pressable>
+            <View style={styles.headerActions}>
+              {/* Every Dashboard Must Be Connected (item 10) — this
+                  dashboard previously had zero navigation of its own. */}
+              <Pressable
+                style={styles.iconBtn}
+                onPress={() => router.push('/chat/ai')}
+                accessibilityRole="button"
+                accessibilityLabel="AI assistant"
+              >
+                <MaterialIcons name="auto-awesome" size={17} color="#FACC15" />
+              </Pressable>
+              <Pressable
+                style={styles.iconBtn}
+                onPress={() => router.push('/help-center')}
+                accessibilityRole="button"
+                accessibilityLabel={t('Help')}
+              >
+                <MaterialIcons name="help-outline" size={18} color="#FFF" />
+              </Pressable>
+              <NotificationBell iconColor="#FFF" size={18} style={styles.iconBtn} />
+              <Pressable style={styles.logoutButton} onPress={handleLogout} accessibilityRole="button" accessibilityLabel={t('Log Out')}>
+                <MaterialIcons name="logout" size={16} color="#FECACA" />
+                <Text style={styles.logoutText}>{t('Exit')}</Text>
+              </Pressable>
+            </View>
           </View>
 
           <View style={styles.profileSection}>
@@ -220,6 +242,12 @@ const styles = StyleSheet.create({
     paddingHorizontal: space.xl, paddingTop: space.md,
   },
   brandName: { fontFamily: font.extrabold, fontSize: 14, color: '#FFF', letterSpacing: 0.3 },
+  headerActions: { flexDirection: 'row', alignItems: 'center', gap: space.sm },
+  iconBtn: {
+    width: 34, height: 34, borderRadius: radius.md,
+    backgroundColor: 'rgba(255,255,255,0.1)',
+    alignItems: 'center', justifyContent: 'center',
+  },
   logoutButton: {
     flexDirection: 'row', alignItems: 'center', gap: 4,
     paddingHorizontal: 10, paddingVertical: 6, borderRadius: radius.md,

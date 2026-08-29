@@ -14,6 +14,7 @@ import { useTranslation } from 'react-i18next';
 import { agentAPI, coordinatorAPI } from '@/src/api/client';
 import { useAuth } from '@/src/contexts/AuthContext';
 import { EmailVerificationBanner } from '@/src/components/EmailVerificationBanner';
+import { NotificationBell } from '@/src/components/NotificationBell';
 import { color, font, radius, shadow, space, type } from '@/constants/theme';
 import { Avatar, useConfirm } from '@/src/components/ui';
 import { useOfflineQueue, processQueue } from '@/src/utils/offlineQueue';
@@ -188,10 +189,32 @@ export default function AgentDashboard() {
           {/* Top Bar with Logout */}
           <View style={styles.topBar}>
             <Text style={styles.brandName}>S-MAHII {t('Agent')}</Text>
-            <Pressable style={styles.logoutButton} onPress={handleLogout} accessibilityRole="button" accessibilityLabel={t('Log Out')}>
-              <MaterialIcons name="logout" size={16} color="#FECACA" />
-              <Text style={styles.logoutText}>{t('Exit')}</Text>
-            </Pressable>
+            <View style={styles.headerActions}>
+              {/* Every Dashboard Must Be Connected (item 10) — a plain
+                  agent had no path to the AI assistant/Help Center at all
+                  (both were coordinator-only until now). */}
+              <Pressable
+                style={styles.iconBtn}
+                onPress={() => router.push('/chat/ai')}
+                accessibilityRole="button"
+                accessibilityLabel="AI assistant"
+              >
+                <MaterialIcons name="auto-awesome" size={17} color="#FACC15" />
+              </Pressable>
+              <Pressable
+                style={styles.iconBtn}
+                onPress={() => router.push('/help-center')}
+                accessibilityRole="button"
+                accessibilityLabel={t('Help')}
+              >
+                <MaterialIcons name="help-outline" size={18} color="#FFF" />
+              </Pressable>
+              <NotificationBell iconColor="#FFF" size={18} style={styles.iconBtn} />
+              <Pressable style={styles.logoutButton} onPress={handleLogout} accessibilityRole="button" accessibilityLabel={t('Log Out')}>
+                <MaterialIcons name="logout" size={16} color="#FECACA" />
+                <Text style={styles.logoutText}>{t('Exit')}</Text>
+              </Pressable>
+            </View>
           </View>
 
           {/* User Profile Section — tap through to My Profile (Digital ID,
@@ -544,6 +567,12 @@ const styles = StyleSheet.create({
     fontFamily: font.extrabold,
     fontSize: 15,
     letterSpacing: 0.3,
+  },
+  headerActions: { flexDirection: 'row', alignItems: 'center', gap: space.sm },
+  iconBtn: {
+    width: 34, height: 34, borderRadius: radius.md,
+    backgroundColor: 'rgba(255,255,255,0.1)',
+    alignItems: 'center', justifyContent: 'center',
   },
   logoutButton: {
     flexDirection: 'row',

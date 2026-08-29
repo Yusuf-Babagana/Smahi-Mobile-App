@@ -26,6 +26,7 @@ import {
 } from '@/src/components/ui';
 import { recordSearch } from '@/src/utils/recommendations';
 import { openDirections } from '@/src/utils/directions';
+import { NotificationBell } from '@/src/components/NotificationBell';
 
 const DISTANCE_OPTIONS = [
   { label: '5 km', value: 5 },
@@ -718,6 +719,7 @@ export default function ClientHomeScreen() {
                   sets which language incoming chat messages get
                   automatically translated into). */}
               <LanguagePickerChip variant="dark" />
+              <NotificationBell iconColor="#FFF" size={18} style={styles.iconBtn} />
               <TouchableOpacity
                 style={styles.iconBtn}
                 onPress={() => router.push('/chat/ai')}

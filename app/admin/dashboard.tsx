@@ -11,6 +11,7 @@ import { adminAPI } from '@/src/api/client';
 import { useAuth } from '@/src/contexts/AuthContext';
 import { color, font, radius, shadow, space } from '@/constants/theme';
 import { StatTile, EmptyState, SkeletonCard, useConfirm } from '@/src/components/ui';
+import { NotificationBell } from '@/src/components/NotificationBell';
 
 // This dashboard is read-only monitoring, with ONE deliberate exception:
 // Coordinator management (app/admin/coordinators.tsx, app/admin/
@@ -86,10 +87,23 @@ export default function AdminDashboard() {
               <Text style={styles.brandName}>{t('S-MAHII Admin')}</Text>
               <Text style={styles.subGreeting}>{displayName}</Text>
             </View>
-            <Pressable style={styles.logoutButton} onPress={handleLogout} accessibilityRole="button" accessibilityLabel={t('Log Out')}>
-              <MaterialIcons name="logout" size={16} color="#FECACA" />
-              <Text style={styles.logoutText}>{t('Exit')}</Text>
-            </Pressable>
+            <View style={styles.headerActions}>
+              {/* Every Dashboard Must Be Connected (item 10) — Admin had
+                  no Help Center/notifications entry point at all. */}
+              <Pressable
+                style={styles.iconBtn}
+                onPress={() => router.push('/help-center')}
+                accessibilityRole="button"
+                accessibilityLabel={t('Help')}
+              >
+                <MaterialIcons name="help-outline" size={18} color="#FFF" />
+              </Pressable>
+              <NotificationBell iconColor="#FFF" size={18} style={styles.iconBtn} />
+              <Pressable style={styles.logoutButton} onPress={handleLogout} accessibilityRole="button" accessibilityLabel={t('Log Out')}>
+                <MaterialIcons name="logout" size={16} color="#FECACA" />
+                <Text style={styles.logoutText}>{t('Exit')}</Text>
+              </Pressable>
+            </View>
           </View>
 
           <View style={styles.readOnlyBanner}>
@@ -295,6 +309,12 @@ const styles = StyleSheet.create({
   },
   brandName: { color: '#FFF', fontFamily: font.extrabold, fontSize: 17, letterSpacing: 0.3 },
   subGreeting: { color: 'rgba(255,255,255,0.72)', fontFamily: font.bold, fontSize: 12.5, marginTop: 2 },
+  headerActions: { flexDirection: 'row', alignItems: 'center', gap: space.sm },
+  iconBtn: {
+    width: 34, height: 34, borderRadius: radius.md,
+    backgroundColor: 'rgba(255,255,255,0.1)',
+    alignItems: 'center', justifyContent: 'center',
+  },
   logoutButton: {
     flexDirection: 'row',
     alignItems: 'center',

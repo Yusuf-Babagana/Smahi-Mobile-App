@@ -818,6 +818,34 @@ export const deviceAPI = {
   },
 };
 
+// --- NOTIFICATIONS (in-app inbox) ---
+// Every Dashboard Must Be Connected (item 10) — a Notification has always
+// existed server-side (emit() writes one for every booking/verification/
+// dispute/agent event) but there was no way to read that history back
+// from inside the app at all, only via Django Admin. This is what every
+// dashboard's bell icon now calls.
+export const notificationAPI = {
+  getNotifications: async (page: number = 1) => {
+    const response = await apiClient.get('/notifications/', { params: { page } });
+    return response.data;
+  },
+
+  getUnreadCount: async () => {
+    const response = await apiClient.get('/notifications/unread-count/');
+    return response.data;
+  },
+
+  markRead: async (id: number) => {
+    const response = await apiClient.post(`/notifications/${id}/read/`);
+    return response.data;
+  },
+
+  markAllRead: async () => {
+    const response = await apiClient.post('/notifications/mark-all-read/');
+    return response.data;
+  },
+};
+
 // --- PAYMENTS (Paystack registration fee) ---
 export const paymentAPI = {
   // Pass the email explicitly when you have it (e.g. the register screen);

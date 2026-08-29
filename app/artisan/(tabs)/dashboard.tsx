@@ -13,6 +13,7 @@ import { useTranslation } from 'react-i18next';
 import { authAPI, artisanAPI, bookingAPI } from '@/src/api/client';
 import { useLocation } from '@/src/contexts/LocationContext';
 import { EmailVerificationBanner } from '@/src/components/EmailVerificationBanner';
+import { NotificationBell } from '@/src/components/NotificationBell';
 import { CLOUDINARY_CLOUD_NAME as CLOUD_NAME } from '@/src/constants/env';
 import { color, font, radius, shadow, space, type } from '@/constants/theme';
 import { Avatar, Badge, Button, LanguagePickerChip, StatTile, useToast, useConfirm } from '@/src/components/ui';
@@ -304,9 +305,27 @@ export default function ArtisanDashboard() {
             </View>
 
             <View style={styles.headerActions}>
-              <Pressable style={styles.iconBtn} accessibilityRole="button" accessibilityLabel={t('Notifications')}>
-                <MaterialIcons name="notifications" size={19} color="#FFF" />
+              {/* Every Dashboard Must Be Connected (item 10) — AI
+                  assistant/Help Center were previously unreachable for an
+                  artisan; the bell used to be a dead button with no
+                  onPress at all. */}
+              <Pressable
+                style={styles.iconBtn}
+                onPress={() => router.push('/chat/ai')}
+                accessibilityRole="button"
+                accessibilityLabel="AI assistant"
+              >
+                <MaterialIcons name="auto-awesome" size={18} color="#FACC15" />
               </Pressable>
+              <Pressable
+                style={styles.iconBtn}
+                onPress={() => router.push('/help-center')}
+                accessibilityRole="button"
+                accessibilityLabel={t('Help')}
+              >
+                <MaterialIcons name="help-outline" size={19} color="#FFF" />
+              </Pressable>
+              <NotificationBell iconColor="#FFF" size={19} style={styles.iconBtn} />
               {/* Which language incoming chat messages get auto-translated
                   into — separate from the app's own interface language. */}
               <LanguagePickerChip variant="dark" />
