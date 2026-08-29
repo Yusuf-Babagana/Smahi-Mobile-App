@@ -42,6 +42,7 @@ export default function AgentDashboard() {
     // omits these entirely for a plain agent (no one "under" them to count).
     total_agents: undefined as number | undefined,
     active_agents: undefined as number | undefined,
+    pending_agents: undefined as number | undefined,
   });
   const [refreshing, setRefreshing] = useState(false);
 
@@ -287,10 +288,12 @@ export default function AgentDashboard() {
             <>
               <ActionCard
                 title={t('My agents')}
-                subtitle={t('Oversee & manage')}
+                subtitle={
+                  stats.pending_agents ? t('{{count}} pending approval', { count: stats.pending_agents }) : t('Oversee & manage')
+                }
                 icon="supervisor-account"
-                tileBg={color.accent100}
-                tileFg={color.accent600}
+                tileBg={stats.pending_agents ? color.warn100 : color.accent100}
+                tileFg={stats.pending_agents ? color.warn600 : color.accent600}
                 onPress={() => router.push('/coordinator/agents')}
               />
               <ActionCard

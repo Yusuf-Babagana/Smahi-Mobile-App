@@ -716,7 +716,7 @@ export const coordinatorAPI = {
     return response.data;
   },
 
-  setAgentStatus: async (agentId: number, status: 'active' | 'suspended' | 'dismissed') => {
+  setAgentStatus: async (agentId: number, status: 'active' | 'suspended' | 'dismissed' | 'rejected') => {
     const response = await apiClient.post(`v1/coordinator/agents/${agentId}/status/`, { status });
     return response.data;
   },

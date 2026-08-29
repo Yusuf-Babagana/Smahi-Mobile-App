@@ -90,13 +90,19 @@ export default function CoordinatorCreateAgentScreen() {
                 const generatedPassword = synced.serverResult?.generated_password;
                 const alreadyRegistered = synced.serverResult?.already_registered;
 
+                const serialNumber = synced.serverResult?.serial_number || synced.serverResult?.user?.serial_number;
+                const pendingNote = t('They will show as Pending Approval until you approve them from My Agents.');
+
                 const done = await confirm({
-                    title: alreadyRegistered ? t('Already created') : t('Agent created'),
+                    title: alreadyRegistered ? t('Already created') : t('Agent created — pending your approval'),
                     message: alreadyRegistered
                         ? (synced.serverResult?.message || t('This agent was already created.'))
                         : generatedPassword
-                            ? t('Share this one-time password with them securely — it will not be shown again:') + `\n\n${generatedPassword}`
-                            : t('Agent created successfully.'),
+                            ? t('Share this one-time password with them securely — it will not be shown again:')
+                                + `\n\n${generatedPassword}`
+                                + (serialNumber ? `\n\n${t('Agent ID')}: ${serialNumber}` : '')
+                                + `\n\n${pendingNote}`
+                            : `${t('Agent created successfully.')} ${pendingNote}`,
                     confirmLabel: t('Done'),
                     cancelLabel: t('Create another'),
                 });
@@ -205,6 +211,13 @@ export default function CoordinatorCreateAgentScreen() {
                         <MaterialIcons name="lock-outline" size={16} color={color.brand600} />
                         <Text style={styles.noteText}>
                             {t("A one-time password will be generated and shown to you after creation — you'll need to share it with the agent yourself.")}
+                        </Text>
+                    </View>
+
+                    <View style={styles.noteBanner}>
+                        <MaterialIcons name="pending-actions" size={16} color={color.brand600} />
+                        <Text style={styles.noteText}>
+                            {t('New agents start out Pending Approval — they cannot use the Agent Dashboard until you approve them from My Agents.')}
                         </Text>
                     </View>
 

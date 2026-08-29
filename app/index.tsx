@@ -36,6 +36,8 @@ export default function Index() {
           router.replace('/activate');
         } else if (user.account_status === 'suspended') {
           router.replace('/login');
+        } else if (user.account_status === 'pending_approval') {
+          router.replace('/agent-pending-approval');
         } else {
           router.replace(getHomeRouteForRole(user.role));
         }

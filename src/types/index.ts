@@ -86,7 +86,7 @@ export interface User {
   email_verified?: boolean;
   // Artisans must pay a registration fee before their account is activated
   registration_fee_paid?: boolean;
-  account_status?: 'active' | 'suspended' | 'locked';
+  account_status?: 'active' | 'suspended' | 'locked' | 'pending_approval' | 'rejected';
   created_at?: string;
   serial_number?: string;
   // Default language incoming/outgoing chat messages are automatically

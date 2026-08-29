@@ -55,6 +55,14 @@ export default function LoginScreen() {
         return;
       }
 
+      // ✅ Agents created by a Coordinator start out pending approval — they
+      // can log in (is_active stays true so this branch is even reachable)
+      // but must not reach the real Agent Dashboard until approved.
+      if (user.account_status === 'pending_approval') {
+        router.replace('/agent-pending-approval');
+        return;
+      }
+
       // ✅ Artisans who haven't paid registration fee are redirected to payment
       if (user.role === 'artisan' && user.registration_fee_paid === false) {
         try {
