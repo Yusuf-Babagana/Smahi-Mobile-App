@@ -321,6 +321,14 @@ export default function AgentDashboard() {
                 tileFg={color.warn600}
                 onPress={() => router.push('/coordinator/reports')}
               />
+              <ActionCard
+                title={t('LGA management')}
+                subtitle={t('Drill into an LGA')}
+                icon="location-city"
+                tileBg={color.brand100}
+                tileFg={color.brand600}
+                onPress={() => router.push('/coordinator/lgas')}
+              />
             </>
           )}
         </View>

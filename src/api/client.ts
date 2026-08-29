@@ -744,6 +744,16 @@ export const coordinatorAPI = {
     const response = await apiClient.get('v1/coordinator/activity-log/', { params: { page, ...params } });
     return response.data;
   },
+
+  // LGA-Level Management (State -> LGA -> Agents -> Activities) — one
+  // consolidated payload (agents, verification stats, reports, booking
+  // performance, recent activity) for a single LGA in the coordinator's
+  // own state, so drilling into an LGA never leaves the dashboard. See
+  // CoordinatorLGAOverviewView.
+  getLGAOverview: async (lgaId: number | string) => {
+    const response = await apiClient.get(`v1/coordinator/lgas/${lgaId}/overview/`);
+    return response.data;
+  },
 };
 
 // --- FAVORITES (saved artisans) ---
