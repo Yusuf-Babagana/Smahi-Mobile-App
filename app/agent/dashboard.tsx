@@ -11,13 +11,14 @@ import * as SecureStore from 'expo-secure-store';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useTranslation } from 'react-i18next';
 
-import { agentAPI } from '@/src/api/client';
+import { agentAPI, coordinatorAPI } from '@/src/api/client';
 import { useAuth } from '@/src/contexts/AuthContext';
 import { EmailVerificationBanner } from '@/src/components/EmailVerificationBanner';
 import { color, font, radius, shadow, space, type } from '@/constants/theme';
 import { Avatar, useConfirm } from '@/src/components/ui';
 import { useOfflineQueue, processQueue } from '@/src/utils/offlineQueue';
 import { syncSubmitters } from '@/src/utils/syncSubmitters';
+import { ACTIVITY_ACTION_ICONS, formatActivityWhen } from '@/src/utils/activityLog';
 
 export default function AgentDashboard() {
   const router = useRouter();
@@ -45,6 +46,10 @@ export default function AgentDashboard() {
     pending_agents: undefined as number | undefined,
   });
   const [refreshing, setRefreshing] = useState(false);
+  // Recent Activities — Coordinator Dashboard spec item 3. Only fetched
+  // for a state_coordinator (see CoordinatorActivityLogView); a plain
+  // agent has nothing to oversee, so this stays empty for them.
+  const [recentActivity, setRecentActivity] = useState<any[]>([]);
 
   // --- ACTIONS ---
 
@@ -52,6 +57,10 @@ export default function AgentDashboard() {
     try {
       const data = await agentAPI.getDashboardStats();
       setStats(data);
+      if (isCoordinator) {
+        const activityData = await coordinatorAPI.getActivityLog(1);
+        setRecentActivity((activityData.results || []).slice(0, 4));
+      }
     } catch (error) {
       console.log("Dashboard Error", error);
     } finally {
@@ -356,6 +365,46 @@ export default function AgentDashboard() {
           )}
         </View>
 
+        {/* RECENT ACTIVITIES — Coordinator Dashboard spec item 3. A short
+            preview of the state-wide Activity Log; "View all" opens the
+            full, paginated list (app/coordinator/activity-log.tsx). */}
+        {isCoordinator && (
+          <>
+            <View style={styles.sectionHeaderRow}>
+              <Text style={[styles.sectionTitle, { marginTop: 0 }]}>{t('Recent activities')}</Text>
+              <Pressable onPress={() => router.push('/coordinator/activity-log')} accessibilityRole="button">
+                <Text style={styles.viewAllLink}>{t('View all')}</Text>
+              </Pressable>
+            </View>
+            <View style={styles.activityCard}>
+              {recentActivity.length === 0 ? (
+                <Text style={styles.activityEmpty}>{t('No activity yet.')}</Text>
+              ) : (
+                recentActivity.map((item, index) => {
+                  const { date, time } = formatActivityWhen(item.created_at);
+                  return (
+                    <View key={item.id} style={[styles.activityRow, index > 0 && styles.activityRowDivider]}>
+                      <View style={styles.activityIconTile}>
+                        <MaterialIcons name={ACTIVITY_ACTION_ICONS[item.action] || 'history'} size={16} color={color.brand600} />
+                      </View>
+                      <View style={{ flex: 1 }}>
+                        <Text style={styles.activityLine} numberOfLines={2}>
+                          <Text style={styles.activityActor}>{item.actor_name}</Text>
+                          <Text style={styles.activityArrow}> {'→'} </Text>
+                          <Text style={styles.activityAction}>{item.action_display}</Text>
+                        </Text>
+                        <Text style={styles.activityMeta} numberOfLines={1}>
+                          {item.lga_details?.name ? `${item.lga_details.name} ${'•'} ` : ''}{date} {'•'} {time}
+                        </Text>
+                      </View>
+                    </View>
+                  );
+                })
+              )}
+            </View>
+          </>
+        )}
+
       </ScrollView>
     </View>
   );
@@ -513,4 +562,34 @@ const styles = StyleSheet.create({
   },
   trendText: { color: color.accent600, fontFamily: font.extrabold, fontSize: 11, marginLeft: 2 },
   horizontalDivider: { height: StyleSheet.hairlineWidth, backgroundColor: color.border },
+
+  // Recent activities preview
+  sectionHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginTop: space.xxl,
+    marginBottom: space.md,
+  },
+  viewAllLink: { fontFamily: font.extrabold, fontSize: 12.5, color: color.brand600 },
+  activityCard: {
+    backgroundColor: color.surface,
+    borderRadius: radius.xl,
+    padding: space.lg,
+    borderWidth: 1,
+    borderColor: '#EEF2F8',
+  },
+  activityEmpty: { fontFamily: font.medium, fontSize: 13, color: color.ink400, textAlign: 'center', paddingVertical: space.md },
+  activityRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: space.md },
+  activityRowDivider: { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: color.border },
+  activityIconTile: {
+    width: 32, height: 32, borderRadius: radius.md,
+    backgroundColor: color.brand100, alignItems: 'center', justifyContent: 'center',
+    marginRight: space.md,
+  },
+  activityLine: { fontSize: 13, lineHeight: 18 },
+  activityActor: { fontFamily: font.extrabold, color: color.ink900 },
+  activityArrow: { fontFamily: font.bold, color: color.ink300 },
+  activityAction: { fontFamily: font.bold, color: color.ink600 },
+  activityMeta: { fontFamily: font.bold, fontSize: 11, color: color.ink300, marginTop: 2 },
 });

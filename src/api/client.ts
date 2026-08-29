@@ -736,6 +736,14 @@ export const coordinatorAPI = {
     const response = await apiClient.get('v1/coordinator/reports/', { params: { page, ...params } });
     return response.data;
   },
+
+  // Recent Activities / Activity Log — see CoordinatorActivityLogView.
+  // Read-only, actor-centric audit trail scoped to the coordinator's own
+  // state (who did what, to whom, in which LGA, with what resulting status).
+  getActivityLog: async (page: number = 1, params?: { action?: string; search?: string }) => {
+    const response = await apiClient.get('v1/coordinator/activity-log/', { params: { page, ...params } });
+    return response.data;
+  },
 };
 
 // --- FAVORITES (saved artisans) ---
