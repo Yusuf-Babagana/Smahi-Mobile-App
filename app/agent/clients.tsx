@@ -20,6 +20,9 @@ export default function AgentClientList() {
     const [loadingMore, setLoadingMore] = useState(false); // Pagination Load
     const [page, setPage] = useState(1);
     const [hasMore, setHasMore] = useState(true);      // Are there more pages?
+    // Only a state_coordinator sees the whole state — a plain agent is
+    // scoped server-side to their own LGA (AgentClientListView).
+    const isCoordinator = user?.role === 'state_coordinator';
 
     useEffect(() => {
         if (user) {
@@ -108,7 +111,7 @@ export default function AgentClientList() {
                     <Pressable onPress={() => router.back()} style={styles.backButton} accessibilityRole="button" accessibilityLabel={t('Back')}>
                         <MaterialIcons name="arrow-back" size={20} color={color.ink900} />
                     </Pressable>
-                    <Text style={styles.headerTitle}>{t('My state clients')}</Text>
+                    <Text style={styles.headerTitle}>{isCoordinator ? t('My state clients') : t('My LGA clients')}</Text>
                     <View style={{ width: 40 }} />
                 </View>
             </SafeAreaView>
@@ -117,7 +120,11 @@ export default function AgentClientList() {
                 <MaterialIcons name="place" size={14} color={color.brand600} />
                 <Text style={styles.subHeaderText}>
                     {t('Listing all clients in')}{' '}
-                    <Text style={styles.subHeaderStrong}>{user?.state_details?.name || t('your state')}</Text>
+                    <Text style={styles.subHeaderStrong}>
+                        {isCoordinator
+                            ? (user?.state_details?.name || t('your state'))
+                            : (user?.lga_details?.name || t('your LGA'))}
+                    </Text>
                 </Text>
             </View>
 
@@ -141,8 +148,10 @@ export default function AgentClientList() {
                     ListEmptyComponent={
                         <EmptyState
                             icon="person-search"
-                            title={t('No clients found in this state.')}
-                            message={t('Clients who register in your state will appear here.')}
+                            title={isCoordinator ? t('No clients found in this state.') : t('No clients found in this LGA.')}
+                            message={isCoordinator
+                                ? t('Clients who register in your state will appear here.')
+                                : t('Clients who register in your LGA will appear here.')}
                         />
                     }
                 />

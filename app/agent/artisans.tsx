@@ -20,6 +20,9 @@ export default function AgentArtisanList() {
     const [loadingMore, setLoadingMore] = useState(false); // Pagination Load
     const [page, setPage] = useState(1);
     const [hasMore, setHasMore] = useState(true);      // Are there more pages?
+    // Only a state_coordinator sees the whole state — a plain agent is
+    // scoped server-side to their own LGA (AgentArtisanListView).
+    const isCoordinator = user?.role === 'state_coordinator';
 
     useEffect(() => {
         if (user) {
@@ -117,7 +120,7 @@ export default function AgentArtisanList() {
                     <Pressable onPress={() => router.back()} style={styles.backButton} accessibilityRole="button" accessibilityLabel={t('Back')}>
                         <MaterialIcons name="arrow-back" size={20} color={color.ink900} />
                     </Pressable>
-                    <Text style={styles.headerTitle}>{t('My state artisans')}</Text>
+                    <Text style={styles.headerTitle}>{isCoordinator ? t('My state artisans') : t('My LGA artisans')}</Text>
                     <View style={{ width: 40 }} />
                 </View>
             </SafeAreaView>
@@ -126,7 +129,11 @@ export default function AgentArtisanList() {
                 <MaterialIcons name="place" size={14} color={color.brand600} />
                 <Text style={styles.subHeaderText}>
                     {t('Listing all artisans in')}{' '}
-                    <Text style={styles.subHeaderStrong}>{user?.state_details?.name || t('your state')}</Text>
+                    <Text style={styles.subHeaderStrong}>
+                        {isCoordinator
+                            ? (user?.state_details?.name || t('your state'))
+                            : (user?.lga_details?.name || t('your LGA'))}
+                    </Text>
                 </Text>
             </View>
 
@@ -151,8 +158,10 @@ export default function AgentArtisanList() {
                     ListEmptyComponent={
                         <EmptyState
                             icon="person-search"
-                            title={t('No artisans found in this state.')}
-                            message={t('Artisans registered in your state will appear here.')}
+                            title={isCoordinator ? t('No artisans found in this state.') : t('No artisans found in this LGA.')}
+                            message={isCoordinator
+                                ? t('Artisans registered in your state will appear here.')
+                                : t('Artisans registered in your LGA will appear here.')}
                         />
                     }
                 />

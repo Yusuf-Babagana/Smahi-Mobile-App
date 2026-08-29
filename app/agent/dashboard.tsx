@@ -286,7 +286,7 @@ export default function AgentDashboard() {
             onPress={() => router.push('/agent/register')}
           />
           <ActionCard
-            title={t('State clients')}
+            title={isCoordinator ? t('State clients') : t('LGA clients')}
             subtitle={t('View all')}
             icon="groups"
             tileBg={color.brand100}
@@ -337,7 +337,7 @@ export default function AgentDashboard() {
         <Text style={styles.sectionTitle}>{t('Performance')}</Text>
         <View style={styles.statsCard}>
           <StatRow
-            title={t('State clients')}
+            title={isCoordinator ? t('State clients') : t('LGA clients')}
             value={stats.total_clients}
             icon="groups"
             tileBg={color.brand100}

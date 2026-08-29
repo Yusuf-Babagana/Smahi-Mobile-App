@@ -16,11 +16,21 @@ export const ACTIVITY_ACTION_ICONS: Record<string, keyof typeof MaterialIcons.gl
     artisan_registered: 'person-add',
     artisan_verified: 'verified',
     artisan_verification_rejected: 'gpp-bad',
+    // Reports/escalations and Admin:Coordinator management — audit trail
+    // item 6, same ActivityLog rows the rest of this file already renders.
+    report_filed: 'report',
+    report_investigating: 'search',
+    report_resolved: 'task-alt',
+    report_dismissed: 'block',
+    coordinator_created: 'person-add-alt',
+    coordinator_suspended: 'pause-circle-outline',
+    coordinator_reactivated: 'play-circle-outline',
+    coordinator_dismissed: 'remove-circle-outline',
 };
 
 export function activityBadgeStatus(resultingStatus: string): BadgeStatus {
-    if (['active', 'approved'].includes(resultingStatus)) return 'verified';
-    if (['pending_approval', 'pending'].includes(resultingStatus)) return 'pending';
+    if (['active', 'approved', 'resolved'].includes(resultingStatus)) return 'verified';
+    if (['pending_approval', 'pending', 'open'].includes(resultingStatus)) return 'pending';
     if (['suspended', 'rejected', 'dismissed'].includes(resultingStatus)) return 'cancelled';
     return 'confirmed';
 }
