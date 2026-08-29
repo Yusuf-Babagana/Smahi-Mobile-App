@@ -700,9 +700,33 @@ export const agentAPI = {
   },
 
   // Summary counts (total_artisans, verified_artisans, pending_verification,
-  // total_clients) for the agent/state-coordinator dashboard.
+  // total_clients, pending_service_requests) for the agent/state-coordinator dashboard.
   getDashboardStats: async () => {
     const response = await apiClient.get('/agent/dashboard-stats/');
+    return response.data;
+  },
+
+  // Client/User -> Agent Dashboard Connection (item 8) — when a client
+  // books an artisan, the request shows up here automatically for
+  // whoever is responsible for that territory (own LGA for an agent,
+  // whole state for a coordinator). See AgentServiceRequestsView.
+  getServiceRequests: async (page: number = 1, params?: { status?: string; search?: string }) => {
+    const response = await apiClient.get('/agent/service-requests/', { params: { page, ...params } });
+    return response.data;
+  },
+
+  // Artisan/Business -> Coordinator Dashboard Connection (item 9) —
+  // businesses in the caller's own LGA (agent) or state (coordinator).
+  getBusinesses: async (page: number = 1, params?: { search?: string; verification_status?: string }) => {
+    const response = await apiClient.get('/agent/businesses/', { params: { page, ...params } });
+    return response.data;
+  },
+
+  setBusinessVerification: async (userId: number, verificationStatus: 'approved' | 'rejected', rejectionReason?: string) => {
+    const response = await apiClient.post(`/agent/verify-business/${userId}/`, {
+      status: verificationStatus,
+      rejection_reason: rejectionReason,
+    });
     return response.data;
   },
 };

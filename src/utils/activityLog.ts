@@ -26,6 +26,10 @@ export const ACTIVITY_ACTION_ICONS: Record<string, keyof typeof MaterialIcons.gl
     coordinator_suspended: 'pause-circle-outline',
     coordinator_reactivated: 'play-circle-outline',
     coordinator_dismissed: 'remove-circle-outline',
+    // Business verification — Artisan/Business -> Coordinator Dashboard
+    // Connection, item 9.
+    business_verified: 'storefront',
+    business_verification_rejected: 'gpp-bad',
 };
 
 export function activityBadgeStatus(resultingStatus: string): BadgeStatus {

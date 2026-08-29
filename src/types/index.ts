@@ -249,6 +249,34 @@ export interface AIActionErrorAction {
   data: { reason: string };
 }
 
+// AI access strictly limited to Agent information (audit-trail spec item
+// 7) — State Coordinators only, see core.services.search_agents() /
+// AIChatView's search_agents tool. This is the complete, fixed allowlist
+// of fields the backend is willing to return: never id/pk, email, or any
+// other User field.
+export interface AIAgentSearchResult {
+  name: string;
+  serial_number: string;
+  phone_number: string;
+  state: string;
+  lga: string;
+  status: string;
+}
+
+export interface AIAgentSearchResultsAction {
+  type: 'agent_search_results';
+  data: {
+    count?: number;
+    agents?: AIAgentSearchResult[];
+    /** Present instead of agents/count when the backend refused the
+     * request (not_authorized/not_authenticated/no_state_assigned) — the
+     * AI's own text reply already explains why, so the card renders
+     * nothing when this is set (see AIActionCard). */
+    error?: string;
+    message?: string;
+  };
+}
+
 export type AIAction =
   | AISearchActionResult
   | AICategoryFilterAction
@@ -259,4 +287,5 @@ export type AIAction =
   | AITrackBookingAction
   | AIBookingStatusAction
   | AIContactArtisanAction
+  | AIAgentSearchResultsAction
   | AIActionErrorAction;

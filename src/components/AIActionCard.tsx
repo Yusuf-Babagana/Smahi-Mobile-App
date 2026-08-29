@@ -179,6 +179,53 @@ export default function AIActionCard({
   // the reason it received in the tool result. ---
   if (action.type === 'action_error') return null;
 
+  // --- Agent search results (AI access limited to Agent info, item 7) —
+  // same "no card, text reply explains" rule when the backend refused
+  // the request (not a coordinator, no state assigned, etc.). ---
+  if (action.type === 'agent_search_results') {
+    const { data } = action;
+    if (data.error) return null;
+    const agents = data.agents || [];
+    if (agents.length === 0) {
+      return (
+        <View style={styles.actionContainer}>
+          <View style={styles.emptyCard}>
+            <MaterialIcons name="person-search" size={28} color={color.ink300} />
+            <Text style={styles.emptyText}>No agents found matching that search.</Text>
+          </View>
+        </View>
+      );
+    }
+    return (
+      <View style={styles.actionContainer}>
+        <View style={styles.resultsCard}>
+          <View style={styles.resultsHeader}>
+            <MaterialIcons name="supervisor-account" size={16} color={color.brand600} />
+            <Text style={styles.resultsTitle}>Agent search results</Text>
+            <Text style={styles.resultsCount}>{agents.length} found</Text>
+          </View>
+          <View style={styles.resultsList}>
+            {agents.map((agent, index) => (
+              <View key={agent.serial_number || agent.phone_number || index} style={styles.miniCard}>
+                <Avatar name={agent.name} size={36} borderRadius={radius.sm} />
+                <View style={styles.miniInfo}>
+                  <Text style={styles.miniName} numberOfLines={1}>{agent.name}</Text>
+                  <Text style={styles.miniCategory} numberOfLines={1}>
+                    {[agent.serial_number, [agent.lga, agent.state].filter(Boolean).join(', ')].filter(Boolean).join(' • ')}
+                  </Text>
+                </View>
+                <View style={styles.miniMetaCol}>
+                  {!!agent.phone_number && <Text style={styles.miniDistance}>{agent.phone_number}</Text>}
+                  <Text style={[styles.miniRatingText, styles.agentStatusText]}>{agent.status}</Text>
+                </View>
+              </View>
+            ))}
+          </View>
+        </View>
+      </View>
+    );
+  }
+
   // --- Navigation action ---
   if (action.type === 'navigation') {
     const screenLabels: Record<string, string> = {
@@ -754,6 +801,10 @@ const styles = StyleSheet.create({
     fontFamily: font.extrabold,
     fontSize: 10.5,
     color: color.brand600,
+  },
+  agentStatusText: {
+    textTransform: 'capitalize',
+    color: color.ink400,
   },
   seeAllBtn: {
     flexDirection: 'row',

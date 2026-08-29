@@ -39,11 +39,24 @@ export default function AgentDashboard() {
     verified_artisans: 0,
     pending_verification: 0,
     total_clients: 0,
+    // Client/User -> Agent Dashboard Connection (item 8) — present for
+    // both roles, scoped to LGA (agent) or state (coordinator).
+    pending_service_requests: 0,
     // Only ever populated for a state_coordinator — AgentDashboardStatsView
     // omits these entirely for a plain agent (no one "under" them to count).
     total_agents: undefined as number | undefined,
     active_agents: undefined as number | undefined,
     pending_agents: undefined as number | undefined,
+    // Artisan/Business -> Coordinator Dashboard Connection (item 9) —
+    // coordinator-only, same reasoning as the agent-oversight counts above.
+    total_businesses: undefined as number | undefined,
+    pending_business_verification: undefined as number | undefined,
+    attention_required: undefined as {
+      pending_artisan_verification: number;
+      pending_business_verification: number;
+      pending_agent_approvals: number;
+      open_reports: number;
+    } | undefined,
   });
   const [refreshing, setRefreshing] = useState(false);
   // Recent Activities — Coordinator Dashboard spec item 3. Only fetched
@@ -293,6 +306,30 @@ export default function AgentDashboard() {
             tileFg={color.brand600}
             onPress={() => router.push('/agent/clients')}
           />
+          <ActionCard
+            title={t('Service requests')}
+            subtitle={
+              stats.pending_service_requests
+                ? t('{{count}} pending', { count: stats.pending_service_requests })
+                : t('From clients')
+            }
+            icon="event-note"
+            tileBg={stats.pending_service_requests ? color.warn100 : color.accent100}
+            tileFg={stats.pending_service_requests ? color.warn600 : color.accent600}
+            onPress={() => router.push('/agent/service-requests')}
+          />
+          <ActionCard
+            title={t('Businesses')}
+            subtitle={
+              stats.pending_business_verification
+                ? t('{{count}} pending', { count: stats.pending_business_verification })
+                : t('Registrations')
+            }
+            icon="storefront"
+            tileBg={stats.pending_business_verification ? color.warn100 : color.accent100}
+            tileFg={stats.pending_business_verification ? color.warn600 : color.accent600}
+            onPress={() => router.push('/agent/businesses')}
+          />
           {user?.role === 'state_coordinator' && (
             <>
               <ActionCard
@@ -328,6 +365,14 @@ export default function AgentDashboard() {
                 tileBg={color.brand100}
                 tileFg={color.brand600}
                 onPress={() => router.push('/coordinator/lgas')}
+              />
+              <ActionCard
+                title={t('Ask AI')}
+                subtitle={t('Find an agent')}
+                icon="auto-awesome"
+                tileBg={color.accent100}
+                tileFg={color.accent600}
+                onPress={() => router.push('/chat/ai')}
               />
             </>
           )}
@@ -369,9 +414,67 @@ export default function AgentDashboard() {
                 tileBg={color.accent100}
                 tileFg={color.accent600}
               />
+              <View style={styles.horizontalDivider} />
+              <StatRow
+                title={t('Registered businesses')}
+                value={stats.total_businesses ?? 0}
+                icon="storefront"
+                tileBg={color.brand100}
+                tileFg={color.brand600}
+              />
             </>
           )}
         </View>
+
+        {/* ATTENTION REQUIRED — Artisan/Business -> Coordinator Dashboard
+            Connection (item 9): one glanceable summary of everything
+            currently waiting on the coordinator, so nothing needing
+            action gets missed in a separate list somewhere. */}
+        {isCoordinator && stats.attention_required && (
+          Object.values(stats.attention_required).some((n) => n > 0) && (
+            <>
+              <Text style={styles.sectionTitle}>{t('Needs your attention')}</Text>
+              <View style={styles.attentionCard}>
+                {stats.attention_required.pending_artisan_verification > 0 && (
+                  <Pressable style={styles.attentionRow} onPress={() => router.push('/agent/artisans')}>
+                    <MaterialIcons name="verified" size={16} color={color.warn600} />
+                    <Text style={styles.attentionText}>
+                      {t('{{count}} artisan(s) awaiting verification', { count: stats.attention_required.pending_artisan_verification })}
+                    </Text>
+                    <MaterialIcons name="chevron-right" size={18} color={color.ink300} />
+                  </Pressable>
+                )}
+                {stats.attention_required.pending_business_verification > 0 && (
+                  <Pressable style={styles.attentionRow} onPress={() => router.push('/agent/businesses')}>
+                    <MaterialIcons name="storefront" size={16} color={color.warn600} />
+                    <Text style={styles.attentionText}>
+                      {t('{{count}} business(es) awaiting verification', { count: stats.attention_required.pending_business_verification })}
+                    </Text>
+                    <MaterialIcons name="chevron-right" size={18} color={color.ink300} />
+                  </Pressable>
+                )}
+                {stats.attention_required.pending_agent_approvals > 0 && (
+                  <Pressable style={styles.attentionRow} onPress={() => router.push('/coordinator/agents')}>
+                    <MaterialIcons name="supervisor-account" size={16} color={color.warn600} />
+                    <Text style={styles.attentionText}>
+                      {t('{{count}} agent(s) awaiting approval', { count: stats.attention_required.pending_agent_approvals })}
+                    </Text>
+                    <MaterialIcons name="chevron-right" size={18} color={color.ink300} />
+                  </Pressable>
+                )}
+                {stats.attention_required.open_reports > 0 && (
+                  <Pressable style={styles.attentionRow} onPress={() => router.push('/coordinator/reports')}>
+                    <MaterialIcons name="report" size={16} color={color.warn600} />
+                    <Text style={styles.attentionText}>
+                      {t('{{count}} open report(s)', { count: stats.attention_required.open_reports })}
+                    </Text>
+                    <MaterialIcons name="chevron-right" size={18} color={color.ink300} />
+                  </Pressable>
+                )}
+              </View>
+            </>
+          )
+        )}
 
         {/* RECENT ACTIVITIES — Coordinator Dashboard spec item 3. A short
             preview of the state-wide Activity Log; "View all" opens the
@@ -600,4 +703,23 @@ const styles = StyleSheet.create({
   activityArrow: { fontFamily: font.bold, color: color.ink300 },
   activityAction: { fontFamily: font.bold, color: color.ink600 },
   activityMeta: { fontFamily: font.bold, fontSize: 11, color: color.ink300, marginTop: 2 },
+
+  // Attention required (item 9)
+  attentionCard: {
+    backgroundColor: '#FFFBEB',
+    borderRadius: radius.xl,
+    borderWidth: 1,
+    borderColor: '#FDE68A',
+    overflow: 'hidden',
+  },
+  attentionRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: space.sm,
+    paddingHorizontal: space.lg,
+    paddingVertical: space.md,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: '#FDE68A',
+  },
+  attentionText: { flex: 1, fontFamily: font.bold, fontSize: 13, color: '#92400E' },
 });

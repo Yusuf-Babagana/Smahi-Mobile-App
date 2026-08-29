@@ -27,6 +27,7 @@ import { AIAction } from '@/src/types';
 import AIActionCard from '@/src/components/AIActionCard';
 import { useToast, useConfirm } from '@/src/components/ui';
 import { useLocation } from '@/src/contexts/LocationContext';
+import { useAuth } from '@/src/contexts/AuthContext';
 
 const MESSAGES_KEY = '@smaahi_ai_chat_messages';
 
@@ -49,6 +50,13 @@ const SUGGESTED_PROMPTS = [
   'What can you help me with?',
   'Help me write a message',
 ];
+
+// AI access strictly limited to Agent information (audit-trail spec item
+// 7) — only offered as a suggestion to a State Coordinator, the one role
+// the backend actually allows to use this (see core.services.search_agents
+// / AIChatView._tools_for_request). Suggesting it to anyone else would be
+// pointless: the tool isn't even offered to the model for them.
+const COORDINATOR_SUGGESTED_PROMPT = 'Find the agent for my LGA';
 
 // Feature 10 (Booking + Actions) needs the model to resolve "book this
 // mechanic"/"call Ahmed" to a real artisan_id across conversation TURNS —
@@ -85,6 +93,10 @@ export default function AIChatScreen() {
   // Lets the AI's artisan results carry a real distance instead of never
   // showing one — same GPS the Home screen already uses, not a fresh permission ask.
   const { location } = useLocation();
+  const { user } = useAuth();
+  const suggestedPrompts = user?.role === 'state_coordinator'
+    ? [COORDINATOR_SUGGESTED_PROMPT, ...SUGGESTED_PROMPTS]
+    : SUGGESTED_PROMPTS;
   const [messages, setMessages] = useState<Message[]>([WELCOME_MESSAGE]);
   const [inputText, setInputText] = useState('');
   const [isLoading, setIsLoading] = useState(false);
@@ -530,7 +542,7 @@ export default function AIChatScreen() {
               {t('Ask me about S-MAHII services, translations, locations, or general questions.')}
             </Text>
             <View style={styles.chipsWrap}>
-              {SUGGESTED_PROMPTS.map((prompt) => (
+              {suggestedPrompts.map((prompt) => (
                 <TouchableOpacity
                   key={prompt}
                   style={styles.chip}
