@@ -188,7 +188,7 @@ export default function AgentDashboard() {
 
           {/* Top Bar with Logout */}
           <View style={styles.topBar}>
-            <Text style={styles.brandName}>S-MAHII {t('Agent')}</Text>
+            <Text style={styles.brandName}>S-MAHII {isCoordinator ? t('Coordinator') : t('Agent')}</Text>
             <View style={styles.headerActions}>
               {/* Every Dashboard Must Be Connected (item 10) — a plain
                   agent had no path to the AI assistant/Help Center at all
