@@ -176,7 +176,7 @@ export default function AgentDashboard() {
     </View>
   );
 
-  const displayName = `${user?.first_name || 'Agent'} ${user?.last_name || ''}`.trim();
+  const displayName = `${user?.first_name || (isCoordinator ? 'Coordinator' : 'Agent')} ${user?.last_name || ''}`.trim();
 
   return (
     <View style={styles.container}>
@@ -321,7 +321,7 @@ export default function AgentDashboard() {
         )}
 
         {/* QUICK ACTIONS — 2×2 grid of white cards with tonal icon tiles */}
-        <Text style={styles.sectionTitle}>{t('Agent actions')}</Text>
+        <Text style={styles.sectionTitle}>{isCoordinator ? t('Coordinator actions') : t('Agent actions')}</Text>
         <View style={styles.actionGrid}>
           <ActionCard
             title={t('Register artisan')}

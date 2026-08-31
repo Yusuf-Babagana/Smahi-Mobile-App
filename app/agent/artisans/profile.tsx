@@ -18,8 +18,9 @@ export default function AgentProfileScreen() {
     const { show: showToast } = useToast();
     const confirm = useConfirm();
     const [showIdCard, setShowIdCard] = useState(false);
+    const isCoordinator = user?.role === 'state_coordinator';
 
-    const displayName = `${user?.first_name || ''} ${user?.last_name || ''}`.trim() || t('Agent');
+    const displayName = `${user?.first_name || ''} ${user?.last_name || ''}`.trim() || (isCoordinator ? t('Coordinator') : t('Agent'));
 
     const handleLogout = async () => {
         const ok = await confirm({
@@ -74,7 +75,7 @@ export default function AgentProfileScreen() {
                 <View style={styles.profileHeader}>
                     <Avatar name={displayName} uri={user?.profile_picture} gender={user?.gender} size={96} borderRadius={30} />
                     <Text style={styles.name}>{displayName}</Text>
-                    <Text style={styles.role}>{t('Verified Field Agent')}</Text>
+                    <Text style={styles.role}>{isCoordinator ? t('State Coordinator') : t('Verified Field Agent')}</Text>
                     <Text style={styles.location}>{user?.lga_details?.name}, {user?.state_details?.name}</Text>
                 </View>
 
@@ -86,7 +87,7 @@ export default function AgentProfileScreen() {
                         style={styles.idCardGradient}
                     >
                         <View>
-                            <Text style={styles.idCardTitle}>{t('Digital Agent ID')}</Text>
+                            <Text style={styles.idCardTitle}>{isCoordinator ? t('Digital Coordinator ID') : t('Digital Agent ID')}</Text>
                             <Text style={styles.idCardSub}>{t('Tap to view')}</Text>
                         </View>
                         <MaterialIcons name="badge" size={30} color="#FFF" />
@@ -121,7 +122,7 @@ export default function AgentProfileScreen() {
                             {/* ID Header */}
                             <View style={styles.idHeader}>
                                 <View style={styles.logoCircle}><Text style={styles.logoText}>S</Text></View>
-                                <Text style={styles.idCompany}>S-MAHII AGENT</Text>
+                                <Text style={styles.idCompany}>{isCoordinator ? 'S-MAHII COORDINATOR' : 'S-MAHII AGENT'}</Text>
                             </View>
 
                             {/* ID Photo & Details */}
@@ -137,7 +138,7 @@ export default function AgentProfileScreen() {
                                     <Text style={styles.idLabel}>{t('Name')}</Text>
                                     <Text style={styles.idValue}>{displayName}</Text>
 
-                                    <Text style={styles.idLabel}>{t('Agent ID')}</Text>
+                                    <Text style={styles.idLabel}>{isCoordinator ? t('Coordinator ID') : t('Agent ID')}</Text>
                                     <Text style={styles.idValue}>{user?.serial_number || 'N/A'}</Text>
 
                                     <Text style={styles.idLabel}>{t('Zone')}</Text>
@@ -154,7 +155,7 @@ export default function AgentProfileScreen() {
                             </View>
 
                             <View style={styles.verifiedBadge}>
-                                <Text style={styles.verifiedText}>{t('Official agent')}</Text>
+                                <Text style={styles.verifiedText}>{isCoordinator ? t('Official coordinator') : t('Official agent')}</Text>
                             </View>
                         </LinearGradient>
 
