@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { View, Text, StyleSheet, Image, ScrollView, Modal, Pressable } from 'react-native';
-import { useRouter } from 'expo-router';
+import { useRouter, Stack } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -56,6 +56,11 @@ export default function AgentProfileScreen() {
 
     return (
         <View style={styles.container}>
+            {/* Suppresses expo-router's default native header (which was
+                showing the raw route path, "agent/artisans/profile", above
+                this screen's own custom header below) — every sibling
+                screen under app/agent/ already does this. */}
+            <Stack.Screen options={{ headerShown: false }} />
             {/* Header */}
             <SafeAreaView edges={['top']} style={styles.headerSafe}>
                 <View style={styles.header}>

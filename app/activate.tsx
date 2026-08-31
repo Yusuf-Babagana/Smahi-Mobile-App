@@ -7,7 +7,7 @@ import {
     KeyboardAvoidingView,
     Platform,
 } from 'react-native';
-import { useRouter } from 'expo-router';
+import { useRouter, Stack } from 'expo-router';
 import axios from 'axios';
 import * as SecureStore from 'expo-secure-store';
 import { MaterialIcons } from '@expo/vector-icons';
@@ -76,6 +76,7 @@ export default function ActivationScreen() {
 
     return (
         <SafeAreaView style={styles.container}>
+            <Stack.Screen options={{ headerShown: false }} />
             <StatusBar style="dark" />
             <KeyboardAvoidingView
                 behavior={Platform.OS === 'ios' ? 'padding' : 'height'}

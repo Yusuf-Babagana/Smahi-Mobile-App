@@ -3,7 +3,7 @@ import {
     View, Text, StyleSheet, ScrollView,
     KeyboardAvoidingView, Platform, Pressable,
 } from 'react-native';
-import { useRouter } from 'expo-router';
+import { useRouter, Stack } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
 import { Picker } from '@react-native-picker/picker';
@@ -169,6 +169,9 @@ export default function AgentRegisterScreen() {
 
     return (
         <View style={styles.container}>
+            {/* Suppresses expo-router's default native header (raw route
+                path) above this screen's own custom header below. */}
+            <Stack.Screen options={{ headerShown: false }} />
             {/* Header */}
             <SafeAreaView edges={['top']} style={styles.headerSafe}>
                 <View style={styles.header}>

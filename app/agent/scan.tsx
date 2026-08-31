@@ -1,6 +1,6 @@
 import React from 'react';
 import { Text, View, StyleSheet, TouchableOpacity } from 'react-native';
-import { useRouter } from 'expo-router';
+import { useRouter, Stack } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { font } from '@/constants/theme';
 
@@ -12,6 +12,7 @@ export default function QRScannerScreen() {
 
     return (
         <View style={styles.container}>
+            <Stack.Screen options={{ headerShown: false }} />
             <View style={[StyleSheet.absoluteFillObject, styles.placeholder]}>
                 <Ionicons name="camera-outline" size={80} color="#374151" />
                 <Text style={styles.placeholderTitle}>Scanning is coming soon</Text>

@@ -5,7 +5,7 @@ import {
     TouchableOpacity,
     StyleSheet,
 } from 'react-native';
-import { useRouter } from 'expo-router';
+import { useRouter, Stack } from 'expo-router';
 import { MaterialIcons } from '@expo/vector-icons';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
@@ -56,6 +56,7 @@ export default function AgentPendingApprovalScreen() {
 
     return (
         <SafeAreaView style={styles.container}>
+            <Stack.Screen options={{ headerShown: false }} />
             <StatusBar style="dark" />
             <View style={styles.content}>
 
