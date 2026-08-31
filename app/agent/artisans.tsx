@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { View, Text, StyleSheet, FlatList, TouchableOpacity, ActivityIndicator, Pressable } from 'react-native';
-import { useRouter, Stack } from 'expo-router';
+import { useRouter, useLocalSearchParams, Stack } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useTranslation } from 'react-i18next';
@@ -8,29 +8,39 @@ import { useTranslation } from 'react-i18next';
 import { agentAPI } from '@/src/api/client';
 import { useAuth } from '@/src/contexts/AuthContext';
 import { color, font, radius, space, type } from '@/constants/theme';
-import { Avatar, Badge, EmptyState, SkeletonCard } from '@/src/components/ui';
+import { Avatar, Badge, EmptyState, SegmentedControl, SkeletonCard } from '@/src/components/ui';
+
+type VerificationFilter = 'all' | 'approved' | 'pending';
 
 export default function AgentArtisanList() {
     const router = useRouter();
     const { user } = useAuth();
     const { t, i18n } = useTranslation();
+    // Tapping "Verified"/"Pending" on the dashboard's stat row lands here
+    // pre-filtered (?filter=approved / ?filter=pending) instead of an
+    // unfiltered list the coordinator/agent then has to search through.
+    const { filter: initialFilter } = useLocalSearchParams<{ filter?: string }>();
 
     const [artisans, setArtisans] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);      // Initial Load
     const [loadingMore, setLoadingMore] = useState(false); // Pagination Load
     const [page, setPage] = useState(1);
     const [hasMore, setHasMore] = useState(true);      // Are there more pages?
+    const [filter, setFilter] = useState<VerificationFilter>(
+        initialFilter === 'approved' || initialFilter === 'pending' ? initialFilter : 'all'
+    );
     // Only a state_coordinator sees the whole state — a plain agent is
     // scoped server-side to their own LGA (AgentArtisanListView).
     const isCoordinator = user?.role === 'state_coordinator';
 
     useEffect(() => {
         if (user) {
-            fetchLocalArtisans(1); // Load Page 1 on start
+            fetchLocalArtisans(1, filter); // Load Page 1 on start / filter change
         }
-    }, [user]);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [user, filter]);
 
-    const fetchLocalArtisans = async (pageNumber: number) => {
+    const fetchLocalArtisans = async (pageNumber: number, statusFilter: VerificationFilter) => {
         if (!hasMore && pageNumber > 1) return;
 
         try {
@@ -39,7 +49,8 @@ export default function AgentArtisanList() {
 
             // Scoped server-side to the agent's own state — includes every
             // artisan there regardless of availability/verification status.
-            const data = await agentAPI.getStateArtisans({}, pageNumber);
+            const params = statusFilter === 'all' ? {} : { verification_status: statusFilter };
+            const data = await agentAPI.getStateArtisans(params, pageNumber);
 
             const newResults = data.results || [];
 
@@ -63,7 +74,7 @@ export default function AgentArtisanList() {
 
     const handleLoadMore = () => {
         if (!loadingMore && hasMore) {
-            fetchLocalArtisans(page + 1);
+            fetchLocalArtisans(page + 1, filter);
         }
     };
 
@@ -137,6 +148,17 @@ export default function AgentArtisanList() {
                 </Text>
             </View>
 
+            <SegmentedControl
+                segments={[
+                    { value: 'all', label: t('All') },
+                    { value: 'approved', label: t('Verified') },
+                    { value: 'pending', label: t('Pending') },
+                ]}
+                value={filter}
+                onChange={setFilter}
+                style={styles.filterControl}
+            />
+
             {loading ? (
                 <View style={styles.skeletonWrap}>
                     <SkeletonCard />
@@ -158,7 +180,9 @@ export default function AgentArtisanList() {
                     ListEmptyComponent={
                         <EmptyState
                             icon="person-search"
-                            title={isCoordinator ? t('No artisans found in this state.') : t('No artisans found in this LGA.')}
+                            title={filter !== 'all'
+                                ? t('No matching artisans found.')
+                                : (isCoordinator ? t('No artisans found in this state.') : t('No artisans found in this LGA.'))}
                             message={isCoordinator
                                 ? t('Artisans registered in your state will appear here.')
                                 : t('Artisans registered in your LGA will appear here.')}
@@ -205,6 +229,7 @@ const styles = StyleSheet.create({
     },
     subHeaderText: { fontFamily: font.medium, color: color.brand600, fontSize: 13 },
     subHeaderStrong: { fontFamily: font.extrabold },
+    filterControl: { marginHorizontal: space.xl, marginTop: space.md },
 
     skeletonWrap: { padding: space.xl },
     listContent: { padding: space.xl, paddingBottom: 50 },

@@ -257,9 +257,19 @@ export default function AgentDashboard() {
             onPress={() => router.push('/agent/artisans')}
           />
           <View style={styles.verticalDivider} />
-          <QuickStat value={stats.verified_artisans} label={t('Verified')} valueColor={color.accent600} />
+          <QuickStat
+            value={stats.verified_artisans}
+            label={t('Verified')}
+            valueColor={color.accent600}
+            onPress={() => router.push({ pathname: '/agent/artisans', params: { filter: 'approved' } })}
+          />
           <View style={styles.verticalDivider} />
-          <QuickStat value={stats.pending_verification} label={t('Pending')} valueColor={color.warn600} />
+          <QuickStat
+            value={stats.pending_verification}
+            label={t('Pending')}
+            valueColor={color.warn600}
+            onPress={() => router.push({ pathname: '/agent/artisans', params: { filter: 'pending' } })}
+          />
         </View>
       </View>
 

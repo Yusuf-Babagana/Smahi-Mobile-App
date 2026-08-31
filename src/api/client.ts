@@ -688,7 +688,7 @@ export const agentAPI = {
 
   // All artisans in the agent's own state, regardless of availability/verification —
   // scoped server-side to request.user.state, so no location params needed here.
-  getStateArtisans: async (params?: { search?: string; category_id?: string | number }, page: number = 1) => {
+  getStateArtisans: async (params?: { search?: string; category_id?: string | number; verification_status?: string }, page: number = 1) => {
     const response = await apiClient.get('/agent/artisans/', { params: { page, ...params } });
     return response.data;
   },
