@@ -15,52 +15,41 @@ import { Button, Input, useToast, useConfirm, SearchablePickerField } from '@/sr
 import { enqueue, processQueue, getQueue, saveDraft, loadDraft, clearDraft, dismissItem } from '@/src/utils/offlineQueue';
 import { syncSubmitters } from '@/src/utils/syncSubmitters';
 
-// One offline-queue "type" + one draft key for this screen — see
-// src/utils/offlineQueue.ts. Registering an artisan in the field must not
-// depend on network: a completed form is queued locally the instant
-// "Register & verify" is tapped, an immediate sync attempt is made in case
-// network is actually fine, and if that fails for network reasons (not a
-// real validation error) the form is treated as saved/pending rather than
-// lost — the background sync in app/_layout.tsx picks it up the moment
-// connectivity returns.
-const QUEUE_TYPE = 'agent_register_artisan';
-const DRAFT_KEY = 'agent_register_artisan';
+// Coordinator/Agent-initiated business registration — the exact
+// counterpart of app/agent/register.tsx (artisans), including the same
+// ₦2,500 Paystack payment step right after registration (collected on
+// this same phone, no in-person cash) — businesses never had this fee
+// before, but now owe the same one artisans do when registered this way.
+const QUEUE_TYPE = 'agent_register_business';
+const DRAFT_KEY = 'agent_register_business';
 
-export default function AgentRegisterScreen() {
+export default function AgentRegisterBusinessScreen() {
     const router = useRouter();
     const { t } = useTranslation();
-    const { user } = useAuth(); // Get Agent's details
+    const { user } = useAuth();
     const { show: showToast } = useToast();
     const confirm = useConfirm();
     // A coordinator oversees their whole state, not one fixed LGA like a
     // plain agent (User.lga is null for a coordinator) — they must choose
-    // which LGA the new artisan belongs to (AgentRegisterArtisanView).
+    // which LGA the new business belongs to (AgentRegisterBusinessView).
     const isCoordinator = user?.role === 'state_coordinator';
 
     const [loading, setLoading] = useState(false);
     const [lgas, setLgas] = useState<any[]>([]);
 
-    // Form State
     const [formData, setFormData] = useState({
+        business_name: '',
         first_name: '',
         last_name: '',
         email: '',
         phone: '',
-        // Free-text skill/profession rather than picking from the fetched
-        // category list — sent as custom_category_name, which
-        // UserRegistrationSerializer already resolves into a real Category
-        // (reusing an existing one case-insensitively, or creating a new
-        // one) — the exact same mechanism the public "Other" registration
-        // flow has always used.
-        skill: '',
+        // Free-text business type rather than a fetched category picker —
+        // sent as custom_category_name, resolved server-side into a real
+        // Category the same way the public "Other" registration flow does.
+        businessType: '',
         lga: '',
     });
 
-    // Restore whatever the agent had typed before the app was killed/
-    // backgrounded mid-form — losing a half-completed registration to an
-    // interruption is exactly the kind of "network/interruption ate my
-    // work" problem this feature exists to prevent, even before the point
-    // of actually submitting.
     const draftLoaded = useRef(false);
     useEffect(() => {
         loadDraft<typeof formData>(DRAFT_KEY).then((draft) => {
@@ -70,9 +59,6 @@ export default function AgentRegisterScreen() {
     }, []);
 
     useEffect(() => {
-        // Skip the very first render (before the draft load above has had a
-        // chance to run) so an empty initial state doesn't overwrite a real
-        // saved draft the instant this effect fires.
         if (!draftLoaded.current) return;
         saveDraft(DRAFT_KEY, formData);
     }, [formData]);
@@ -88,41 +74,29 @@ export default function AgentRegisterScreen() {
     }, [isCoordinator, user?.state]);
 
     const handleRegister = async () => {
-        if (!formData.first_name || !formData.last_name || !formData.phone || !formData.skill) {
+        if (!formData.business_name || !formData.first_name || !formData.last_name || !formData.phone || !formData.businessType) {
             showToast("Please fill all required fields.", { type: 'warn' });
             return;
         }
         if (isCoordinator && !formData.lga) {
-            showToast(t('Please select the artisan\'s LGA.'), { type: 'warn' });
+            showToast(t('Please select the business\'s LGA.'), { type: 'warn' });
             return;
         }
 
         setLoading(true);
         try {
-            // Construct the payload — the backend generates the password
-            // server-side, so none is sent here.
             const payload = {
+                business_name: formData.business_name,
                 first_name: formData.first_name,
                 last_name: formData.last_name,
-                email: formData.email || `${formData.phone}@smahi.com`, // Fallback email
+                email: formData.email || `${formData.phone}@smahi.com`,
                 phone_number: formData.phone,
-                // Free-text skill, not a fetched category id — the backend
-                // resolves/creates the matching Category from this name.
-                custom_category_name: formData.skill.trim(),
-                country: user?.country, // 🔒 Locked to the agent/coordinator's own state
+                custom_category_name: formData.businessType.trim(),
+                country: user?.country,
                 state: user?.state,
-                // A coordinator picks the LGA (validated server-side against
-                // their own state); a plain agent stays locked to their own —
-                // the backend enforces this either way, this is just what's sent.
                 lga: isCoordinator ? formData.lga : user?.lga,
             };
 
-            // Queue first, then attempt a sync right away — this is what
-            // makes the form safe even if network drops mid-submit: the
-            // instant it's queued, this data can no longer be lost to a
-            // failed request, only retried automatically later by
-            // app/_layout.tsx's OfflineSyncManager if this immediate
-            // attempt doesn't succeed.
             const queued = await enqueue(QUEUE_TYPE, payload);
             await processQueue(syncSubmitters);
             const items = await getQueue(QUEUE_TYPE);
@@ -134,11 +108,11 @@ export default function AgentRegisterScreen() {
                 const newUserId = synced.serverResult?.user?.id;
                 await clearDraft(DRAFT_KEY);
 
-                // Collect the ₦2,500 fee right now via Paystack — on the
-                // same phone, handed to the artisan to pay by their own
-                // card/transfer/USSD — instead of in-person cash. Attempted
+                // Collect the ₦2,500 fee right now via Paystack — same
+                // phone, handed to the owner to pay by their own card/
+                // transfer/USSD — instead of in-person cash. Attempted
                 // even on an idempotent "already registered" replay:
-                // initializeRegistrationPayment itself returns already_paid
+                // initializeRegistrationPayment returns already_paid
                 // cleanly if it's genuinely settled already.
                 if (newUserId) {
                     try {
@@ -155,31 +129,27 @@ export default function AgentRegisterScreen() {
                         return;
                     } catch (payErr: any) {
                         if (payErr?.response?.data?.already_paid) {
-                            showToast(t('This artisan has already paid their registration fee.'), { type: 'info' });
+                            showToast(t('This business has already paid its registration fee.'), { type: 'info' });
                             router.back();
                             return;
                         }
                         if (payErr?.response?.status === 503) {
-                            // Payments not configured yet — fall through to
-                            // the password dialog below so the coordinator
-                            // isn't blocked on an unavailable gateway.
                             showToast(t('Payments are not available yet. You can collect the fee later.'), { type: 'info' });
                         } else {
-                            showToast(t('Could not start the payment step. Try again from the artisans list.'), { type: 'error' });
+                            showToast(t('Could not start the payment step. Try again from the businesses list.'), { type: 'error' });
                         }
                     }
                 }
 
                 // Fallback (no id in the response, or payment couldn't
-                // start) — the coordinator/agent still gets the one-time
-                // password, same as before this payment step existed.
+                // start) — still gets the one-time password.
                 const done = await confirm({
-                    title: alreadyRegistered ? "Already registered" : "Artisan Registered",
+                    title: alreadyRegistered ? "Already registered" : "Business Registered",
                     message: alreadyRegistered
-                        ? (synced.serverResult?.message || "This artisan was already registered — no new account was created.")
+                        ? (synced.serverResult?.message || "This business was already registered — no new account was created.")
                         : generatedPassword
                             ? `Share this one-time password with them securely — it will not be shown again:\n\n${generatedPassword}`
-                            : "Artisan registered successfully.",
+                            : "Business registered successfully.",
                     confirmLabel: "Done",
                     cancelLabel: "Register Another",
                 });
@@ -189,17 +159,9 @@ export default function AgentRegisterScreen() {
                     resetForm();
                 }
             } else if (synced?.status === 'failed') {
-                // A real rejection from the server (a validation error, not
-                // a network problem) — surface it immediately so the agent
-                // can fix it, exactly as before this feature existed. Not
-                // worth keeping in the Pending Sync list once shown — the
-                // next submit attempt queues a fresh item.
                 showToast(synced.lastError || "Registration failed.", { type: 'error' });
                 await dismissItem(queued.id);
             } else {
-                // Still pending_sync — no usable network right now. Nothing
-                // is lost: it's safely queued and will sync on its own the
-                // moment connectivity returns.
                 showToast(
                     "No network right now — saved. This registration will sync automatically once you're back online.",
                     { type: 'warn', duration: 5000 }
@@ -214,21 +176,18 @@ export default function AgentRegisterScreen() {
     };
 
     const resetForm = () => {
-        setFormData({ ...formData, first_name: '', last_name: '', email: '', phone: '' });
+        setFormData({ ...formData, business_name: '', first_name: '', last_name: '', email: '', phone: '' });
     };
 
     return (
         <View style={styles.container}>
-            {/* Suppresses expo-router's default native header (raw route
-                path) above this screen's own custom header below. */}
             <Stack.Screen options={{ headerShown: false }} />
-            {/* Header */}
             <SafeAreaView edges={['top']} style={styles.headerSafe}>
                 <View style={styles.header}>
                     <Pressable onPress={() => router.back()} style={styles.backButton} accessibilityRole="button" accessibilityLabel={t('Back')}>
                         <MaterialIcons name="arrow-back" size={20} color="#FFF" />
                     </Pressable>
-                    <Text style={styles.headerTitle}>{t('Register new artisan')}</Text>
+                    <Text style={styles.headerTitle}>{t('Register new business')}</Text>
                     <View style={{ width: 40 }} />
                 </View>
             </SafeAreaView>
@@ -239,23 +198,31 @@ export default function AgentRegisterScreen() {
                         <View style={styles.noteBanner}>
                             <MaterialIcons name="place" size={16} color={color.brand600} />
                             <Text style={styles.noteText}>
-                                {t('You are registering this artisan in')}{' '}
+                                {t('You are registering this business in')}{' '}
                                 <Text style={styles.noteStrong}>{user?.lga_details?.name || t('your LGA')}</Text>.
                             </Text>
                         </View>
                     )}
 
                     <Input
-                        label={t('First name')}
-                        placeholder={t("Enter the artisan's first name")}
+                        label={t('Business name')}
+                        placeholder={t("Enter the business's name")}
+                        value={formData.business_name}
+                        onChangeText={v => setFormData({ ...formData, business_name: v })}
+                        icon="storefront"
+                        containerStyle={styles.field}
+                    />
+                    <Input
+                        label={t('Owner first name')}
+                        placeholder={t("Enter the owner's first name")}
                         value={formData.first_name}
                         onChangeText={v => setFormData({ ...formData, first_name: v })}
                         icon="person-outline"
                         containerStyle={styles.field}
                     />
                     <Input
-                        label={t('Last name')}
-                        placeholder={t("Enter the artisan's last name")}
+                        label={t('Owner last name')}
+                        placeholder={t("Enter the owner's last name")}
                         value={formData.last_name}
                         onChangeText={v => setFormData({ ...formData, last_name: v })}
                         icon="person-outline"
@@ -284,7 +251,7 @@ export default function AgentRegisterScreen() {
                     {isCoordinator && (
                         <SearchablePickerField
                             label={t('LGA')}
-                            placeholder={t('Select the LGA this artisan belongs to')}
+                            placeholder={t('Select the LGA this business belongs to')}
                             searchPlaceholder={t('Search LGA…')}
                             value={formData.lga}
                             onValueChange={(v) => setFormData({ ...formData, lga: v })}
@@ -293,11 +260,11 @@ export default function AgentRegisterScreen() {
                     )}
 
                     <Input
-                        label={t('Skill / Profession')}
-                        placeholder={t("e.g. Plumbing, Welding, Tailoring…")}
-                        value={formData.skill}
-                        onChangeText={v => setFormData({ ...formData, skill: v })}
-                        icon="build"
+                        label={t('Business type')}
+                        placeholder={t("e.g. Grocery Store, Hotel, Pharmacy…")}
+                        value={formData.businessType}
+                        onChangeText={v => setFormData({ ...formData, businessType: v })}
+                        icon="category"
                         containerStyle={styles.field}
                     />
 
@@ -306,19 +273,19 @@ export default function AgentRegisterScreen() {
                     <View style={styles.noteBanner}>
                         <MaterialIcons name="payments" size={16} color={color.brand600} />
                         <Text style={styles.noteText}>
-                            {t("After registering, you'll pay the ₦2,500 registration fee on this same screen — hand your phone to the artisan to pay by card, bank transfer, or USSD via Paystack.")}
+                            {t("After registering, you'll pay the ₦2,500 registration fee on this same screen — hand your phone to the owner to pay by card, bank transfer, or USSD via Paystack.")}
                         </Text>
                     </View>
 
                     <View style={styles.noteBanner}>
                         <MaterialIcons name="lock-outline" size={16} color={color.brand600} />
                         <Text style={styles.noteText}>
-                            {t("A one-time password will be generated and shown to you after registration — you'll need to share it with the artisan yourself.")}
+                            {t("A one-time password will be generated and shown to you after registration — you'll need to share it with the business owner yourself.")}
                         </Text>
                     </View>
 
                     <Button
-                        title={t('Register & verify')}
+                        title={t('Register business')}
                         onPress={handleRegister}
                         loading={loading}
                         style={styles.submitButton}
@@ -367,20 +334,6 @@ const styles = StyleSheet.create({
     field: { marginBottom: space.lg },
 
     divider: { height: 1, backgroundColor: color.border, marginVertical: space.lg },
-
-    passwordBox: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: 10,
-        height: 52,
-        borderRadius: 14,
-        borderWidth: 1.5,
-        borderColor: color.border,
-        backgroundColor: color.surfaceChip,
-        paddingHorizontal: space.lg,
-    },
-    passwordInput: { flex: 1, fontFamily: font.bold, fontSize: 14.5, color: color.ink400 },
-    hint: { fontFamily: font.bold, fontSize: 12, color: color.ink300, marginTop: 6 },
 
     submitButton: { marginTop: space.md },
 });

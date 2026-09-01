@@ -10,6 +10,9 @@ export const syncSubmitters: Record<string, Submitter> = {
   agent_register_artisan: (payload, clientRequestId) =>
     agentAPI.registerArtisan({ ...payload, client_request_id: clientRequestId }),
 
+  agent_register_business: (payload, clientRequestId) =>
+    agentAPI.registerBusiness({ ...payload, client_request_id: clientRequestId }),
+
   coordinator_create_agent: (payload, clientRequestId) =>
     coordinatorAPI.createAgent({ ...payload, client_request_id: clientRequestId }),
 

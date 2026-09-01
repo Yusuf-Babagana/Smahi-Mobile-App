@@ -686,6 +686,28 @@ export const agentAPI = {
     return response.data;
   },
 
+  // Same as registerArtisan, for a Coordinator/Agent registering a
+  // business instead — see AgentRegisterBusinessView.
+  registerBusiness: async (data: any) => {
+    const response = await apiClient.post('/agent/register-business/', data);
+    return response.data;
+  },
+
+  // Coordinator/Agent collecting the ₦2,500 registration fee via Paystack
+  // right there on their own device, for an artisan/business they just
+  // registered — no in-person cash. See AgentInitializeRegistrationPaymentView
+  // / AgentVerifyRegistrationPaymentView. userId is the newly-created
+  // artisan/business's own id (from registerArtisan/registerBusiness's response).
+  initializeRegistrationPayment: async (userId: number) => {
+    const response = await apiClient.post(`/agent/registrations/${userId}/payment/initialize/`);
+    return response.data;
+  },
+
+  verifyRegistrationPayment: async (userId: number, reference: string) => {
+    const response = await apiClient.post(`/agent/registrations/${userId}/payment/verify/${reference}/`);
+    return response.data;
+  },
+
   // All artisans in the agent's own state, regardless of availability/verification —
   // scoped server-side to request.user.state, so no location params needed here.
   getStateArtisans: async (params?: { search?: string; category_id?: string | number; verification_status?: string }, page: number = 1) => {

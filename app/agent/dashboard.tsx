@@ -332,6 +332,14 @@ export default function AgentDashboard() {
             onPress={() => router.push('/agent/register')}
           />
           <ActionCard
+            title={t('Register business')}
+            subtitle={t('New profile')}
+            icon="storefront"
+            tileBg={color.brand100}
+            tileFg={color.brand600}
+            onPress={() => router.push('/agent/register-business')}
+          />
+          <ActionCard
             title={isCoordinator ? t('State clients') : t('LGA clients')}
             subtitle={t('View all')}
             icon="groups"

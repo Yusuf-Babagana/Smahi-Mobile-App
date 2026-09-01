@@ -11,7 +11,7 @@ import { MaterialIcons } from '@expo/vector-icons';
 import { useTranslation } from 'react-i18next';
 import { useFocusEffect } from '@react-navigation/native';
 
-import { authAPI, paymentAPI } from '@/src/api/client';
+import { agentAPI, authAPI, paymentAPI } from '@/src/api/client';
 import { useAuth } from '@/src/contexts/AuthContext';
 import { color, font, radius, shadow, space } from '@/constants/theme';
 import { useToast, useConfirm } from '@/src/components/ui';
@@ -21,10 +21,19 @@ export default function PaymentScreen() {
   const { t } = useTranslation();
   const { show: showToast } = useToast();
   const confirm = useConfirm();
-  const { authorizationUrl, reference } = useLocalSearchParams<{
+  const { authorizationUrl, reference, agentUserId, generatedPassword } = useLocalSearchParams<{
     authorizationUrl: string;
     reference: string;
+    // Present only when a Coordinator/Agent is collecting this fee (right
+    // there, in person) for someone they just registered — the id of
+    // that new artisan/business account. Absent for the normal
+    // self-service flow (an artisan paying their own fee at login).
+    agentUserId?: string;
+    generatedPassword?: string;
   }>();
+  // Whichever of the two flows this screen is running: who it verifies
+  // as, and where it lands afterward, all branch on this one flag.
+  const isAgentInitiated = !!agentUserId;
 
   const [loading, setLoading] = useState(true);
   const [verifying, setVerifying] = useState(false);
@@ -47,31 +56,58 @@ export default function PaymentScreen() {
     hasVerified.current = true;
     setVerifying(true);
 
-    try {
-      const result = await paymentAPI.verify(ref);
-      if (result.status === 'success') {
-        // The verify endpoint doesn't return the updated user — fetch it so
-        // AuthContext reflects the now-active, fee-paid account instead of
-        // leaving the dashboard to discover this on its own.
-        try {
-          const freshUser = await authAPI.getProfile();
-          if (freshUser) await setAuthUser(freshUser);
-        } catch { /* dashboard still self-fetches as a fallback */ }
+    // Where each mode lands, on success or failure — a Coordinator/Agent
+    // goes back to their own dashboard either way (the account they just
+    // created still exists regardless of how the payment went); a
+    // self-service artisan goes to their dashboard on success, login on
+    // failure (matching the exact pre-existing behavior for that flow).
+    const failureRoute = isAgentInitiated ? '/agent/dashboard' : '/login';
 
-        showToast('Your account is now active! Welcome to S-MAHII.', { type: 'success' });
-        router.replace('/artisan/(tabs)/dashboard');
+    try {
+      const result = isAgentInitiated
+        ? await agentAPI.verifyRegistrationPayment(Number(agentUserId), ref)
+        : await paymentAPI.verify(ref);
+
+      if (result.status === 'success') {
+        if (isAgentInitiated) {
+          // The one-time password was already generated at registration —
+          // this is the same "share it now, it won't be shown again"
+          // dialog the registration screen itself used to show right
+          // after submit, just moved to after payment instead.
+          if (generatedPassword) {
+            await confirm({
+              title: 'Registered & Paid',
+              message: `Share this one-time password with them securely — it will not be shown again:\n\n${generatedPassword}`,
+              confirmLabel: 'Done',
+            });
+          } else {
+            showToast('Payment confirmed — registration is complete.', { type: 'success' });
+          }
+          router.replace('/agent/dashboard');
+        } else {
+          // The verify endpoint doesn't return the updated user — fetch it so
+          // AuthContext reflects the now-active, fee-paid account instead of
+          // leaving the dashboard to discover this on its own.
+          try {
+            const freshUser = await authAPI.getProfile();
+            if (freshUser) await setAuthUser(freshUser);
+          } catch { /* dashboard still self-fetches as a fallback */ }
+
+          showToast('Your account is now active! Welcome to S-MAHII.', { type: 'success' });
+          router.replace('/artisan/(tabs)/dashboard');
+        }
       } else {
         showToast('Payment was not successful. Please try again.', { type: 'error' });
-        router.replace('/login');
+        router.replace(failureRoute);
       }
     } catch (err: any) {
       const msg = err.response?.data?.error || 'Verification failed. Please contact support.';
       showToast(msg, { type: 'error' });
-      router.replace('/login');
+      router.replace(failureRoute);
     } finally {
       setVerifying(false);
     }
-  }, [router]);
+  }, [router, isAgentInitiated, agentUserId, generatedPassword, confirm]);
 
   const handleNavigationStateChange = useCallback((navState: any) => {
     const url = navState.url || '';
@@ -102,12 +138,14 @@ export default function PaymentScreen() {
   const handleCancel = async () => {
     const ok = await confirm({
       title: 'Cancel Payment',
-      message: 'Are you sure you want to cancel? You can complete payment later from your profile.',
+      message: isAgentInitiated
+        ? 'Are you sure you want to cancel? The account is already registered — you can collect this fee for them later.'
+        : 'Are you sure you want to cancel? You can complete payment later from your profile.',
       confirmLabel: 'Cancel',
       cancelLabel: 'Continue Payment',
       destructive: true,
     });
-    if (ok) router.replace('/login');
+    if (ok) router.replace(isAgentInitiated ? '/agent/dashboard' : '/login');
   };
 
   if (!authorizationUrl) {
@@ -118,8 +156,11 @@ export default function PaymentScreen() {
           <MaterialIcons name="error-outline" size={48} color={color.danger600} />
           <Text style={styles.errorTitle}>Payment URL missing</Text>
           <Text style={styles.errorSubtitle}>Please try registering again.</Text>
-          <TouchableOpacity style={styles.retryBtn} onPress={() => router.replace('/register')}>
-            <Text style={styles.retryBtnText}>Back to Register</Text>
+          <TouchableOpacity
+            style={styles.retryBtn}
+            onPress={() => router.replace(isAgentInitiated ? '/agent/dashboard' : '/register')}
+          >
+            <Text style={styles.retryBtnText}>{isAgentInitiated ? 'Back to Dashboard' : 'Back to Register'}</Text>
           </TouchableOpacity>
         </View>
       </SafeAreaView>
