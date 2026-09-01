@@ -237,7 +237,14 @@ export default function AgentDashboard() {
               <View style={styles.locationRow}>
                 <MaterialIcons name="place" size={12} color="rgba(255,255,255,0.72)" />
                 <Text style={styles.locationText}>
-                  {user?.lga_details?.name || t('Local Govt')}, {user?.state_details?.name || t('State')}
+                  {/* A state_coordinator has no User.lga of their own (they
+                      oversee the whole state, not one fixed LGA) — showing
+                      the LGA-first fallback text here was literally
+                      rendering the placeholder "Local Govt" for every
+                      coordinator instead of their actual state. */}
+                  {isCoordinator
+                    ? (user?.state_details?.name || t('State'))
+                    : `${user?.lga_details?.name || t('Local Govt')}, ${user?.state_details?.name || t('State')}`}
                 </Text>
               </View>
             </View>

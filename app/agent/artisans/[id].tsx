@@ -9,7 +9,8 @@ import { MaterialIcons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useTranslation } from 'react-i18next';
 
-import { artisanAPI } from '@/src/api/client';
+import { artisanAPI, coordinatorAPI } from '@/src/api/client';
+import { useAuth } from '@/src/contexts/AuthContext';
 import { color, font, radius, shadow, space, type } from '@/constants/theme';
 import { Badge, useToast, useConfirm } from '@/src/components/ui';
 
@@ -17,11 +18,19 @@ export default function ArtisanDetailScreen() {
     const { t, i18n } = useTranslation();
     const { id } = useLocalSearchParams();
     const router = useRouter();
+    const { user } = useAuth();
     const { show: showToast } = useToast();
     const confirm = useConfirm();
     const [artisan, setArtisan] = useState<any>(null);
     const [loading, setLoading] = useState(true);
     const [verifying, setVerifying] = useState(false);
+    const [deactivating, setDeactivating] = useState(false);
+    // Whether the logged-in coordinator personally registered this artisan
+    // — derived from a real 200/404 against CoordinatorRegisteredUserDetailView
+    // rather than re-deriving it client-side, since the public artisan
+    // endpoint below (artisanAPI.getArtisanById) deliberately never exposes
+    // registered_by (see core.serializers RBAC hardening).
+    const [canManage, setCanManage] = useState(false);
 
     useEffect(() => {
         fetchDetails();
@@ -32,6 +41,15 @@ export default function ArtisanDetailScreen() {
             // Fetch details using the ID from the URL
             const data = await artisanAPI.getArtisanById(Number(id));
             setArtisan(data);
+
+            if (user?.role === 'state_coordinator' && data?.user) {
+                try {
+                    await coordinatorAPI.getRegisteredUser(Number(data.user));
+                    setCanManage(true);
+                } catch {
+                    setCanManage(false);
+                }
+            }
         } catch (error) {
             showToast("Could not load artisan details", { type: 'error' });
             router.back();
@@ -70,6 +88,27 @@ export default function ArtisanDetailScreen() {
             showToast("Verification failed. Please try again.", { type: 'error' });
         } finally {
             setVerifying(false);
+        }
+    };
+
+    const handleDeactivate = async () => {
+        const ok = await confirm({
+            title: t('Deactivate this account?'),
+            message: t('They will no longer be able to log in. This can be undone later from Django Admin if needed.'),
+            confirmLabel: t('Deactivate'),
+            destructive: true,
+        });
+        if (!ok) return;
+
+        setDeactivating(true);
+        try {
+            await coordinatorAPI.deactivateRegisteredUser(Number(artisan.user));
+            showToast(t('Account deactivated.'), { type: 'info' });
+            router.back();
+        } catch (error) {
+            showToast(t('Could not deactivate this account — please try again.'), { type: 'error' });
+        } finally {
+            setDeactivating(false);
         }
     };
 
@@ -162,6 +201,40 @@ export default function ArtisanDetailScreen() {
                     </View>
                 </View>
 
+                {/* Coordinator CRUD — only for an artisan this coordinator personally registered. */}
+                {canManage && (
+                    <View style={styles.manageRow}>
+                        <Pressable
+                            style={({ pressed }) => [styles.editButton, pressed && { opacity: 0.85 }]}
+                            onPress={() => router.push({
+                                pathname: '/agent/edit-registered-user',
+                                params: { userId: String(artisan.user), role: 'artisan' },
+                            })}
+                            accessibilityRole="button"
+                            accessibilityLabel={t('Edit')}
+                        >
+                            <MaterialIcons name="edit" size={18} color={color.brand600} />
+                            <Text style={styles.editText}>{t('Edit')}</Text>
+                        </Pressable>
+                        <Pressable
+                            style={({ pressed }) => [styles.deactivateButton, pressed && { opacity: 0.85 }]}
+                            onPress={handleDeactivate}
+                            disabled={deactivating}
+                            accessibilityRole="button"
+                            accessibilityLabel={t('Deactivate account')}
+                        >
+                            {deactivating ? (
+                                <ActivityIndicator size="small" color="#B91C1C" />
+                            ) : (
+                                <>
+                                    <MaterialIcons name="block" size={18} color="#B91C1C" />
+                                    <Text style={styles.deactivateText}>{t('Deactivate')}</Text>
+                                </>
+                            )}
+                        </Pressable>
+                    </View>
+                )}
+
                 {/* 4. Action Button */}
                 {!person.is_verified && (
                     <View style={styles.footer}>
@@ -250,6 +323,35 @@ const styles = StyleSheet.create({
     },
     contactLabel: { fontFamily: font.bold, fontSize: 11.5, color: color.ink400 },
     contactValue: { fontFamily: font.extrabold, fontSize: 14.5, color: color.ink900, marginTop: 1 },
+
+    // Coordinator CRUD row
+    manageRow: { flexDirection: 'row', gap: space.sm, marginBottom: space.xl },
+    editButton: {
+        flex: 1,
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        gap: 6,
+        paddingVertical: space.md,
+        borderRadius: radius.lg,
+        borderWidth: 1.5,
+        borderColor: color.brand600,
+        backgroundColor: color.brand100,
+    },
+    editText: { fontFamily: font.extrabold, fontSize: 13.5, color: color.brand600 },
+    deactivateButton: {
+        flex: 1,
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        gap: 6,
+        paddingVertical: space.md,
+        borderRadius: radius.lg,
+        borderWidth: 1.5,
+        borderColor: '#FCA5A5',
+        backgroundColor: '#FEF2F2',
+    },
+    deactivateText: { fontFamily: font.extrabold, fontSize: 13.5, color: '#B91C1C' },
 
     // Footer / Action
     footer: { marginTop: space.sm },

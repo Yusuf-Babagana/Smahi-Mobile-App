@@ -800,6 +800,28 @@ export const coordinatorAPI = {
     const response = await apiClient.get(`v1/coordinator/lgas/${lgaId}/overview/`);
     return response.data;
   },
+
+  // CRUD over an artisan/business account THIS coordinator personally
+  // registered — scoped server-side by registered_by, not territory. See
+  // CoordinatorRegisteredUserDetailView. userId is the artisan/business's
+  // own user id (ArtisanProfileSerializer/BusinessProfileSerializer's
+  // "user" field, not the profile id).
+  getRegisteredUser: async (userId: number) => {
+    const response = await apiClient.get(`v1/coordinator/registered-users/${userId}/`);
+    return response.data;
+  },
+
+  updateRegisteredUser: async (userId: number, data: any) => {
+    const response = await apiClient.patch(`v1/coordinator/registered-users/${userId}/`, data);
+    return response.data;
+  },
+
+  // Soft-deactivate only — same convention as everywhere else in this app,
+  // never a real row deletion.
+  deactivateRegisteredUser: async (userId: number) => {
+    const response = await apiClient.delete(`v1/coordinator/registered-users/${userId}/`);
+    return response.data;
+  },
 };
 
 // --- FAVORITES (saved artisans) ---

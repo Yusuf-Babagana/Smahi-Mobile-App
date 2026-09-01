@@ -11,7 +11,7 @@ import { MaterialIcons } from '@expo/vector-icons';
 import { Audio } from 'expo-av';
 import { useTranslation } from 'react-i18next';
 
-import { chatAPI } from '@/src/api/client';
+import { chatAPI, artisanAPI } from '@/src/api/client';
 import { storage } from '@/src/utils/storage';
 import { color, font, radius, shadow, space } from '@/constants/theme';
 import { Avatar, MessageBubble, useToast } from '@/src/components/ui';
@@ -164,20 +164,33 @@ export default function ChatRoomScreen() {
     }, []);
 
     // --- HANDLERS ---
-    const handleProfileClick = () => {
+    const handleProfileClick = async () => {
         let targetId = recipientId;
         if (!targetId && messages.length > 0) {
             const otherMsg = messages.find(m => Number(m.sender) !== currentUserId);
             if (otherMsg) targetId = otherMsg.sender;
         }
 
-        if (targetId) {
-            router.push({
-                pathname: '/artisan-profile',
-                params: { id: targetId }
-            });
-        } else {
+        if (!targetId) {
             showToast("Profile details not available right now.", { type: 'info' });
+            return;
+        }
+
+        // /artisan-profile only has anything to show for an artisan — chat
+        // partners can just as easily be a client, business, agent, or
+        // coordinator (e.g. a Coordinator messaging someone from their State
+        // Clients list), who get a plain "Artisan not found" dead end
+        // otherwise. Check first rather than assuming, since this screen
+        // has no route param telling it who it's actually talking to.
+        try {
+            const profile = await artisanAPI.getArtisanByUserId(Number(targetId));
+            if (profile) {
+                router.push({ pathname: '/artisan-profile', params: { id: targetId } });
+            } else {
+                showToast("This contact doesn't have a public profile to view.", { type: 'info' });
+            }
+        } catch {
+            showToast("Could not open this profile right now.", { type: 'info' });
         }
     };
 

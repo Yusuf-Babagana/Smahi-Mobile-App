@@ -30,7 +30,16 @@ export default function PublicArtisanProfile() {
 
     const fetchDetails = async () => {
         try {
-            const data = await artisanAPI.getArtisanById(id as string);
+            // The only caller of this screen (app/chat/[id].tsx's
+            // handleProfileClick) passes the OTHER PARTICIPANT's USER id
+            // (Message.sender), not an ArtisanProfile id — getArtisanById
+            // looks up by ArtisanProfile pk, a different id sequence that
+            // only coincidentally matched sometimes, 404ing the rest of the
+            // time ("Artisan not found" for a real, existing chat partner).
+            // getArtisanByUserId resolves the right profile via the
+            // ArtisanViewSet's own ?user= filter instead — already used the
+            // same way by the artisan's own dashboard/profile screens.
+            const data = await artisanAPI.getArtisanByUserId(Number(id));
             setArtisan(data);
         } catch (error) {
             console.log("Error loading artisan", error);

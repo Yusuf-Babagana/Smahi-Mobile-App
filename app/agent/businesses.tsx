@@ -5,7 +5,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useTranslation } from 'react-i18next';
 
-import { agentAPI } from '@/src/api/client';
+import { agentAPI, coordinatorAPI } from '@/src/api/client';
 import { useAuth } from '@/src/contexts/AuthContext';
 import { color, font, radius, space } from '@/constants/theme';
 import { Avatar, Badge, EmptyState, SkeletonCard, SegmentedControl, useToast, useConfirm } from '@/src/components/ui';
@@ -33,6 +33,7 @@ export default function AgentBusinessListScreen() {
     const [searchQuery, setSearchQuery] = useState('');
     const [filter, setFilter] = useState<StatusFilter>('all');
     const [updatingId, setUpdatingId] = useState<number | null>(null);
+    const [deactivatingId, setDeactivatingId] = useState<number | null>(null);
 
     const fetchBusinesses = useCallback(async (pageNumber: number, search?: string, statusFilter?: StatusFilter) => {
         try {
@@ -105,12 +106,39 @@ export default function AgentBusinessListScreen() {
         }
     };
 
+    const handleDeactivate = async (business: any) => {
+        const ok = await confirm({
+            title: t('Deactivate this account?'),
+            message: t('They will no longer be able to log in. This can be undone later from Django Admin if needed.'),
+            confirmLabel: t('Deactivate'),
+            destructive: true,
+        });
+        if (!ok) return;
+
+        setDeactivatingId(business.id);
+        try {
+            await coordinatorAPI.deactivateRegisteredUser(business.user);
+            setBusinesses(prev => prev.filter(b => b.id !== business.id));
+            showToast(t('Account deactivated.'), { type: 'info' });
+        } catch (error) {
+            showToast(t('Could not deactivate this account — please try again.'), { type: 'error' });
+        } finally {
+            setDeactivatingId(null);
+        }
+    };
+
     const renderItem = ({ item }: any) => {
         const owner = item.user_details || {};
         const ownerName = `${owner.first_name || ''} ${owner.last_name || ''}`.trim();
         const pending = item.verification_status === 'pending';
         const approved = item.verification_status === 'approved';
         const isUpdating = updatingId === item.id;
+        // Coordinator CRUD ("any user he register") — only for a business
+        // THIS coordinator personally registered; AgentBusinessListView's
+        // full BusinessProfileSerializer already includes registered_by
+        // (unlike the public one), so no extra round trip is needed here.
+        const canManage = isCoordinator && item.registered_by === user?.id;
+        const isDeactivating = deactivatingId === item.id;
 
         return (
             <View style={styles.card}>
@@ -132,6 +160,38 @@ export default function AgentBusinessListScreen() {
                     />
                 </View>
                 {!!ownerName && <Text style={styles.ownerText}>{t('Owner')}: {ownerName}</Text>}
+                {canManage && (
+                    <View style={styles.manageRow}>
+                        <Pressable
+                            style={({ pressed }) => [styles.manageBtn, pressed && { opacity: 0.7 }]}
+                            onPress={() => router.push({
+                                pathname: '/agent/edit-registered-user',
+                                params: { userId: String(item.user), role: 'business' },
+                            })}
+                            accessibilityRole="button"
+                            accessibilityLabel={t('Edit')}
+                        >
+                            <MaterialIcons name="edit" size={14} color={color.brand600} />
+                            <Text style={styles.manageBtnText}>{t('Edit')}</Text>
+                        </Pressable>
+                        <Pressable
+                            style={({ pressed }) => [styles.manageDeactivateBtn, pressed && { opacity: 0.7 }]}
+                            onPress={() => handleDeactivate(item)}
+                            disabled={isDeactivating}
+                            accessibilityRole="button"
+                            accessibilityLabel={t('Deactivate')}
+                        >
+                            {isDeactivating ? (
+                                <ActivityIndicator size="small" color="#B91C1C" />
+                            ) : (
+                                <>
+                                    <MaterialIcons name="block" size={14} color="#B91C1C" />
+                                    <Text style={styles.manageDeactivateText}>{t('Deactivate')}</Text>
+                                </>
+                            )}
+                        </Pressable>
+                    </View>
+                )}
                 {pending && (
                     <View style={styles.actionRow}>
                         <Pressable
@@ -311,6 +371,33 @@ const styles = StyleSheet.create({
     locRow: { flexDirection: 'row', alignItems: 'center', gap: 2, marginTop: 4 },
     location: { fontFamily: font.bold, fontSize: 11, color: color.ink300, flexShrink: 1 },
     ownerText: { fontFamily: font.medium, fontSize: 12, color: color.ink400, marginTop: space.md },
+
+    manageRow: { flexDirection: 'row', gap: space.sm, marginTop: space.md },
+    manageBtn: {
+        flex: 1,
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        gap: 6,
+        paddingVertical: space.sm,
+        borderRadius: radius.md,
+        borderWidth: 1,
+        borderColor: color.brand600,
+        backgroundColor: color.brand100,
+    },
+    manageBtnText: { fontFamily: font.extrabold, fontSize: 12.5, color: color.brand600 },
+    manageDeactivateBtn: {
+        flex: 1,
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        gap: 6,
+        paddingVertical: space.sm,
+        borderRadius: radius.md,
+        borderWidth: 1,
+        borderColor: '#FCA5A5',
+    },
+    manageDeactivateText: { fontFamily: font.extrabold, fontSize: 12.5, color: '#B91C1C' },
 
     actionRow: { flexDirection: 'row', gap: space.sm, marginTop: space.md },
     approveBtn: {
