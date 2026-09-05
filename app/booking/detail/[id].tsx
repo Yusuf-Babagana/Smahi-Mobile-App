@@ -226,6 +226,19 @@ export default function BookingDetailScreen() {
     const address = booking?.location || booking?.address;
     if (address) {
       openDirectionsToAddress(address);
+      return;
+    }
+    // Last resort: the artisan's registered LGA/State/Country — most
+    // artisans never share live location or a free-text booking address at
+    // all, so falling straight through to "not available" left this button
+    // broken for almost everyone. Google's directions endpoint accepts a
+    // free-text destination just as well as coordinates.
+    const lgaName = artisanUser.lga_details?.name;
+    const stateName = artisanUser.state_details?.name;
+    const countryName = artisanUser.country_details?.name;
+    const addressParts = [lgaName, stateName, countryName].filter(Boolean);
+    if (addressParts.length > 0) {
+      openDirectionsToAddress(addressParts.join(', '));
     } else {
       showToast(t("This artisan's location isn't available yet."), { type: 'info' });
     }

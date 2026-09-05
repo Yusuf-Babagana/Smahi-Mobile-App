@@ -11,7 +11,7 @@ import { useTranslation } from 'react-i18next';
 
 import { artisanAPI, favoriteAPI } from '@/src/api/client';
 import { useLocation } from '@/src/contexts/LocationContext';
-import { openDirections } from '@/src/utils/directions';
+import { openDirections, openDirectionsToAddress } from '@/src/utils/directions';
 import { BACKEND_URL } from '@/src/constants/env';
 import { color, font, radius, shadow, space, type } from '@/constants/theme';
 import { Avatar, Badge, Chip, useToast } from '@/src/components/ui';
@@ -124,10 +124,24 @@ export default function ArtisanProfileRoom() {
   };
 
   // "Route idan an buƙata" — deep-links to the native maps app rather than
-  // drawing an in-app route (see src/utils/directions.ts).
+  // drawing an in-app route (see src/utils/directions.ts). Prefers the
+  // artisan's live GPS coordinates, but most artisans never share live
+  // location at all — falling straight through to "not available" then
+  // meant this button was effectively broken for almost everyone. Google's
+  // directions endpoint accepts a free-text destination just as well as
+  // coordinates, so their registered LGA/State/Country is a perfectly
+  // usable fallback (same pattern already used in
+  // app/booking/detail/[id].tsx's own handleGetDirections).
   const handleGetDirections = () => {
     if (artisanLat != null && artisanLon != null && !isNaN(parseFloat(artisanLat)) && !isNaN(parseFloat(artisanLon))) {
       openDirections(parseFloat(artisanLat), parseFloat(artisanLon));
+      return;
+    }
+    const addressParts = [lgaName, stateName, countryName].filter(
+      (part) => part && !part.startsWith('Unknown')
+    );
+    if (addressParts.length > 0) {
+      openDirectionsToAddress(addressParts.join(', '));
     } else {
       showToast(t("This artisan's location isn't available yet."), { type: 'info' });
     }
