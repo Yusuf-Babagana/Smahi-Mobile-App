@@ -816,9 +816,25 @@ export default function ClientHomeScreen() {
               {isSearchingCategories ? (
                 <ActivityIndicator size="small" color={color.brand600} style={{ padding: 12 }} />
               ) : searchResults.length === 0 ? (
-                <Text style={styles.searchDropdownEmpty}>
-                  {t('noMatchingServices')}
-                </Text>
+                // Previously a dead end (a plain "no matches" label with
+                // nothing to do next) — the Intent Engine can understand a
+                // request even when it shares no substring with any real
+                // category name (typos, slang, another language), so route
+                // there with what they already typed pre-filled instead of
+                // just telling them it failed.
+                <TouchableOpacity
+                    style={styles.smartSearchSuggestion}
+                    onPress={() => {
+                        setShowSearchDropdown(false);
+                        router.push({ pathname: '/smart-search', params: { q: searchQuery } });
+                    }}
+                    accessibilityRole="button"
+                >
+                    <MaterialIcons name="auto-awesome" size={16} color={color.brand600} />
+                    <Text style={styles.smartSearchSuggestionText}>
+                        {t('No exact match — try Smart Search for "{{query}}"', { query: searchQuery })}
+                    </Text>
+                </TouchableOpacity>
               ) : (
                 <ScrollView
                   style={styles.searchDropdownScroll}
@@ -1302,6 +1318,18 @@ const styles = StyleSheet.create({
     color: color.ink300,
     fontSize: 13,
     textAlign: 'center',
+  },
+  smartSearchSuggestion: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    padding: space.lg,
+  },
+  smartSearchSuggestionText: {
+    flex: 1,
+    fontFamily: font.bold,
+    color: color.brand600,
+    fontSize: 13,
   },
   searchDropdownItem: {
     flexDirection: 'row',

@@ -753,6 +753,16 @@ export const agentAPI = {
   },
 };
 
+// --- AI INTENT ENGINE (classify-then-search, one-shot — distinct from
+// the conversational assistant at app/chat/ai.tsx, which posts to
+// 'ai/chat/' directly). See core.views.AIIntentClassifierView. ---
+export const aiAPI = {
+  classifyIntent: async (message: string) => {
+    const response = await apiClient.post('ai/classify-intent/', { message });
+    return response.data;
+  },
+};
+
 // --- COORDINATOR (oversight of the agents in their own state) ---
 // Lives under /api/v1/ — a genuinely new resource, same versioning
 // decision as disputeAPI above.
