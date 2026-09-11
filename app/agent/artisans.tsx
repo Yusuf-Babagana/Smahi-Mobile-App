@@ -8,14 +8,15 @@ import { useTranslation } from 'react-i18next';
 import { agentAPI } from '@/src/api/client';
 import { useAuth } from '@/src/contexts/AuthContext';
 import { color, font, radius, space, type } from '@/constants/theme';
-import { Avatar, Badge, EmptyState, SegmentedControl, SkeletonCard } from '@/src/components/ui';
+import { Avatar, Badge, EmptyState, SegmentedControl, SkeletonCard, useToast } from '@/src/components/ui';
 
-type VerificationFilter = 'all' | 'approved' | 'pending';
+type VerificationFilter = 'all' | 'unpaid' | 'approved' | 'pending';
 
 export default function AgentArtisanList() {
     const router = useRouter();
     const { user } = useAuth();
     const { t, i18n } = useTranslation();
+    const { show: showToast } = useToast();
     // Tapping "Verified"/"Pending" on the dashboard's stat row lands here
     // pre-filtered (?filter=approved / ?filter=pending) instead of an
     // unfiltered list the coordinator/agent then has to search through.
@@ -27,8 +28,9 @@ export default function AgentArtisanList() {
     const [page, setPage] = useState(1);
     const [hasMore, setHasMore] = useState(true);      // Are there more pages?
     const [filter, setFilter] = useState<VerificationFilter>(
-        initialFilter === 'approved' || initialFilter === 'pending' ? initialFilter : 'all'
+        initialFilter === 'approved' || initialFilter === 'pending' || initialFilter === 'unpaid' ? initialFilter : 'all'
     );
+    const [collectingId, setCollectingId] = useState<number | null>(null);
     // Only a state_coordinator sees the whole state — a plain agent is
     // scoped server-side to their own LGA (AgentArtisanListView).
     const isCoordinator = user?.role === 'state_coordinator';
@@ -49,7 +51,12 @@ export default function AgentArtisanList() {
 
             // Scoped server-side to the agent's own state — includes every
             // artisan there regardless of availability/verification status.
-            const params = statusFilter === 'all' ? {} : { verification_status: statusFilter };
+            const params: any = {};
+            if (statusFilter === 'unpaid') {
+                params.payment_status = 'unpaid';
+            } else if (statusFilter === 'approved' || statusFilter === 'pending') {
+                params.verification_status = statusFilter;
+            }
             const data = await agentAPI.getStateArtisans(params, pageNumber);
 
             const newResults = data.results || [];
@@ -78,12 +85,42 @@ export default function AgentArtisanList() {
         }
     };
 
+    const handleCollectPayment = async (userId: number, event?: any) => {
+        event?.stopPropagation?.();
+        if (!userId) return;
+        setCollectingId(userId);
+        try {
+            const payResult = await agentAPI.initializeRegistrationPayment(userId);
+            router.push({
+                pathname: '/payment',
+                params: {
+                    authorizationUrl: payResult.authorization_url,
+                    reference: payResult.reference,
+                    agentUserId: String(userId),
+                },
+            });
+        } catch (err: any) {
+            if (err?.response?.data?.already_paid) {
+                showToast(t('This artisan has already paid their registration fee.'), { type: 'info' });
+                fetchLocalArtisans(1, filter);
+            } else {
+                const msg = err?.response?.data?.error || t('Could not start payment. Please try again.');
+                showToast(msg, { type: 'error' });
+            }
+        } finally {
+            setCollectingId(null);
+        }
+    };
+
     const renderItem = ({ item }: any) => {
         const person = item.user_details || {};
         const name = `${person.first_name || ''} ${person.last_name || ''}`.trim();
         const trade = i18n.language === 'ha' && item.category_name_ha
             ? item.category_name_ha
             : (item.profession_name || item.category_name || t('General Artisan'));
+        const isUnpaid = person.registration_fee_paid === false;
+        const isCollecting = collectingId === person.id;
+
         return (
             <Pressable
                 style={({ pressed }) => [styles.card, pressed && { opacity: 0.85 }]}
@@ -91,7 +128,13 @@ export default function AgentArtisanList() {
                 accessibilityRole="button"
                 accessibilityLabel={name}
             >
-                <Avatar name={name} uri={person.profile_picture} gender={person.gender} size={48} verified={!!person.is_verified} />
+                <Avatar
+                    name={name}
+                    uri={person.profile_picture}
+                    gender={person.gender}
+                    size={48}
+                    verified={!isUnpaid && !!person.is_verified}
+                />
 
                 <View style={styles.info}>
                     <Text style={styles.name} numberOfLines={1}>{name}</Text>
@@ -104,10 +147,38 @@ export default function AgentArtisanList() {
                     </View>
                 </View>
 
-                <Badge
-                    label={person.is_verified ? t('Verified') : t('Pending')}
-                    status={person.is_verified ? 'verified' : 'pending'}
-                />
+                <View style={styles.badgeCol}>
+                    {isUnpaid ? (
+                        <View style={styles.unpaidWrap}>
+                            <View style={styles.unpaidBadge}>
+                                <MaterialIcons name="error-outline" size={11} color="#DC2626" />
+                                <Text style={styles.unpaidBadgeText}>{t('Unpaid ₦2.5k')}</Text>
+                            </View>
+                            <TouchableOpacity
+                                style={styles.collectMiniBtn}
+                                onPress={(e) => handleCollectPayment(person.id, e)}
+                                disabled={isCollecting}
+                                activeOpacity={0.8}
+                                accessibilityRole="button"
+                                accessibilityLabel={t('Collect ₦2,500')}
+                            >
+                                {isCollecting ? (
+                                    <ActivityIndicator size="small" color="#FFFFFF" />
+                                ) : (
+                                    <>
+                                        <MaterialIcons name="payment" size={12} color="#FFFFFF" style={{ marginRight: 3 }} />
+                                        <Text style={styles.collectMiniBtnText}>{t('Collect')}</Text>
+                                    </>
+                                )}
+                            </TouchableOpacity>
+                        </View>
+                    ) : (
+                        <Badge
+                            label={person.is_verified ? t('Verified') : t('Pending')}
+                            status={person.is_verified ? 'verified' : 'pending'}
+                        />
+                    )}
+                </View>
             </Pressable>
         );
     };
@@ -151,6 +222,7 @@ export default function AgentArtisanList() {
             <SegmentedControl
                 segments={[
                     { value: 'all', label: t('All') },
+                    { value: 'unpaid', label: t('Unpaid (₦2.5k)') },
                     { value: 'approved', label: t('Verified') },
                     { value: 'pending', label: t('Pending') },
                 ]}
@@ -249,4 +321,36 @@ const styles = StyleSheet.create({
     service: { fontFamily: font.bold, fontSize: 12.5, color: color.ink400, marginTop: 2 },
     locRow: { flexDirection: 'row', alignItems: 'center', gap: 2, marginTop: 4 },
     location: { fontFamily: font.bold, fontSize: 11.5, color: color.ink300, flexShrink: 1 },
+
+    badgeCol: { alignItems: 'flex-end', justifyContent: 'center' },
+    unpaidWrap: { alignItems: 'flex-end', gap: 6 },
+    unpaidBadge: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 3,
+        backgroundColor: '#FEF2F2',
+        paddingHorizontal: 7,
+        paddingVertical: 3,
+        borderRadius: radius.full,
+        borderWidth: 1,
+        borderColor: '#FECACA',
+    },
+    unpaidBadgeText: {
+        fontFamily: font.extrabold,
+        fontSize: 10.5,
+        color: '#DC2626',
+    },
+    collectMiniBtn: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        backgroundColor: '#1B5FD9',
+        paddingHorizontal: 9,
+        paddingVertical: 5,
+        borderRadius: radius.md,
+    },
+    collectMiniBtnText: {
+        fontFamily: font.extrabold,
+        fontSize: 11,
+        color: '#FFFFFF',
+    },
 });

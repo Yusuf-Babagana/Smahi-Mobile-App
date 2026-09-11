@@ -1,4 +1,15 @@
-export type UserRole = 'client' | 'artisan' | 'business' | 'agent' | 'state_coordinator' | 'admin';
+export type UserRole = 'client' | 'artisan' | 'business' | 'agent' | 'state_coordinator' | 'admin' | 'super_admin';
+
+export interface State {
+  name: string;
+  localGovernments: string[];
+}
+
+export interface Country {
+  name: string;
+  code: string;
+  states: State[];
+}
 
 export type VerificationStatus = 'pending' | 'approved' | 'rejected' | 'none';
 
@@ -89,10 +100,64 @@ export interface User {
   account_status?: 'active' | 'suspended' | 'locked' | 'pending_approval' | 'rejected';
   created_at?: string;
   serial_number?: string;
+  // Referral network (Coordinator -> Agent -> Service Provider). Populated
+  // server-side via /api/v1/referrals/me/ / validate/ — NOT from the login
+  // payload (kept out of UserSerializer so it can never leak into booking/
+  // chat payloads).
+  referral_code?: string;
   // Default language incoming/outgoing chat messages are automatically
   // translated into (see src/constants/languages.ts). Blank = never
   // explicitly chosen.
   preferred_language?: string;
+}
+
+// When a coordinator/agent is entry point for a referral code.
+export interface ReferralOwner {
+  id: number;
+  name: string;
+  role?: 'agent' | 'state_coordinator';
+  serial_number?: string;
+  referral_code?: string;
+  state?: { id: number; name: string; code?: string };
+}
+
+// The "shareable" view of the user's own referral chain — who they are,
+// whose code they carried in, and who they report to.
+export interface ReferralSummary {
+  role?: UserRole;
+  referral_code?: string | null;
+  // The Coordinator this agent reports to (agents only). For a coordinator
+  // this is themselves; null for clients/artisans/businesses.
+  coordinator?: {
+    id: number;
+    name: string;
+    referral_code?: string;
+    state?: { id: number; name: string; code?: string };
+  } | null;
+  // Agent owner, present when validating an agent's code.
+  agent?: ReferralOwner | null;
+  // Stats — the exact keys depend on the caller's role; only the ones their
+  // role is entitled to are ever present.
+  total_agents?: number;
+  active_agents?: number;
+  pending_agents?: number;
+  total_service_providers_recorded?: number;
+  total_service_providers_registered?: number;
+  total_artisans?: number;
+  total_artisans_registered?: number;
+  total_businesses?: number;
+  total_businesses_registered?: number;
+  recent_activity?: { action: string; target: string; created_at: string }[];
+}
+
+export interface ReferralValidationResult {
+  valid: boolean;
+  // 'Invalid referral code.' or 'This referral code is no longer valid.'
+  error?: string;
+  role?: 'agent' | 'state_coordinator';
+  code?: string;
+  coordinator?: ReferralSummary['coordinator'];
+  agent?: ReferralOwner | null;
 }
 
 // The data collected from the Register Form

@@ -1,779 +1,1350 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
-  View, Text, StyleSheet, ScrollView, TouchableOpacity, RefreshControl,
+  View,
+  Text,
+  StyleSheet,
+  ScrollView,
+  RefreshControl,
+  TouchableOpacity,
   Pressable,
+  Dimensions,
+  Linking,
 } from 'react-native';
+import { useRouter, Stack } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useRouter } from 'expo-router';
-import { MaterialIcons } from '@expo/vector-icons';
-import { StatusBar } from 'expo-status-bar';
-import * as SecureStore from 'expo-secure-store';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import { MaterialIcons, Ionicons } from '@expo/vector-icons';
+import { LinearGradient } from 'expo-linear-gradient';
+import * as Clipboard from 'expo-clipboard';
 import { useTranslation } from 'react-i18next';
 
-import { agentAPI, coordinatorAPI } from '@/src/api/client';
 import { useAuth } from '@/src/contexts/AuthContext';
-import { EmailVerificationBanner } from '@/src/components/EmailVerificationBanner';
-import { NotificationBell } from '@/src/components/NotificationBell';
-import { color, font, radius, shadow, space, type } from '@/constants/theme';
-import { Avatar, useConfirm } from '@/src/components/ui';
-import { useOfflineQueue, processQueue } from '@/src/utils/offlineQueue';
-import { syncSubmitters } from '@/src/utils/syncSubmitters';
-import { ACTIVITY_ACTION_ICONS, formatActivityWhen } from '@/src/utils/activityLog';
+import { agentAPI, referralAPI } from '@/src/api/client';
+import { color, font, radius, space, shadow } from '@/constants/theme';
+import { Avatar, useToast, useConfirm } from '@/src/components/ui';
+import { useOfflineQueue } from '@/src/utils/offlineQueue';
+import { ReferralSummary } from '@/src/types';
+
+const { width } = Dimensions.get('window');
 
 export default function AgentDashboard() {
   const router = useRouter();
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const confirm = useConfirm();
-
+  const { show: showToast } = useToast();
   const { user, logout } = useAuth();
-  // Offline-first field registration: how many artisan registrations (or,
-  // for a coordinator, agent creations) this device has queued locally,
-  // confirmed by the server, or need attention — see
-  // src/utils/offlineQueue.ts. This dashboard is shared between both
-  // roles, and each uses a different queue type.
-  const isCoordinator = user?.role === 'state_coordinator';
-  const { counts: syncCounts } = useOfflineQueue(isCoordinator ? 'coordinator_create_agent' : 'agent_register_artisan');
+
+  // If a State Coordinator somehow enters here, redirect directly to Coordinator Command Center
+  useEffect(() => {
+    if (user?.role === 'state_coordinator') {
+      router.replace('/coordinator/dashboard');
+    }
+  }, [user?.role, router]);
+
+  const { counts: syncCounts } = useOfflineQueue('agent_register_artisan');
 
   const [stats, setStats] = useState({
     total_artisans: 0,
     verified_artisans: 0,
     pending_verification: 0,
     total_clients: 0,
-    // Client/User -> Agent Dashboard Connection (item 8) — present for
-    // both roles, scoped to LGA (agent) or state (coordinator).
     pending_service_requests: 0,
-    // Only ever populated for a state_coordinator — AgentDashboardStatsView
-    // omits these entirely for a plain agent (no one "under" them to count).
-    total_agents: undefined as number | undefined,
-    active_agents: undefined as number | undefined,
-    pending_agents: undefined as number | undefined,
-    // Artisan/Business -> Coordinator Dashboard Connection (item 9) —
-    // coordinator-only, same reasoning as the agent-oversight counts above.
-    total_businesses: undefined as number | undefined,
-    pending_business_verification: undefined as number | undefined,
-    attention_required: undefined as {
-      pending_artisan_verification: number;
-      pending_business_verification: number;
-      pending_agent_approvals: number;
-      open_reports: number;
-    } | undefined,
   });
+
+  const [recentArtisans, setRecentArtisans] = useState<any[]>([]);
   const [refreshing, setRefreshing] = useState(false);
-  // Recent Activities — Coordinator Dashboard spec item 3. Only fetched
-  // for a state_coordinator (see CoordinatorActivityLogView); a plain
-  // agent has nothing to oversee, so this stays empty for them.
-  const [recentActivity, setRecentActivity] = useState<any[]>([]);
+  const [referral, setReferral] = useState<ReferralSummary | null>(null);
 
-  // --- ACTIONS ---
-
-  const fetchDashboardData = async () => {
+  const fetchAgentData = async () => {
     try {
-      const data = await agentAPI.getDashboardStats();
-      setStats(data);
-      if (isCoordinator) {
-        const activityData = await coordinatorAPI.getActivityLog(1);
-        setRecentActivity((activityData.results || []).slice(0, 4));
+      const statsData = await agentAPI.getDashboardStats();
+      if (statsData) setStats(statsData);
+    } catch (error) {
+      console.log('Error fetching agent stats:', error);
+    }
+
+    try {
+      const referralData = await referralAPI.getMyReferral();
+      setReferral(referralData);
+    } catch (error) {
+      console.log('Error fetching agent referral:', error);
+    }
+
+    try {
+      const artisansData = await agentAPI.getStateArtisans({}, 1);
+      if (artisansData?.results) {
+        setRecentArtisans(artisansData.results.slice(0, 4));
       }
     } catch (error) {
-      console.log("Dashboard Error", error);
+      console.log('Error fetching recent artisans:', error);
     } finally {
       setRefreshing(false);
     }
   };
 
+  useEffect(() => {
+    fetchAgentData();
+  }, []);
+
+  const onRefresh = () => {
+    setRefreshing(true);
+    fetchAgentData();
+  };
+
+  const agentReferralCode = referral?.referral_code || user?.serial_number || 'SMAHI-AGENT';
+
+  const shareText = `Join S-MAHI as an artisan or registered business in our LGA!\n\n1. Download S-MAHI on Google Play:\nhttps://play.google.com/store/apps/details?id=com.smahi.app\n\n2. Register using my Agent Referral Code:\n${agentReferralCode}\n\nStart onboarding to connect with customers in our community!`;
+
+  const copyReferralCode = async () => {
+    await Clipboard.setStringAsync(shareText);
+    showToast(t('Referral message and link copied!'), { type: 'success' });
+  };
+
+  const copyAgentId = async () => {
+    const id = user?.serial_number || agentReferralCode;
+    await Clipboard.setStringAsync(id);
+    showToast(t('Agent ID copied to clipboard!'), { type: 'success' });
+  };
+
+  const shareWhatsApp = () => {
+    const url = `whatsapp://send?text=${encodeURIComponent(shareText)}`;
+    Linking.openURL(url).catch(() => {
+      showToast(t('WhatsApp not installed or could not be opened.'), { type: 'error' });
+    });
+  };
+
+  const shareSMS = () => {
+    const url = `sms:?body=${encodeURIComponent(shareText)}`;
+    Linking.openURL(url).catch(() => {
+      showToast(t('Could not open SMS messenger.'), { type: 'error' });
+    });
+  };
+
   const handleLogout = async () => {
     const ok = await confirm({
-      title: t("Log Out"),
-      message: t("Are you sure you want to exit?"),
-      confirmLabel: t("Log Out"),
-      cancelLabel: t("Cancel"),
+      title: t('Log Out'),
+      message: t('Are you sure you want to log out of the Agent Portal?'),
+      confirmLabel: t('Log Out'),
       destructive: true,
     });
     if (ok) {
-      if (logout) {
-        await logout();
-      } else {
-        await SecureStore.deleteItemAsync('accessToken');
-        await SecureStore.deleteItemAsync('refreshToken');
-        await AsyncStorage.removeItem('user');
-      }
-      router.replace('/login');
+      await logout();
+      router.replace('/welcome');
     }
   };
 
-  useEffect(() => {
-    fetchDashboardData();
-  }, []);
-
-  const onRefresh = useCallback(() => {
-    setRefreshing(true);
-    fetchDashboardData();
-    // Pull-to-refresh doubles as "try syncing pending registrations now" —
-    // an easy manual nudge for an agent who knows they just regained
-    // signal, rather than waiting for the next automatic attempt.
-    processQueue(syncSubmitters).catch(() => {});
-  }, []);
-
-  // --- SUB-COMPONENTS ---
-
-  const QuickStat = ({ value, label, valueColor, onPress }: {
-    value: string | number;
-    label: string;
-    valueColor: string;
-    onPress?: () => void;
-  }) => (
-    <TouchableOpacity style={styles.quickStat} onPress={onPress} activeOpacity={onPress ? 0.7 : 1}>
-      <Text style={[styles.quickStatValue, { color: valueColor }]}>{value}</Text>
-      <Text style={styles.quickStatLabel}>{label}</Text>
-    </TouchableOpacity>
-  );
-
-  const ActionCard = ({ title, subtitle, icon, tileBg, tileFg, onPress }: {
-    title: string;
-    subtitle?: string;
-    icon: keyof typeof MaterialIcons.glyphMap;
-    tileBg: string;
-    tileFg: string;
-    onPress: () => void;
-  }) => (
-    <Pressable
-      style={({ pressed }) => [styles.actionCard, pressed && { opacity: 0.85 }]}
-      onPress={onPress}
-      accessibilityRole="button"
-      accessibilityLabel={title}
-    >
-      <View style={[styles.actionIconTile, { backgroundColor: tileBg }]}>
-        <MaterialIcons name={icon} size={20} color={tileFg} />
-      </View>
-      <Text style={styles.actionTitle} numberOfLines={1}>{title}</Text>
-      {subtitle ? <Text style={styles.actionSubtitle} numberOfLines={1}>{subtitle}</Text> : null}
-    </Pressable>
-  );
-
-  const StatRow = ({ title, value, icon, tileBg, tileFg, trend }: {
-    title: string;
-    value: string | number;
-    icon: keyof typeof MaterialIcons.glyphMap;
-    tileBg: string;
-    tileFg: string;
-    trend?: string;
-  }) => (
-    <View style={styles.statRow}>
-      <View style={[styles.iconBox, { backgroundColor: tileBg }]}>
-        <MaterialIcons name={icon} size={20} color={tileFg} />
-      </View>
-      <View style={styles.statRowText}>
-        <Text style={styles.statRowLabel}>{title}</Text>
-        <Text style={styles.statRowValue}>{value}</Text>
-      </View>
-      {trend && (
-        <View style={styles.trendBadge}>
-          <MaterialIcons name="trending-up" size={12} color={color.accent600} />
-          <Text style={styles.trendText}>{trend}</Text>
-        </View>
-      )}
-    </View>
-  );
-
-  const displayName = `${user?.first_name || (isCoordinator ? 'Coordinator' : 'Agent')} ${user?.last_name || ''}`.trim();
+  const displayName = [user?.first_name, user?.last_name].filter(Boolean).join(' ') || 'Field Agent';
+  const lgaName = (user as any)?.lga_details?.name || (user as any)?.lga?.name || 'Local Government';
+  const stateName = (user as any)?.state_details?.name || (user as any)?.state?.name || 'State';
 
   return (
     <View style={styles.container}>
-      <StatusBar style="light" />
+      <Stack.Screen options={{ headerShown: false }} />
 
-      {/* 1. HEADER (brand900, flat) */}
-      <View style={styles.header}>
-        <SafeAreaView edges={['top', 'left', 'right']}>
-
-          {/* Top Bar with Logout */}
+      {/* 1. HERO FIELD CREDENTIAL HEADER */}
+      <LinearGradient
+        colors={['#071E3D', '#0B2E5B', '#1B5FD9']}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
+        style={styles.fieldHeader}
+      >
+        <SafeAreaView edges={['top']} style={styles.safeHeader}>
+          {/* Top Bar: Live Jurisdiction Pill, Key & Logout */}
           <View style={styles.topBar}>
-            <Text style={styles.brandName}>S-MAHII {isCoordinator ? t('Coordinator') : t('Agent')}</Text>
-            <View style={styles.headerActions}>
-              {/* Every Dashboard Must Be Connected (item 10) — a plain
-                  agent had no path to the AI assistant/Help Center at all
-                  (both were coordinator-only until now). */}
-              <Pressable
-                style={styles.iconBtn}
-                onPress={() => router.push('/chat/ai')}
+            <View style={styles.territoryBadge}>
+              <View style={styles.liveDot} />
+              <Ionicons name="location-sharp" size={13} color="#22D3EE" />
+              <Text style={styles.territoryText}>{lgaName.toUpperCase()} {t('FIELD OFFICE')}</Text>
+            </View>
+
+            <View style={styles.topActionsRow}>
+              <TouchableOpacity
+                style={styles.headerIconButton}
+                onPress={() => router.push('/change-password')}
                 accessibilityRole="button"
-                accessibilityLabel="AI assistant"
+                accessibilityLabel={t('Change password')}
               >
-                <MaterialIcons name="auto-awesome" size={17} color="#FACC15" />
-              </Pressable>
-              <Pressable
-                style={styles.iconBtn}
-                onPress={() => router.push('/help-center')}
+                <Ionicons name="key-outline" size={17} color="#38BDF8" />
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={styles.headerIconButton}
+                onPress={handleLogout}
                 accessibilityRole="button"
-                accessibilityLabel={t('Help')}
+                accessibilityLabel={t('Log out')}
               >
-                <MaterialIcons name="help-outline" size={18} color="#FFF" />
-              </Pressable>
-              <NotificationBell iconColor="#FFF" size={18} style={styles.iconBtn} />
-              <Pressable style={styles.logoutButton} onPress={handleLogout} accessibilityRole="button" accessibilityLabel={t('Log Out')}>
-                <MaterialIcons name="logout" size={16} color="#FECACA" />
-                <Text style={styles.logoutText}>{t('Exit')}</Text>
-              </Pressable>
+                <MaterialIcons name="logout" size={18} color="rgba(255,255,255,0.9)" />
+              </TouchableOpacity>
             </View>
           </View>
 
-          {/* User Profile Section — tap through to My Profile (Digital ID,
-              account settings, logout), same pattern as the artisan dashboard's
-              avatar. This was previously the only screen with no entry point
-              into app/agent/artisans/profile.tsx at all. */}
-          <Pressable
-            style={styles.profileSection}
-            onPress={() => router.push('/agent/artisans/profile')}
-            accessibilityRole="button"
-            accessibilityLabel={t('My profile')}
-          >
-            <Avatar name={displayName} uri={user?.profile_picture} gender={user?.gender} size={60} borderRadius={20} online />
-            <View style={styles.profileInfo}>
-              <Text style={styles.userName} numberOfLines={1}>{displayName}</Text>
-              <View style={styles.idBadge}>
-                <Text style={styles.idLabel}>ID:</Text>
-                <Text style={styles.idValue}>{user?.serial_number || 'PENDING'}</Text>
+          {/* Agent Identity Tile */}
+          <View style={styles.agentProfileRow}>
+            <View style={styles.avatarGlowWrap}>
+              <Avatar
+                name={displayName}
+                uri={user?.profile_picture}
+                gender={user?.gender}
+                size={62}
+                borderRadius={20}
+              />
+            </View>
+
+            <View style={styles.profileTextWrap}>
+              <View style={styles.roleTag}>
+                <Ionicons name="shield-checkmark" size={12} color="#38BDF8" />
+                <Text style={styles.roleLabel}>{t('OFFICIAL FIELD AGENT')}</Text>
               </View>
-              <View style={styles.locationRow}>
-                <MaterialIcons name="place" size={12} color="rgba(255,255,255,0.72)" />
-                <Text style={styles.locationText}>
-                  {/* A state_coordinator has no User.lga of their own (they
-                      oversee the whole state, not one fixed LGA) — showing
-                      the LGA-first fallback text here was literally
-                      rendering the placeholder "Local Govt" for every
-                      coordinator instead of their actual state. */}
-                  {isCoordinator
-                    ? (user?.state_details?.name || t('State'))
-                    : `${user?.lga_details?.name || t('Local Govt')}, ${user?.state_details?.name || t('State')}`}
-                </Text>
+
+              <Text style={styles.agentName} numberOfLines={1}>{displayName}</Text>
+
+              <View style={styles.badgeRow}>
+                <TouchableOpacity
+                  style={styles.idBadge}
+                  onPress={copyAgentId}
+                  accessibilityRole="button"
+                  accessibilityLabel={t('Copy Agent ID')}
+                >
+                  <MaterialIcons name="fingerprint" size={13} color="#22D3EE" />
+                  <Text style={styles.idBadgeText}>{user?.serial_number || 'AGT-ID'}</Text>
+                  <MaterialIcons name="content-copy" size={11} color="rgba(255,255,255,0.7)" />
+                </TouchableOpacity>
+
+                <View style={styles.locationPill}>
+                  <Ionicons name="map-outline" size={12} color="#93C5FD" />
+                  <Text style={styles.locationText}>{lgaName}, {stateName}</Text>
+                </View>
               </View>
             </View>
-            <MaterialIcons name="chevron-right" size={20} color="rgba(255,255,255,0.5)" />
-          </Pressable>
+          </View>
 
+          {/* Coordinator Supervisor Endorsement */}
+          {referral?.coordinator && (
+            <View style={styles.sponsorBanner}>
+              <MaterialIcons name="verified-user" size={15} color="#34D399" />
+              <Text style={styles.sponsorText}>
+                {t('Supervised by State Coordinator {{name}}', { name: referral.coordinator.name })}
+              </Text>
+            </View>
+          )}
         </SafeAreaView>
-      </View>
+      </LinearGradient>
 
-      {/* 2. FLOATING STATS CARD (overlaps header) */}
-      <View style={styles.floatingStatsContainer}>
-        <View style={styles.floatingStatsCard}>
-          <QuickStat
-            value={stats.total_artisans}
-            label={t('Artisans')}
-            valueColor={color.brand600}
+      {/* 2. ELEVATED FLOATING KPI DECK (4 Interactive Pods) */}
+      <View style={styles.statsOverlapContainer}>
+        <View style={styles.statsCard}>
+          {/* Stat 1: Total Artisans */}
+          <TouchableOpacity
+            style={styles.statCell}
             onPress={() => router.push('/agent/artisans')}
-          />
-          <View style={styles.verticalDivider} />
-          <QuickStat
-            value={stats.verified_artisans}
-            label={t('Verified')}
-            valueColor={color.accent600}
+            activeOpacity={0.7}
+          >
+            <View style={[styles.statIconTile, { backgroundColor: '#EFF6FF' }]}>
+              <MaterialIcons name="engineering" size={16} color="#1D4ED8" />
+            </View>
+            <Text style={[styles.statValue, { color: '#0F172A' }]}>{stats.total_artisans}</Text>
+            <Text style={styles.statLabel}>{t('Artisans')}</Text>
+          </TouchableOpacity>
+
+          <View style={styles.statDivider} />
+
+          {/* Stat 2: Verified Badges */}
+          <TouchableOpacity
+            style={styles.statCell}
             onPress={() => router.push({ pathname: '/agent/artisans', params: { filter: 'approved' } })}
-          />
-          <View style={styles.verticalDivider} />
-          <QuickStat
-            value={stats.pending_verification}
-            label={t('Pending')}
-            valueColor={color.warn600}
+            activeOpacity={0.7}
+          >
+            <View style={[styles.statIconTile, { backgroundColor: '#ECFDF5' }]}>
+              <MaterialIcons name="verified" size={16} color="#059669" />
+            </View>
+            <Text style={[styles.statValue, { color: '#059669' }]}>{stats.verified_artisans}</Text>
+            <Text style={styles.statLabel}>{t('Verified')}</Text>
+          </TouchableOpacity>
+
+          <View style={styles.statDivider} />
+
+          {/* Stat 3: Pending Review */}
+          <TouchableOpacity
+            style={styles.statCell}
             onPress={() => router.push({ pathname: '/agent/artisans', params: { filter: 'pending' } })}
-          />
+            activeOpacity={0.7}
+          >
+            <View style={[styles.statIconTile, { backgroundColor: '#FFFBEB' }]}>
+              <MaterialIcons name="hourglass-top" size={16} color="#D97706" />
+            </View>
+            <Text style={[styles.statValue, { color: '#D97706' }]}>{stats.pending_verification}</Text>
+            <Text style={styles.statLabel}>{t('Pending')}</Text>
+          </TouchableOpacity>
+
+          <View style={styles.statDivider} />
+
+          {/* Stat 4: Service Requests */}
+          <TouchableOpacity
+            style={styles.statCell}
+            onPress={() => router.push('/agent/service-requests')}
+            activeOpacity={0.7}
+          >
+            <View style={[styles.statIconTile, { backgroundColor: stats.pending_service_requests > 0 ? '#FEF2F2' : '#EEF2FF' }]}>
+              <MaterialIcons
+                name="event-note"
+                size={16}
+                color={stats.pending_service_requests > 0 ? '#DC2626' : '#4F46E5'}
+              />
+            </View>
+            <Text
+              style={[
+                styles.statValue,
+                { color: stats.pending_service_requests > 0 ? '#DC2626' : '#4F46E5' },
+              ]}
+            >
+              {stats.pending_service_requests}
+            </Text>
+            <Text style={styles.statLabel}>{t('Requests')}</Text>
+          </TouchableOpacity>
         </View>
       </View>
 
-      {/* 3. SCROLL CONTENT */}
+      {/* 3. SCROLLABLE OPERATIONS STREAM */}
       <ScrollView
-        style={styles.content}
-        contentContainerStyle={{ paddingBottom: 100, paddingTop: 56 }}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={color.brand600} />}
+        style={styles.scrollContent}
+        contentContainerStyle={styles.scrollContainer}
         showsVerticalScrollIndicator={false}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#1B5FD9" />}
       >
-
-        <EmailVerificationBanner />
-
-        {/* SYNC STATUS — offline-first field registration. Only shown once
-            this device has actually queued something, so a fresh install
-            with no history isn't cluttered with an all-zero card. */}
+        {/* OFFLINE SYNC CARD */}
         {syncCounts.total > 0 && (
           <View style={styles.syncCard}>
             <View style={styles.syncHeaderRow}>
-              <MaterialIcons
-                name={syncCounts.pending_sync > 0 ? 'cloud-off' : 'cloud-done'}
-                size={18}
-                color={syncCounts.pending_sync > 0 ? color.warn600 : color.accent600}
-              />
-              <Text style={styles.syncTitle}>{isCoordinator ? t('Agent creation sync status') : t('Registration sync status')}</Text>
+              <View style={[styles.syncIconWrap, { backgroundColor: syncCounts.pending_sync > 0 ? '#FEF3C7' : '#DCFCE7' }]}>
+                <MaterialIcons
+                  name={syncCounts.pending_sync > 0 ? 'cloud-upload' : 'cloud-done'}
+                  size={18}
+                  color={syncCounts.pending_sync > 0 ? '#D97706' : '#16A34A'}
+                />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.syncTitle}>{t('Offline Sync Queue')}</Text>
+                <Text style={styles.syncSubtitle}>
+                  {syncCounts.pending_sync > 0
+                    ? t('{{count}} items queued for cloud upload', { count: syncCounts.pending_sync })
+                    : t('All registrations synced with server')}
+                </Text>
+              </View>
             </View>
+
             <View style={styles.syncCountsRow}>
               <View style={styles.syncCountBox}>
-                <Text style={[styles.syncCountValue, { color: color.warn600 }]}>{syncCounts.pending_sync}</Text>
-                <Text style={styles.syncCountLabel}>{t('Pending sync')}</Text>
+                <Text style={[styles.syncCountValue, { color: '#D97706' }]}>{syncCounts.pending_sync}</Text>
+                <Text style={styles.syncCountLabel}>{t('Pending')}</Text>
               </View>
               <View style={styles.syncCountBox}>
-                <Text style={[styles.syncCountValue, { color: color.accent600 }]}>{syncCounts.server_verified}</Text>
-                <Text style={styles.syncCountLabel}>{t('Server confirmed')}</Text>
+                <Text style={[styles.syncCountValue, { color: '#059669' }]}>{syncCounts.server_verified}</Text>
+                <Text style={styles.syncCountLabel}>{t('Synced')}</Text>
               </View>
               {syncCounts.failed > 0 && (
                 <View style={styles.syncCountBox}>
-                  <Text style={[styles.syncCountValue, { color: color.danger600 }]}>{syncCounts.failed}</Text>
-                  <Text style={styles.syncCountLabel}>{t('Needs attention')}</Text>
+                  <Text style={[styles.syncCountValue, { color: '#DC2626' }]}>{syncCounts.failed}</Text>
+                  <Text style={styles.syncCountLabel}>{t('Needs Review')}</Text>
                 </View>
               )}
             </View>
-            {syncCounts.pending_sync > 0 && (
-              <Text style={styles.syncHint}>
-                {t("These registrations are saved on this device and will sync automatically once you're back online.")}
-              </Text>
-            )}
           </View>
         )}
 
-        {/* QUICK ACTIONS — 2×2 grid of white cards with tonal icon tiles */}
-        <Text style={styles.sectionTitle}>{isCoordinator ? t('Coordinator actions') : t('Agent actions')}</Text>
-        <View style={styles.actionGrid}>
-          <ActionCard
-            title={t('Register artisan')}
-            subtitle={t('New profile')}
-            icon="person-add"
-            tileBg={color.brand100}
-            tileFg={color.brand600}
+        {/* PRIMARY GROUND ACTIONS (Hero Banners) */}
+        <View style={styles.sectionHeaderRow}>
+          <Text style={styles.sectionTitle}>{t('Ground Operations')}</Text>
+          <Text style={styles.sectionCaption}>{t('Direct Field Registration')}</Text>
+        </View>
+
+        <View style={styles.heroActionDeck}>
+          {/* Hero 1: Register Artisan */}
+          <TouchableOpacity
+            style={styles.heroActionCard}
             onPress={() => router.push('/agent/register')}
-          />
-          <ActionCard
-            title={t('Register business')}
-            subtitle={t('New profile')}
-            icon="storefront"
-            tileBg={color.brand100}
-            tileFg={color.brand600}
-            onPress={() => router.push('/agent/register-business')}
-          />
-          <ActionCard
-            title={isCoordinator ? t('State clients') : t('LGA clients')}
-            subtitle={t('View all')}
-            icon="groups"
-            tileBg={color.brand100}
-            tileFg={color.brand600}
-            onPress={() => router.push('/agent/clients')}
-          />
-          <ActionCard
-            title={t('Service requests')}
-            subtitle={
-              stats.pending_service_requests
-                ? t('{{count}} pending', { count: stats.pending_service_requests })
-                : t('From clients')
-            }
-            icon="event-note"
-            tileBg={stats.pending_service_requests ? color.warn100 : color.accent100}
-            tileFg={stats.pending_service_requests ? color.warn600 : color.accent600}
-            onPress={() => router.push('/agent/service-requests')}
-          />
-          <ActionCard
-            title={t('Businesses')}
-            subtitle={
-              stats.pending_business_verification
-                ? t('{{count}} pending', { count: stats.pending_business_verification })
-                : t('Registrations')
-            }
-            icon="storefront"
-            tileBg={stats.pending_business_verification ? color.warn100 : color.accent100}
-            tileFg={stats.pending_business_verification ? color.warn600 : color.accent600}
-            onPress={() => router.push('/agent/businesses')}
-          />
-          {user?.role === 'state_coordinator' && (
-            <>
-              <ActionCard
-                title={t('My agents')}
-                subtitle={
-                  stats.pending_agents ? t('{{count}} pending approval', { count: stats.pending_agents }) : t('Oversee & manage')
-                }
-                icon="supervisor-account"
-                tileBg={stats.pending_agents ? color.warn100 : color.accent100}
-                tileFg={stats.pending_agents ? color.warn600 : color.accent600}
-                onPress={() => router.push('/coordinator/agents')}
-              />
-              <ActionCard
-                title={t('Create agent')}
-                subtitle={t('Onboard new')}
-                icon="person-add-alt"
-                tileBg={color.accent100}
-                tileFg={color.accent600}
-                onPress={() => router.push('/coordinator/create-agent')}
-              />
-              <ActionCard
-                title={t('Reports')}
-                subtitle={t('Escalations')}
-                icon="report"
-                tileBg={color.warn100}
-                tileFg={color.warn600}
-                onPress={() => router.push('/coordinator/reports')}
-              />
-              <ActionCard
-                title={t('LGA management')}
-                subtitle={t('Drill into an LGA')}
-                icon="location-city"
-                tileBg={color.brand100}
-                tileFg={color.brand600}
-                onPress={() => router.push('/coordinator/lgas')}
-              />
-              <ActionCard
-                title={t('Ask AI')}
-                subtitle={t('Find an agent')}
-                icon="auto-awesome"
-                tileBg={color.accent100}
-                tileFg={color.accent600}
-                onPress={() => router.push('/chat/ai')}
-              />
-            </>
-          )}
-        </View>
-
-        {/* PERFORMANCE OVERVIEW */}
-        <Text style={styles.sectionTitle}>{t('Performance')}</Text>
-        <View style={styles.statsCard}>
-          <StatRow
-            title={isCoordinator ? t('State clients') : t('LGA clients')}
-            value={stats.total_clients}
-            icon="groups"
-            tileBg={color.brand100}
-            tileFg={color.brand600}
-          />
-          <View style={styles.horizontalDivider} />
-          <StatRow
-            title={t('Verified artisans')}
-            value={stats.verified_artisans}
-            icon="done-all"
-            tileBg={color.accent100}
-            tileFg={color.accent600}
-          />
-          {isCoordinator && stats.total_agents !== undefined && (
-            <>
-              <View style={styles.horizontalDivider} />
-              <StatRow
-                title={t('Total agents')}
-                value={stats.total_agents}
-                icon="supervisor-account"
-                tileBg={color.accent100}
-                tileFg={color.accent600}
-              />
-              <View style={styles.horizontalDivider} />
-              <StatRow
-                title={t('Active agents')}
-                value={stats.active_agents ?? 0}
-                icon="check-circle"
-                tileBg={color.accent100}
-                tileFg={color.accent600}
-              />
-              <View style={styles.horizontalDivider} />
-              <StatRow
-                title={t('Registered businesses')}
-                value={stats.total_businesses ?? 0}
-                icon="storefront"
-                tileBg={color.brand100}
-                tileFg={color.brand600}
-              />
-            </>
-          )}
-        </View>
-
-        {/* ATTENTION REQUIRED — Artisan/Business -> Coordinator Dashboard
-            Connection (item 9): one glanceable summary of everything
-            currently waiting on the coordinator, so nothing needing
-            action gets missed in a separate list somewhere. */}
-        {isCoordinator && stats.attention_required && (
-          Object.values(stats.attention_required).some((n) => n > 0) && (
-            <>
-              <Text style={styles.sectionTitle}>{t('Needs your attention')}</Text>
-              <View style={styles.attentionCard}>
-                {stats.attention_required.pending_artisan_verification > 0 && (
-                  <Pressable style={styles.attentionRow} onPress={() => router.push('/agent/artisans')}>
-                    <MaterialIcons name="verified" size={16} color={color.warn600} />
-                    <Text style={styles.attentionText}>
-                      {t('{{count}} artisan(s) awaiting verification', { count: stats.attention_required.pending_artisan_verification })}
-                    </Text>
-                    <MaterialIcons name="chevron-right" size={18} color={color.ink300} />
-                  </Pressable>
-                )}
-                {stats.attention_required.pending_business_verification > 0 && (
-                  <Pressable style={styles.attentionRow} onPress={() => router.push('/agent/businesses')}>
-                    <MaterialIcons name="storefront" size={16} color={color.warn600} />
-                    <Text style={styles.attentionText}>
-                      {t('{{count}} business(es) awaiting verification', { count: stats.attention_required.pending_business_verification })}
-                    </Text>
-                    <MaterialIcons name="chevron-right" size={18} color={color.ink300} />
-                  </Pressable>
-                )}
-                {stats.attention_required.pending_agent_approvals > 0 && (
-                  <Pressable style={styles.attentionRow} onPress={() => router.push('/coordinator/agents')}>
-                    <MaterialIcons name="supervisor-account" size={16} color={color.warn600} />
-                    <Text style={styles.attentionText}>
-                      {t('{{count}} agent(s) awaiting approval', { count: stats.attention_required.pending_agent_approvals })}
-                    </Text>
-                    <MaterialIcons name="chevron-right" size={18} color={color.ink300} />
-                  </Pressable>
-                )}
-                {stats.attention_required.open_reports > 0 && (
-                  <Pressable style={styles.attentionRow} onPress={() => router.push('/coordinator/reports')}>
-                    <MaterialIcons name="report" size={16} color={color.warn600} />
-                    <Text style={styles.attentionText}>
-                      {t('{{count}} open report(s)', { count: stats.attention_required.open_reports })}
-                    </Text>
-                    <MaterialIcons name="chevron-right" size={18} color={color.ink300} />
-                  </Pressable>
-                )}
+            activeOpacity={0.85}
+          >
+            <LinearGradient
+              colors={['#1B5FD9', '#1044A5']}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+              style={styles.heroActionGradient}
+            >
+              <View style={styles.heroActionTop}>
+                <View style={styles.heroIconCircle}>
+                  <MaterialIcons name="person-add-alt-1" size={24} color="#FFFFFF" />
+                </View>
+                <View style={styles.heroBadgePill}>
+                  <Text style={styles.heroBadgeText}>{t('PRIMARY TASK')}</Text>
+                </View>
               </View>
-            </>
-          )
-        )}
 
-        {/* RECENT ACTIVITIES — Coordinator Dashboard spec item 3. A short
-            preview of the state-wide Activity Log; "View all" opens the
-            full, paginated list (app/coordinator/activity-log.tsx). */}
-        {isCoordinator && (
-          <>
-            <View style={styles.sectionHeaderRow}>
-              <Text style={[styles.sectionTitle, { marginTop: 0 }]}>{t('Recent activities')}</Text>
-              <Pressable onPress={() => router.push('/coordinator/activity-log')} accessibilityRole="button">
-                <Text style={styles.viewAllLink}>{t('View all')}</Text>
-              </Pressable>
+              <Text style={styles.heroActionTitle}>{t('Register Artisan')}</Text>
+              <Text style={styles.heroActionDesc}>
+                {t('Onboard local tradespeople, mechanics, plumbers, and carpenters.')}
+              </Text>
+
+              <View style={styles.heroActionFooter}>
+                <Text style={styles.heroActionCta}>{t('Start Registration')}</Text>
+                <MaterialIcons name="arrow-forward" size={18} color="#FFFFFF" />
+              </View>
+            </LinearGradient>
+          </TouchableOpacity>
+
+          {/* Hero 2: Register Business */}
+          <TouchableOpacity
+            style={styles.heroActionCard}
+            onPress={() => router.push('/agent/register-business')}
+            activeOpacity={0.85}
+          >
+            <LinearGradient
+              colors={['#0F766E', '#065F46']}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+              style={styles.heroActionGradient}
+            >
+              <View style={styles.heroActionTop}>
+                <View style={[styles.heroIconCircle, { backgroundColor: 'rgba(255,255,255,0.2)' }]}>
+                  <MaterialIcons name="storefront" size={24} color="#FFFFFF" />
+                </View>
+                <View style={[styles.heroBadgePill, { backgroundColor: 'rgba(255,255,255,0.2)' }]}>
+                  <Text style={styles.heroBadgeText}>{t('ENTERPRISE')}</Text>
+                </View>
+              </View>
+
+              <Text style={styles.heroActionTitle}>{t('Register Business')}</Text>
+              <Text style={styles.heroActionDesc}>
+                {t('Enroll shops, repair centers, clinics, and local enterprises.')}
+              </Text>
+
+              <View style={styles.heroActionFooter}>
+                <Text style={styles.heroActionCta}>{t('Register Shop')}</Text>
+                <MaterialIcons name="arrow-forward" size={18} color="#FFFFFF" />
+              </View>
+            </LinearGradient>
+          </TouchableOpacity>
+        </View>
+
+        {/* 4-GRID TERRITORY MANAGEMENT HUB */}
+        <View style={[styles.sectionHeaderRow, { marginTop: space.lg }]}>
+          <Text style={styles.sectionTitle}>{t('Territory Hub')}</Text>
+          <Text style={styles.sectionCaption}>{t('Manage LGA Directory')}</Text>
+        </View>
+
+        <View style={styles.hubGrid}>
+          {/* Hub 1: LGA Artisans Directory */}
+          <TouchableOpacity
+            style={styles.hubCard}
+            onPress={() => router.push('/agent/artisans')}
+            activeOpacity={0.8}
+          >
+            <View style={[styles.hubIconWrap, { backgroundColor: '#EFF6FF' }]}>
+              <MaterialIcons name="engineering" size={22} color="#1D4ED8" />
             </View>
-            <View style={styles.activityCard}>
-              {recentActivity.length === 0 ? (
-                <Text style={styles.activityEmpty}>{t('No activity yet.')}</Text>
-              ) : (
-                recentActivity.map((item, index) => {
-                  const { date, time } = formatActivityWhen(item.created_at);
-                  return (
-                    <View key={item.id} style={[styles.activityRow, index > 0 && styles.activityRowDivider]}>
-                      <View style={styles.activityIconTile}>
-                        <MaterialIcons name={ACTIVITY_ACTION_ICONS[item.action] || 'history'} size={16} color={color.brand600} />
-                      </View>
-                      <View style={{ flex: 1 }}>
-                        <Text style={styles.activityLine} numberOfLines={2}>
-                          <Text style={styles.activityActor}>{item.actor_name}</Text>
-                          <Text style={styles.activityArrow}> {'→'} </Text>
-                          <Text style={styles.activityAction}>{item.action_display}</Text>
-                        </Text>
-                        <Text style={styles.activityMeta} numberOfLines={1}>
-                          {item.lga_details?.name ? `${item.lga_details.name} ${'•'} ` : ''}{date} {'•'} {time}
-                        </Text>
-                      </View>
+            <Text style={styles.hubCardTitle}>{t('LGA Artisans')}</Text>
+            <Text style={styles.hubCardSub}>{t('{{count}} enrolled', { count: stats.total_artisans })}</Text>
+            <View style={styles.hubChevronWrap}>
+              <MaterialIcons name="chevron-right" size={18} color="#94A3B8" />
+            </View>
+          </TouchableOpacity>
+
+          {/* Hub 2: LGA Businesses Directory */}
+          <TouchableOpacity
+            style={styles.hubCard}
+            onPress={() => router.push('/agent/businesses')}
+            activeOpacity={0.8}
+          >
+            <View style={[styles.hubIconWrap, { backgroundColor: '#F0FDF4' }]}>
+              <MaterialIcons name="domain" size={22} color="#059669" />
+            </View>
+            <Text style={styles.hubCardTitle}>{t('LGA Businesses')}</Text>
+            <Text style={styles.hubCardSub}>{t('Physical verify')}</Text>
+            <View style={styles.hubChevronWrap}>
+              <MaterialIcons name="chevron-right" size={18} color="#94A3B8" />
+            </View>
+          </TouchableOpacity>
+
+          {/* Hub 3: Service Requests */}
+          <TouchableOpacity
+            style={styles.hubCard}
+            onPress={() => router.push('/agent/service-requests')}
+            activeOpacity={0.8}
+          >
+            <View style={[styles.hubIconWrap, { backgroundColor: stats.pending_service_requests > 0 ? '#FEF3C7' : '#EEF2FF' }]}>
+              <MaterialIcons
+                name="assignment"
+                size={22}
+                color={stats.pending_service_requests > 0 ? '#D97706' : '#4F46E5'}
+              />
+            </View>
+            <Text style={styles.hubCardTitle}>{t('Service Bookings')}</Text>
+            <Text
+              style={[
+                styles.hubCardSub,
+                stats.pending_service_requests > 0 && { color: '#D97706', fontFamily: font.bold },
+              ]}
+            >
+              {stats.pending_service_requests > 0
+                ? t('{{count}} waiting', { count: stats.pending_service_requests })
+                : t('Client requests')}
+            </Text>
+            <View style={styles.hubChevronWrap}>
+              <MaterialIcons name="chevron-right" size={18} color="#94A3B8" />
+            </View>
+          </TouchableOpacity>
+
+          {/* Hub 4: LGA Clients */}
+          <TouchableOpacity
+            style={styles.hubCard}
+            onPress={() => router.push('/agent/clients')}
+            activeOpacity={0.8}
+          >
+            <View style={[styles.hubIconWrap, { backgroundColor: '#F3E8FF' }]}>
+              <MaterialIcons name="people-alt" size={22} color="#9333EA" />
+            </View>
+            <Text style={styles.hubCardTitle}>{t('LGA Clients')}</Text>
+            <Text style={styles.hubCardSub}>{t('{{count}} registered', { count: stats.total_clients })}</Text>
+            <View style={styles.hubChevronWrap}>
+              <MaterialIcons name="chevron-right" size={18} color="#94A3B8" />
+            </View>
+          </TouchableOpacity>
+        </View>
+
+        {/* 4. RECENT LGA ARTISANS LIST STREAM */}
+        <View style={[styles.sectionHeaderRow, { marginTop: space.xl }]}>
+          <Text style={styles.sectionTitle}>{t('Recent LGA Artisans')}</Text>
+          <TouchableOpacity
+            onPress={() => router.push('/agent/artisans')}
+            style={styles.viewAllBtn}
+            accessibilityRole="button"
+            accessibilityLabel={t('View all artisans')}
+          >
+            <Text style={styles.viewAllText}>{t('View All')}</Text>
+            <MaterialIcons name="chevron-right" size={16} color="#1B5FD9" />
+          </TouchableOpacity>
+        </View>
+
+        {recentArtisans.length > 0 ? (
+          <View style={styles.recentStreamCard}>
+            {recentArtisans.map((item, index) => {
+              const person = item.user_details || {};
+              const name = `${person.first_name || ''} ${person.last_name || ''}`.trim() || t('Artisan');
+              const trade = i18n.language === 'ha' && item.category_name_ha
+                ? item.category_name_ha
+                : (item.profession_name || item.category_name || t('General Artisan'));
+              const isVerified = item.verification_status === 'approved';
+              const isLast = index === recentArtisans.length - 1;
+
+              return (
+                <Pressable
+                  key={item.id}
+                  style={({ pressed }) => [
+                    styles.artisanRow,
+                    isLast && { borderBottomWidth: 0 },
+                    pressed && { backgroundColor: '#F8FAFC' },
+                  ]}
+                  onPress={() => router.push({ pathname: '/agent/artisans/[id]', params: { id: item.id } })}
+                  accessibilityRole="button"
+                  accessibilityLabel={name}
+                >
+                  <Avatar
+                    name={name}
+                    uri={person.profile_picture}
+                    gender={person.gender}
+                    size={46}
+                    verified={isVerified}
+                  />
+
+                  <View style={styles.artisanMeta}>
+                    <Text style={styles.artisanName} numberOfLines={1}>{name}</Text>
+                    <View style={styles.tradePill}>
+                      <Text style={styles.tradeText} numberOfLines={1}>{trade}</Text>
                     </View>
-                  );
-                })
-              )}
+                  </View>
+
+                  {person.registration_fee_paid === false ? (
+                    <View style={[styles.statusBadge, { backgroundColor: '#FEF2F2' }]}>
+                      <MaterialIcons name="error-outline" size={13} color="#DC2626" />
+                      <Text style={[styles.statusBadgeText, { color: '#DC2626', fontFamily: font.extrabold }]}>
+                        {t('₦2.5k Unpaid')}
+                      </Text>
+                    </View>
+                  ) : (
+                    <View style={[styles.statusBadge, { backgroundColor: isVerified ? '#ECFDF5' : '#FFFBEB' }]}>
+                      <MaterialIcons
+                        name={isVerified ? 'verified' : 'schedule'}
+                        size={13}
+                        color={isVerified ? '#059669' : '#D97706'}
+                      />
+                      <Text style={[styles.statusBadgeText, { color: isVerified ? '#059669' : '#D97706' }]}>
+                        {isVerified ? t('Verified') : t('Pending')}
+                      </Text>
+                    </View>
+                  )}
+                </Pressable>
+              );
+            })}
+          </View>
+        ) : (
+          <View style={styles.emptyArtisansCard}>
+            <View style={styles.emptyIconCircle}>
+              <MaterialIcons name="engineering" size={32} color="#94A3B8" />
             </View>
-          </>
+            <Text style={styles.emptyTitle}>{t('No artisans registered yet')}</Text>
+            <Text style={styles.emptySubtitle}>
+              {t('You are the official agent for this LGA. Start onboarding local tradespeople today!')}
+            </Text>
+            <TouchableOpacity
+              style={styles.emptyCtaButton}
+              onPress={() => router.push('/agent/register')}
+            >
+              <MaterialIcons name="person-add" size={17} color="#FFFFFF" style={{ marginRight: 6 }} />
+              <Text style={styles.emptyCtaText}>{t('Register First Artisan')}</Text>
+            </TouchableOpacity>
+          </View>
         )}
 
+        {/* 5. AGENT VIP RECRUITMENT PASS */}
+        <View style={[styles.sectionHeaderRow, { marginTop: space.xl }]}>
+          <Text style={styles.sectionTitle}>{t('Agent Recruitment Pass')}</Text>
+          <Text style={styles.sectionCaption}>{t('Share Your Referral Code')}</Text>
+        </View>
+
+        <View style={styles.referralPassCard}>
+          <LinearGradient
+            colors={['#0F172A', '#1E293B']}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+            style={styles.referralPassHeader}
+          >
+            <View style={styles.passHeaderLeft}>
+              <View style={styles.passChip}>
+                <Ionicons name="sparkles" size={12} color="#F59E0B" />
+                <Text style={styles.passChipText}>{t('OFFICIAL PASS')}</Text>
+              </View>
+              <Text style={styles.passTitle}>{t('Field Referral Code')}</Text>
+            </View>
+            <View style={styles.qrBadgeCircle}>
+              <MaterialIcons name="qr-code-2" size={24} color="#38BDF8" />
+            </View>
+          </LinearGradient>
+
+          <View style={styles.referralPassBody}>
+            <Text style={styles.passInstruction}>
+              {t('Share this code with artisans and businesses so they enroll under your direct field supervision.')}
+            </Text>
+
+            <View style={styles.codeContainer}>
+              <Text style={styles.codeText} selectable>
+                {agentReferralCode}
+              </Text>
+            </View>
+
+            {/* Tactile 1-Tap Share Triggers */}
+            <View style={styles.shareDeck}>
+              <TouchableOpacity
+                style={styles.shareWhatsAppBtn}
+                onPress={shareWhatsApp}
+                activeOpacity={0.8}
+              >
+                <Ionicons name="logo-whatsapp" size={16} color="#FFF" />
+                <Text style={styles.shareBtnText}>{t('WhatsApp')}</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={styles.shareSMSBtn}
+                onPress={shareSMS}
+                activeOpacity={0.8}
+              >
+                <MaterialIcons name="sms" size={16} color="#FFF" />
+                <Text style={styles.shareBtnText}>{t('SMS')}</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={styles.shareCopyBtn}
+                onPress={copyReferralCode}
+                activeOpacity={0.8}
+              >
+                <MaterialIcons name="content-copy" size={16} color="#0F172A" />
+                <Text style={[styles.shareBtnText, { color: '#0F172A' }]}>{t('Copy')}</Text>
+              </TouchableOpacity>
+            </View>
+
+            {/* Performance Stats */}
+            <View style={styles.passStatsRow}>
+              <View style={styles.passStatBox}>
+                <Text style={styles.passStatNum}>
+                  {referral?.total_artisans_registered ?? stats.total_artisans}
+                </Text>
+                <Text style={styles.passStatLabel}>{t('Artisans Enrolled')}</Text>
+              </View>
+              <View style={styles.passStatDivider} />
+              <View style={styles.passStatBox}>
+                <Text style={[styles.passStatNum, { color: '#059669' }]}>
+                  {stats.verified_artisans}
+                </Text>
+                <Text style={styles.passStatLabel}>{t('Verified Badges')}</Text>
+              </View>
+            </View>
+          </View>
+        </View>
       </ScrollView>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: color.surfaceSunken },
+  container: {
+    flex: 1,
+    backgroundColor: '#F6F8FB',
+  },
 
-  // Header
-  header: {
-    backgroundColor: color.brand900,
-    paddingBottom: 64,
-    borderBottomLeftRadius: radius.xxl,
-    borderBottomRightRadius: radius.xxl,
+  /* 1. HERO FIELD HEADER */
+  fieldHeader: {
+    paddingBottom: 44,
+    borderBottomLeftRadius: 30,
+    borderBottomRightRadius: 30,
+  },
+  safeHeader: {
+    paddingHorizontal: 18,
   },
   topBar: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
-    paddingHorizontal: space.xl,
-    marginTop: space.md,
-    marginBottom: space.xl,
+    justifyContent: 'space-between',
+    paddingVertical: 8,
   },
-  brandName: {
-    color: '#FFF',
-    fontFamily: font.extrabold,
-    fontSize: 15,
-    letterSpacing: 0.3,
-  },
-  headerActions: { flexDirection: 'row', alignItems: 'center', gap: space.sm },
-  iconBtn: {
-    width: 34, height: 34, borderRadius: radius.md,
-    backgroundColor: 'rgba(255,255,255,0.1)',
-    alignItems: 'center', justifyContent: 'center',
-  },
-  logoutButton: {
+  territoryBadge: {
     flexDirection: 'row',
     alignItems: 'center',
+    backgroundColor: 'rgba(255, 255, 255, 0.12)',
+    borderRadius: 20,
+    paddingHorizontal: 11,
+    paddingVertical: 5,
     gap: 6,
-    backgroundColor: 'rgba(239, 68, 68, 0.18)',
-    paddingVertical: 7,
-    paddingHorizontal: 12,
-    borderRadius: radius.full,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.18)',
   },
-  logoutText: { color: '#FECACA', fontFamily: font.extrabold, fontSize: 12 },
+  liveDot: {
+    width: 6.5,
+    height: 6.5,
+    borderRadius: 3.5,
+    backgroundColor: '#22C55E',
+  },
+  territoryText: {
+    fontFamily: font.bold,
+    fontSize: 11,
+    color: '#F8FAFC',
+    letterSpacing: 0.6,
+  },
+  topActionsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  headerIconButton: {
+    width: 38,
+    height: 38,
+    borderRadius: 12,
+    backgroundColor: 'rgba(255, 255, 255, 0.14)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.15)',
+  },
 
-  // Profile Section
-  profileSection: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: space.xl },
-  profileInfo: { flex: 1, marginLeft: space.lg },
-  userName: { color: '#FFF', fontFamily: font.extrabold, fontSize: 19, letterSpacing: -0.19 },
+  agentProfileRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingTop: 12,
+    gap: 14,
+  },
+  avatarGlowWrap: {
+    padding: 2.5,
+    borderRadius: 24,
+    backgroundColor: 'rgba(255, 255, 255, 0.25)',
+  },
+  profileTextWrap: {
+    flex: 1,
+  },
+  roleTag: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  roleLabel: {
+    fontFamily: font.extrabold,
+    fontSize: 10,
+    color: '#93C5FD',
+    letterSpacing: 1,
+  },
+  agentName: {
+    fontFamily: font.extrabold,
+    fontSize: 20,
+    color: '#FFFFFF',
+    marginTop: 2,
+    letterSpacing: -0.3,
+  },
+  badgeRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 6,
+    gap: 8,
+    flexWrap: 'wrap',
+  },
   idBadge: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: 'rgba(255,255,255,0.14)',
-    alignSelf: 'flex-start',
+    backgroundColor: 'rgba(255, 255, 255, 0.18)',
+    borderRadius: 8,
     paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 6,
-    marginTop: 5,
-    marginBottom: 5,
+    paddingVertical: 3.5,
+    gap: 5,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.15)',
   },
-  idLabel: { color: 'rgba(255,255,255,0.72)', fontFamily: font.bold, fontSize: 10.5, marginRight: 4 },
-  idValue: { color: '#FFF', fontFamily: font.extrabold, fontSize: 11.5, letterSpacing: 0.4 },
-  locationRow: { flexDirection: 'row', alignItems: 'center', gap: 4 },
-  locationText: { color: 'rgba(255,255,255,0.72)', fontFamily: font.bold, fontSize: 12 },
-
-  // Floating Stats
-  floatingStatsContainer: { marginTop: -44, paddingHorizontal: space.xl, zIndex: 10 },
-  floatingStatsCard: {
-    flexDirection: 'row',
-    backgroundColor: color.surface,
-    borderRadius: radius.xl,
-    paddingVertical: space.lg,
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    ...shadow.e2,
-  },
-  quickStat: { alignItems: 'center', flex: 1 },
-  quickStatValue: { fontFamily: font.extrabold, fontSize: 20 },
-  quickStatLabel: {
-    fontFamily: font.extrabold,
-    fontSize: 10.5,
-    color: color.ink400,
-    marginTop: 4,
-    textTransform: 'uppercase',
+  idBadgeText: {
+    fontFamily: font.bold,
+    fontSize: 11,
+    color: '#FFFFFF',
     letterSpacing: 0.4,
   },
-  verticalDivider: { width: StyleSheet.hairlineWidth, height: 32, backgroundColor: color.border },
-
-  // Content
-  content: { flex: 1, paddingHorizontal: space.xl, marginTop: -40 },
-  sectionTitle: { ...type.heading, marginBottom: space.md, marginTop: space.xxl },
-
-  // Action Grid
-  actionGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: space.md },
-  actionCard: {
-    flexBasis: '47%',
-    flexGrow: 1,
-    backgroundColor: color.surface,
-    borderRadius: radius.lg,
-    borderWidth: 1,
-    borderColor: '#EEF2F8',
-    padding: space.lg,
-    ...shadow.e1,
-  },
-  actionIconTile: {
-    width: 40,
-    height: 40,
-    borderRadius: radius.md,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: space.md,
-  },
-  actionTitle: { fontFamily: font.extrabold, fontSize: 13.5, color: color.ink900 },
-  actionSubtitle: { fontFamily: font.bold, fontSize: 11.5, color: color.ink400, marginTop: 2 },
-
-  // Stats Rows
-  statsCard: {
-    backgroundColor: color.surface,
-    borderRadius: radius.xl,
-    padding: space.lg,
-    borderWidth: 1,
-    borderColor: '#EEF2F8',
-  },
-
-  syncCard: {
-    backgroundColor: color.surface,
-    borderRadius: radius.xl,
-    padding: space.lg,
-    borderWidth: 1,
-    borderColor: '#EEF2F8',
-    marginTop: space.lg,
-  },
-  syncHeaderRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: space.md },
-  syncTitle: { fontFamily: font.extrabold, fontSize: 14, color: color.ink900 },
-  syncCountsRow: { flexDirection: 'row', gap: space.xl },
-  syncCountBox: { flex: 1 },
-  syncCountValue: { fontFamily: font.extrabold, fontSize: 22 },
-  syncCountLabel: { fontFamily: font.medium, fontSize: 12, color: color.ink400, marginTop: 2 },
-  syncHint: { fontFamily: font.medium, fontSize: 12.5, color: color.ink400, marginTop: space.md, lineHeight: 18 },
-
-  statRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: space.md },
-  iconBox: {
-    width: 40,
-    height: 40,
-    borderRadius: radius.md,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginRight: space.md,
-  },
-  statRowText: { flex: 1 },
-  statRowLabel: { fontFamily: font.bold, fontSize: 12.5, color: color.ink400 },
-  statRowValue: { fontFamily: font.extrabold, fontSize: 15.5, color: color.ink900, marginTop: 1 },
-  trendBadge: {
+  locationPill: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: color.accent100,
+    backgroundColor: 'rgba(0, 0, 0, 0.2)',
+    borderRadius: 8,
     paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: radius.full,
+    paddingVertical: 3.5,
+    gap: 4,
   },
-  trendText: { color: color.accent600, fontFamily: font.extrabold, fontSize: 11, marginLeft: 2 },
-  horizontalDivider: { height: StyleSheet.hairlineWidth, backgroundColor: color.border },
+  locationText: {
+    fontFamily: font.medium,
+    fontSize: 11,
+    color: '#E0F2FE',
+  },
+  sponsorBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: 'rgba(255, 255, 255, 0.12)',
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    marginTop: 14,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.1)',
+  },
+  sponsorText: {
+    fontFamily: font.medium,
+    fontSize: 11.5,
+    color: '#E0F2FE',
+  },
 
-  // Recent activities preview
+  /* 2. ELEVATED FLOATING STATS CARD */
+  statsOverlapContainer: {
+    paddingHorizontal: 16,
+    marginTop: -30,
+  },
+  statsCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FFFFFF',
+    borderRadius: 20,
+    paddingVertical: 14,
+    paddingHorizontal: 8,
+    shadowColor: '#071E3D',
+    shadowOpacity: 0.09,
+    shadowRadius: 18,
+    shadowOffset: { width: 0, height: 6 },
+    elevation: 5,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+  },
+  statCell: {
+    flex: 1,
+    alignItems: 'center',
+  },
+  statIconTile: {
+    width: 32,
+    height: 32,
+    borderRadius: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 4,
+  },
+  statValue: {
+    fontFamily: font.extrabold,
+    fontSize: 17,
+    letterSpacing: -0.3,
+  },
+  statLabel: {
+    fontFamily: font.bold,
+    fontSize: 11,
+    color: '#64748B',
+    marginTop: 2,
+  },
+  statDivider: {
+    width: 1,
+    height: 36,
+    backgroundColor: '#F1F5F9',
+  },
+
+  /* 3. SCROLL CONTENT */
+  scrollContent: {
+    flex: 1,
+  },
+  scrollContainer: {
+    paddingHorizontal: 16,
+    paddingTop: 18,
+    paddingBottom: 110,
+  },
   sectionHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'baseline',
+    justifyContent: 'space-between',
+    marginBottom: 10,
+  },
+  sectionTitle: {
+    fontFamily: font.extrabold,
+    fontSize: 14.5,
+    color: '#0F172A',
+    textTransform: 'uppercase',
+    letterSpacing: 0.6,
+  },
+  sectionCaption: {
+    fontFamily: font.medium,
+    fontSize: 11.5,
+    color: '#94A3B8',
+  },
+
+  /* SYNC CARD */
+  syncCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 16,
+    padding: 14,
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    shadowColor: '#0F172A',
+    shadowOpacity: 0.03,
+    shadowRadius: 8,
+    elevation: 2,
+  },
+  syncHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    marginBottom: 10,
+  },
+  syncIconWrap: {
+    width: 34,
+    height: 34,
+    borderRadius: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  syncTitle: {
+    fontFamily: font.bold,
+    fontSize: 13,
+    color: '#0F172A',
+  },
+  syncSubtitle: {
+    fontFamily: font.medium,
+    fontSize: 11,
+    color: '#64748B',
+    marginTop: 1,
+  },
+  syncCountsRow: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  syncCountBox: {
+    flex: 1,
+    backgroundColor: '#F8FAFC',
+    borderRadius: 10,
+    padding: 8,
+    alignItems: 'center',
+  },
+  syncCountValue: {
+    fontFamily: font.extrabold,
+    fontSize: 15,
+  },
+  syncCountLabel: {
+    fontFamily: font.medium,
+    fontSize: 10.5,
+    color: '#64748B',
+    marginTop: 2,
+  },
+
+  /* HERO ACTIONS DECK */
+  heroActionDeck: {
+    flexDirection: 'row',
+    gap: 12,
+    marginBottom: 18,
+  },
+  heroActionCard: {
+    flex: 1,
+    borderRadius: 20,
+    overflow: 'hidden',
+    shadowColor: '#0F172A',
+    shadowOpacity: 0.12,
+    shadowRadius: 12,
+    shadowOffset: { width: 0, height: 5 },
+    elevation: 4,
+  },
+  heroActionGradient: {
+    padding: 16,
+    minHeight: 180,
+    justifyContent: 'space-between',
+  },
+  heroActionTop: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginTop: space.xxl,
-    marginBottom: space.md,
   },
-  viewAllLink: { fontFamily: font.extrabold, fontSize: 12.5, color: color.brand600 },
-  activityCard: {
-    backgroundColor: color.surface,
-    borderRadius: radius.xl,
-    padding: space.lg,
-    borderWidth: 1,
-    borderColor: '#EEF2F8',
+  heroIconCircle: {
+    width: 42,
+    height: 42,
+    borderRadius: 14,
+    backgroundColor: 'rgba(255, 255, 255, 0.22)',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
-  activityEmpty: { fontFamily: font.medium, fontSize: 13, color: color.ink400, textAlign: 'center', paddingVertical: space.md },
-  activityRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: space.md },
-  activityRowDivider: { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: color.border },
-  activityIconTile: {
-    width: 32, height: 32, borderRadius: radius.md,
-    backgroundColor: color.brand100, alignItems: 'center', justifyContent: 'center',
-    marginRight: space.md,
+  heroBadgePill: {
+    backgroundColor: 'rgba(255, 255, 255, 0.22)',
+    paddingHorizontal: 7,
+    paddingVertical: 3,
+    borderRadius: 6,
   },
-  activityLine: { fontSize: 13, lineHeight: 18 },
-  activityActor: { fontFamily: font.extrabold, color: color.ink900 },
-  activityArrow: { fontFamily: font.bold, color: color.ink300 },
-  activityAction: { fontFamily: font.bold, color: color.ink600 },
-  activityMeta: { fontFamily: font.bold, fontSize: 11, color: color.ink300, marginTop: 2 },
-
-  // Attention required (item 9)
-  attentionCard: {
-    backgroundColor: '#FFFBEB',
-    borderRadius: radius.xl,
-    borderWidth: 1,
-    borderColor: '#FDE68A',
-    overflow: 'hidden',
+  heroBadgeText: {
+    fontFamily: font.bold,
+    fontSize: 9.5,
+    color: '#FFFFFF',
+    letterSpacing: 0.4,
   },
-  attentionRow: {
+  heroActionTitle: {
+    fontFamily: font.extrabold,
+    fontSize: 17,
+    color: '#FFFFFF',
+    marginTop: 10,
+    letterSpacing: -0.3,
+  },
+  heroActionDesc: {
+    fontFamily: font.medium,
+    fontSize: 11.5,
+    color: 'rgba(255, 255, 255, 0.85)',
+    marginTop: 4,
+    lineHeight: 16,
+  },
+  heroActionFooter: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: space.sm,
-    paddingHorizontal: space.lg,
-    paddingVertical: space.md,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: '#FDE68A',
+    gap: 6,
+    marginTop: 12,
+    paddingTop: 10,
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(255, 255, 255, 0.18)',
   },
-  attentionText: { flex: 1, fontFamily: font.bold, fontSize: 13, color: '#92400E' },
+  heroActionCta: {
+    fontFamily: font.bold,
+    fontSize: 12,
+    color: '#FFFFFF',
+  },
+
+  /* 4-GRID HUB */
+  hubGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 10,
+    marginBottom: 20,
+  },
+  hubCard: {
+    width: (width - 32 - 10) / 2,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 18,
+    padding: 14,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    shadowColor: '#0F172A',
+    shadowOpacity: 0.04,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 3 },
+    elevation: 2,
+    position: 'relative',
+  },
+  hubIconWrap: {
+    width: 38,
+    height: 38,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 10,
+  },
+  hubCardTitle: {
+    fontFamily: font.bold,
+    fontSize: 14,
+    color: '#0F172A',
+  },
+  hubCardSub: {
+    fontFamily: font.medium,
+    fontSize: 11.5,
+    color: '#64748B',
+    marginTop: 3,
+  },
+  hubChevronWrap: {
+    position: 'absolute',
+    top: 14,
+    right: 12,
+  },
+
+  /* RECENT ARTISANS STREAM */
+  viewAllBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  viewAllText: {
+    fontFamily: font.bold,
+    fontSize: 12.5,
+    color: '#1B5FD9',
+  },
+  recentStreamCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    paddingVertical: 2,
+    marginBottom: 20,
+    shadowColor: '#0F172A',
+    shadowOpacity: 0.04,
+    shadowRadius: 10,
+    elevation: 2,
+  },
+  artisanRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 12,
+    paddingHorizontal: 14,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F1F5F9',
+    gap: 12,
+  },
+  artisanMeta: {
+    flex: 1,
+  },
+  artisanName: {
+    fontFamily: font.bold,
+    fontSize: 14,
+    color: '#0F172A',
+  },
+  tradePill: {
+    alignSelf: 'flex-start',
+    backgroundColor: '#F1F5F9',
+    paddingHorizontal: 7,
+    paddingVertical: 2,
+    borderRadius: 6,
+    marginTop: 3,
+  },
+  tradeText: {
+    fontFamily: font.medium,
+    fontSize: 11,
+    color: '#475569',
+  },
+  statusBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 10,
+    gap: 4,
+  },
+  statusBadgeText: {
+    fontFamily: font.bold,
+    fontSize: 11,
+  },
+  emptyArtisansCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    padding: 24,
+    alignItems: 'center',
+    marginBottom: 20,
+  },
+  emptyIconCircle: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    backgroundColor: '#F1F5F9',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 8,
+  },
+  emptyTitle: {
+    fontFamily: font.bold,
+    fontSize: 14.5,
+    color: '#0F172A',
+  },
+  emptySubtitle: {
+    fontFamily: font.medium,
+    fontSize: 12,
+    color: '#64748B',
+    textAlign: 'center',
+    marginTop: 4,
+    lineHeight: 18,
+    paddingHorizontal: 12,
+  },
+  emptyCtaButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#1B5FD9',
+    paddingHorizontal: 18,
+    paddingVertical: 10,
+    borderRadius: 10,
+    marginTop: 14,
+  },
+  emptyCtaText: {
+    fontFamily: font.bold,
+    fontSize: 13,
+    color: '#FFFFFF',
+  },
+
+  /* 5. AGENT VIP RECRUITMENT PASS */
+  referralPassCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    overflow: 'hidden',
+    shadowColor: '#0F172A',
+    shadowOpacity: 0.06,
+    shadowRadius: 12,
+    elevation: 3,
+    marginBottom: 24,
+  },
+  referralPassHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+  },
+  passHeaderLeft: {},
+  passChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  passChipText: {
+    fontFamily: font.bold,
+    fontSize: 10,
+    color: '#F59E0B',
+    letterSpacing: 0.6,
+  },
+  passTitle: {
+    fontFamily: font.extrabold,
+    fontSize: 16,
+    color: '#FFFFFF',
+    marginTop: 2,
+  },
+  qrBadgeCircle: {
+    width: 40,
+    height: 40,
+    borderRadius: 12,
+    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  referralPassBody: {
+    padding: 16,
+  },
+  passInstruction: {
+    fontFamily: font.medium,
+    fontSize: 12,
+    color: '#64748B',
+    lineHeight: 17,
+  },
+  codeContainer: {
+    backgroundColor: '#F8FAFC',
+    borderWidth: 1.5,
+    borderStyle: 'dashed',
+    borderColor: '#93C5FD',
+    borderRadius: 12,
+    paddingVertical: 10,
+    paddingHorizontal: 16,
+    alignItems: 'center',
+    marginVertical: 12,
+  },
+  codeText: {
+    fontFamily: font.extrabold,
+    fontSize: 18,
+    color: '#1B5FD9',
+    letterSpacing: 2,
+  },
+  shareDeck: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  shareWhatsAppBtn: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#25D366',
+    paddingVertical: 10,
+    borderRadius: 10,
+    gap: 6,
+  },
+  shareSMSBtn: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#1B5FD9',
+    paddingVertical: 10,
+    borderRadius: 10,
+    gap: 6,
+  },
+  shareCopyBtn: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#F1F5F9',
+    paddingVertical: 10,
+    borderRadius: 10,
+    gap: 6,
+  },
+  shareBtnText: {
+    fontFamily: font.bold,
+    fontSize: 12,
+    color: '#FFFFFF',
+  },
+  passStatsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 14,
+    paddingTop: 12,
+    borderTopWidth: 1,
+    borderTopColor: '#F1F5F9',
+  },
+  passStatBox: {
+    flex: 1,
+    alignItems: 'center',
+  },
+  passStatNum: {
+    fontFamily: font.extrabold,
+    fontSize: 16,
+    color: '#0F172A',
+  },
+  passStatLabel: {
+    fontFamily: font.medium,
+    fontSize: 11,
+    color: '#64748B',
+    marginTop: 2,
+  },
+  passStatDivider: {
+    width: 1,
+    height: 24,
+    backgroundColor: '#E2E8F0',
+  },
 });

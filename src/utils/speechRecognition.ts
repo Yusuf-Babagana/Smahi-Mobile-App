@@ -1,15 +1,19 @@
-import { Audio } from 'expo-av';
+import { Audio, isAudioAvailable } from '@/src/utils/safeAudio';
 import { Platform } from 'react-native';
 import { API_URL } from '@/src/constants/env';
 
-let recording: Audio.Recording | null = null;
+let recording: any = null;
 
 const TAG = '[SpeechRecognition]';
 
-export const isSpeechAvailable = true;
+export const isSpeechAvailable = isAudioAvailable;
 
 export async function requestSpeechPermissions(): Promise<boolean> {
   console.log(TAG, 'requestSpeechPermissions called');
+  if (!isAudioAvailable) {
+    console.warn(TAG, 'Audio not available in this environment (Expo Go)');
+    return false;
+  }
   try {
     const perm = await Audio.requestPermissionsAsync();
     console.log(TAG, 'Permission result:', JSON.stringify(perm));
@@ -22,6 +26,9 @@ export async function requestSpeechPermissions(): Promise<boolean> {
 
 export async function startSpeechRecognition(options?: { lang?: string }) {
   console.log(TAG, 'startSpeechRecognition called', options);
+  if (!isAudioAvailable) {
+    throw new Error('Voice recording is not supported in Expo Go. Please use a development build.');
+  }
   try {
     console.log(TAG, 'Setting audio mode...');
     await Audio.setAudioModeAsync({

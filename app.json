@@ -72,7 +72,8 @@
           "icon": "./assets/images/smahi.png",
           "color": "#007BFF"
         }
-      ]
+      ],
+      "@react-native-community/datetimepicker"
     ],
     "scheme": "natively",
     "experiments": {

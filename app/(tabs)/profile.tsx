@@ -104,6 +104,8 @@ export default function ProfileScreen() {
           <View style={styles.sectionContainer}>
             <SettingsRow icon="person-outline" label={t('Personal Information')} onPress={() => router.push('/personal-info')} />
             <View style={styles.separator} />
+            <SettingsRow icon="lock-outline" label={t('Change Password')} onPress={() => router.push('/change-password')} />
+            <View style={styles.separator} />
             <SettingsRow icon="favorite-outline" label={t('Saved artisans')} onPress={() => router.push('/favorites')} />
             <View style={styles.separator} />
             <SettingsRow icon="notifications-none" label={t('Notifications')} onPress={() => router.push('/notification-settings')} />

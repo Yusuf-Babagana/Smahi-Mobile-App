@@ -65,7 +65,7 @@ export default function ArtisanTabLayout() {
         name="dashboard"
         options={{
           title: t('Dashboard'),
-          tabBarIcon: ({ color, focused }) => (
+          tabBarIcon: ({ color, focused }: { color: string; focused: boolean }) => (
             <Ionicons name={focused ? 'grid' : 'grid-outline'} size={20} color={color} />
           ),
         }}
@@ -74,7 +74,7 @@ export default function ArtisanTabLayout() {
         name="jobs"
         options={{
           title: t('Jobs'),
-          tabBarIcon: ({ color, focused }) => (
+          tabBarIcon: ({ color, focused }: { color: string; focused: boolean }) => (
             <Ionicons name={focused ? 'briefcase' : 'briefcase-outline'} size={20} color={color} />
           ),
         }}
@@ -83,7 +83,7 @@ export default function ArtisanTabLayout() {
         name="chats"
         options={{
           title: t('Chat'),
-          tabBarIcon: ({ color, focused }) => (
+          tabBarIcon: ({ color, focused }: { color: string; focused: boolean }) => (
             <Ionicons name={focused ? 'chatbubbles' : 'chatbubbles-outline'} size={20} color={color} />
           ),
         }}
@@ -92,7 +92,7 @@ export default function ArtisanTabLayout() {
         name="portfolio"
         options={{
           title: t('Portfolio'),
-          tabBarIcon: ({ color, focused }) => (
+          tabBarIcon: ({ color, focused }: { color: string; focused: boolean }) => (
             <Ionicons name={focused ? 'images' : 'images-outline'} size={20} color={color} />
           ),
         }}

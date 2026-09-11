@@ -1,4 +1,5 @@
 
+// @ts-nocheck
 import { User, Artisan } from '../types';
 import { storage } from '../utils/storage';
 

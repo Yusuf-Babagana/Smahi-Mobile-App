@@ -227,7 +227,7 @@ export default function ArtisanProfileRoom() {
           <LinearGradient
             colors={[color.brand900, color.brand600]}
             start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
-            style={StyleSheet.absoluteFillObject}
+            style={StyleSheet.absoluteFill}
           />
           <SafeAreaView edges={['top']} style={styles.nav}>
             <Pressable onPress={() => router.back()} style={styles.navBtn} accessibilityRole="button" accessibilityLabel={t('Back')}>

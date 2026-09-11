@@ -1,35 +1,24 @@
 import React, { useState, useEffect, useRef } from 'react';
 import {
     View, Text, StyleSheet, ScrollView,
-    KeyboardAvoidingView, Platform, Pressable,
+    KeyboardAvoidingView, Platform, Pressable, Linking, TouchableOpacity,
 } from 'react-native';
-import { useRouter } from 'expo-router';
+import { useRouter, Stack } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { MaterialIcons } from '@expo/vector-icons';
+import { MaterialIcons, Ionicons } from '@expo/vector-icons';
+import * as Clipboard from 'expo-clipboard';
 import { useTranslation } from 'react-i18next';
 
 import { useAuth } from '@/src/contexts/AuthContext';
-import { locationAPI } from '@/src/api/client';
-import { color, font, radius, space } from '@/constants/theme';
-import { Button, Input, useToast, useConfirm, SearchablePickerField } from '@/src/components/ui';
-import { enqueue, processQueue, getQueue, saveDraft, loadDraft, clearDraft, dismissItem } from '@/src/utils/offlineQueue';
-import { syncSubmitters } from '@/src/utils/syncSubmitters';
-
-// Coordinator Dashboard (Full State Management) — per the explicit
-// decision that Coordinators, not Admin and not a self-application flow,
-// are responsible for creating new Agents in their own state. Same
-// offline-first pattern as app/agent/register.tsx: a completed form must
-// not be lost to a network drop, so it's queued locally first and synced
-// automatically — see src/utils/offlineQueue.ts.
-const QUEUE_TYPE = 'coordinator_create_agent';
-const DRAFT_KEY = 'coordinator_create_agent';
+import { locationAPI, coordinatorAPI } from '@/src/api/client';
+import { color, font, radius, shadow, space } from '@/constants/theme';
+import { Button, Input, useToast, SearchablePickerField } from '@/src/components/ui';
 
 export default function CoordinatorCreateAgentScreen() {
     const router = useRouter();
     const { t } = useTranslation();
     const { user } = useAuth();
     const { show: showToast } = useToast();
-    const confirm = useConfirm();
 
     const [loading, setLoading] = useState(false);
     const [lgas, setLgas] = useState<any[]>([]);
@@ -40,7 +29,15 @@ export default function CoordinatorCreateAgentScreen() {
         email: '',
         phone: '',
         lga: '',
+        referral_code: '',
     });
+
+    const [createdResult, setCreatedResult] = useState<{
+        user: any;
+        password: string;
+        emailSent: boolean;
+        shareMessage: string;
+    } | null>(null);
 
     useEffect(() => {
         if (user?.state) {
@@ -50,205 +47,329 @@ export default function CoordinatorCreateAgentScreen() {
         }
     }, [user?.state]);
 
-    // Restore an in-progress form after an app kill/interruption — same
-    // reasoning as app/agent/register.tsx.
-    const draftLoaded = useRef(false);
-    useEffect(() => {
-        loadDraft<typeof formData>(DRAFT_KEY).then((draft) => {
-            if (draft) setFormData(draft);
-            draftLoaded.current = true;
-        });
-    }, []);
-
-    useEffect(() => {
-        if (!draftLoaded.current) return;
-        saveDraft(DRAFT_KEY, formData);
-    }, [formData]);
-
     const handleCreate = async () => {
-        if (!formData.first_name || !formData.last_name || !formData.phone || !formData.lga) {
-            showToast(t('Please fill all required fields.'), { type: 'warn' });
+        if (!formData.first_name.trim() || !formData.last_name.trim()) {
+            showToast(t("Please enter agent's full name."), { type: 'warn' });
+            return;
+        }
+
+        const email = formData.email.trim().toLowerCase();
+        if (!email || !email.includes('@')) {
+            showToast(t('Please enter a valid personal email address for the agent.'), { type: 'warn' });
+            return;
+        }
+
+        const phone = formData.phone.trim();
+        if (!phone) {
+            showToast(t('Please enter a valid phone number for the agent.'), { type: 'warn' });
+            return;
+        }
+
+        if (!formData.lga) {
+            showToast(t('Please select the LGA this agent will oversee.'), { type: 'warn' });
             return;
         }
 
         setLoading(true);
         try {
             const payload = {
-                first_name: formData.first_name,
-                last_name: formData.last_name,
-                email: formData.email || `${formData.phone}@smahi.com`,
-                phone_number: formData.phone,
+                first_name: formData.first_name.trim(),
+                last_name: formData.last_name.trim(),
+                email: email,
+                phone_number: phone,
                 lga: Number(formData.lga),
+                auto_approve: true, // Coordinator creates as directly active
+                referral_code: formData.referral_code?.trim() || undefined,
             };
 
-            const queued = await enqueue(QUEUE_TYPE, payload);
-            await processQueue(syncSubmitters);
-            const items = await getQueue(QUEUE_TYPE);
-            const synced = items.find(i => i.id === queued.id);
+            const response = await coordinatorAPI.createAgent(payload);
 
-            if (synced?.status === 'server_verified') {
-                const generatedPassword = synced.serverResult?.generated_password;
-                const alreadyRegistered = synced.serverResult?.already_registered;
-
-                const serialNumber = synced.serverResult?.serial_number || synced.serverResult?.user?.serial_number;
-                const pendingNote = t('They will show as Pending Approval until you approve them from My Agents.');
-
-                const done = await confirm({
-                    title: alreadyRegistered ? t('Already created') : t('Agent created — pending your approval'),
-                    message: alreadyRegistered
-                        ? (synced.serverResult?.message || t('This agent was already created.'))
-                        : generatedPassword
-                            ? t('Share this one-time password with them securely — it will not be shown again:')
-                                + `\n\n${generatedPassword}`
-                                + (serialNumber ? `\n\n${t('Agent ID')}: ${serialNumber}` : '')
-                                + `\n\n${pendingNote}`
-                            : `${t('Agent created successfully.')} ${pendingNote}`,
-                    confirmLabel: t('Done'),
-                    cancelLabel: t('Create another'),
-                });
-                await clearDraft(DRAFT_KEY);
-                if (done) {
-                    router.back();
-                } else {
-                    setFormData({ first_name: '', last_name: '', email: '', phone: '', lga: '' });
-                }
-            } else if (synced?.status === 'failed') {
-                let serverMessage: string | undefined;
-                try {
-                    const parsed = JSON.parse(synced.lastError || '');
-                    serverMessage = typeof parsed === 'object'
-                        ? (Object.values(parsed).flat().find((v) => typeof v === 'string') as string | undefined)
-                        : undefined;
-                } catch {
-                    // not JSON — fall through to the generic message below
-                }
-                showToast(serverMessage || t('Could not create this agent.'), { type: 'error' });
-                await dismissItem(queued.id);
-            } else {
-                showToast(
-                    t("No network right now — saved. This agent will be created automatically once you're back online."),
-                    { type: 'warn', duration: 5000 }
+            if (response?.user) {
+                const assignedLgaName = lgas.find(l => String(l.id) === String(formData.lga))?.name || 'Assigned LGA';
+                const coordName = [user?.first_name, user?.last_name].filter(Boolean).join(' ') || 'State Coordinator';
+                const defaultShare = (
+                    `Hello ${response.user.first_name}, you have been appointed as an official S-MAHI Field Agent for ${assignedLgaName} LGA by State Coordinator ${coordName}.\n\n` +
+                    `Download the S-MAHI app and log in with your credentials:\n` +
+                    `• Email: ${response.user.email}\n` +
+                    `• Temporary Password: ${response.generated_password}\n` +
+                    `• Agent ID: ${response.user.serial_number}\n\n` +
+                    `Welcome to the S-MAHI team!`
                 );
-                setFormData({ first_name: '', last_name: '', email: '', phone: '', lga: '' });
+
+                setCreatedResult({
+                    user: response.user,
+                    password: response.generated_password,
+                    emailSent: Boolean(response.email_sent),
+                    shareMessage: response.share_message || defaultShare,
+                });
+
+                showToast(t('Agent account created and credentials dispatched!'), { type: 'success' });
             }
         } catch (error: any) {
-            showToast(t('Could not save this — please try again.'), { type: 'error' });
+            const errData = error?.response?.data;
+            let msg = t('Failed to create agent account.');
+            if (errData?.email) msg = Array.isArray(errData.email) ? errData.email[0] : String(errData.email);
+            else if (errData?.phone_number) msg = Array.isArray(errData.phone_number) ? errData.phone_number[0] : String(errData.phone_number);
+            else if (errData?.error) msg = String(errData.error);
+            showToast(msg, { type: 'error' });
         } finally {
             setLoading(false);
         }
     };
 
+    const copyCredentials = async () => {
+        if (!createdResult) return;
+        await Clipboard.setStringAsync(
+            `Download S-MAHI on Google Play:\nhttps://play.google.com/store/apps/details?id=com.smahi.app\n\nLogin Credentials:\nEmail: ${createdResult.user.email}\nTemporary Password: ${createdResult.password}\nAgent ID: ${createdResult.user.serial_number}`
+        );
+        showToast(t('Credentials copied to clipboard!'), { type: 'success' });
+    };
+
+    const shareWhatsApp = () => {
+        if (!createdResult?.shareMessage) return;
+        const url = `whatsapp://send?text=${encodeURIComponent(createdResult.shareMessage)}`;
+        Linking.openURL(url).catch(() => {
+            showToast(t('WhatsApp not installed or could not be opened.'), { type: 'error' });
+        });
+    };
+
+    const shareSMS = () => {
+        if (!createdResult?.shareMessage) return;
+        const phone = createdResult.user.phone_number || '';
+        const url = `sms:${phone}?body=${encodeURIComponent(createdResult.shareMessage)}`;
+        Linking.openURL(url).catch(() => {
+            showToast(t('Could not launch SMS messenger.'), { type: 'error' });
+        });
+    };
+
+    const handleReset = () => {
+        setCreatedResult(null);
+        setFormData({
+            first_name: '',
+            last_name: '',
+            email: '',
+            phone: '',
+            lga: '',
+            referral_code: '',
+        });
+    };
+
     return (
         <View style={styles.container}>
+            <Stack.Screen options={{ headerShown: false }} />
+
+            {/* HEADER */}
             <SafeAreaView edges={['top']} style={styles.headerSafe}>
                 <View style={styles.header}>
-                    <Pressable onPress={() => router.back()} style={styles.backButton} accessibilityRole="button" accessibilityLabel={t('Back')}>
+                    <Pressable
+                        onPress={() => router.back()}
+                        style={styles.backButton}
+                        accessibilityRole="button"
+                        accessibilityLabel={t('Back')}
+                    >
                         <MaterialIcons name="arrow-back" size={20} color="#FFF" />
                     </Pressable>
-                    <Text style={styles.headerTitle}>{t('Create agent')}</Text>
+                    <Text style={styles.headerTitle}>{t('Recruit & Onboard Agent')}</Text>
                     <View style={{ width: 40 }} />
                 </View>
             </SafeAreaView>
 
-            <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : "height"} style={{ flex: 1 }}>
-                <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
-                    <View style={styles.noteBanner}>
-                        <MaterialIcons name="place" size={16} color={color.brand600} />
-                        <Text style={styles.noteText}>
-                            {t('You are creating this agent in')}{' '}
-                            <Text style={styles.noteStrong}>{user?.state_details?.name || t('your state')}</Text>.
+            {createdResult ? (
+                /* SUCCESS CREDENTIALS CARD */
+                <ScrollView contentContainerStyle={styles.successScroll}>
+                    <View style={styles.successCard}>
+                        <View style={styles.successIconCircle}>
+                            <Ionicons name="checkmark-circle" size={48} color="#059669" />
+                        </View>
+                        <Text style={styles.successTitle}>{t('Agent Account Created!')}</Text>
+                        <Text style={styles.successSubtitle}>
+                            {t('The account is active and credentials have been dispatched.')}
                         </Text>
+
+                        {/* Email Dispatch Status Banner */}
+                        <View style={styles.emailBanner}>
+                            <MaterialIcons name="mark-email-read" size={20} color="#1E40AF" />
+                            <View style={{ flex: 1 }}>
+                                <Text style={styles.emailBannerTitle}>
+                                    {createdResult.emailSent ? t('Welcome Email Sent via Brevo') : t('Credentials Ready')}
+                                </Text>
+                                <Text style={styles.emailBannerText}>
+                                    {t('Delivered to')} {createdResult.user.email}
+                                </Text>
+                            </View>
+                        </View>
+
+                        {/* Credentials Box */}
+                        <View style={styles.credentialsBox}>
+                            <View style={styles.credRow}>
+                                <Text style={styles.credLabel}>{t('Agent Name')}:</Text>
+                                <Text style={styles.credValue}>
+                                    {createdResult.user.first_name} {createdResult.user.last_name}
+                                </Text>
+                            </View>
+                            <View style={styles.credDivider} />
+                            <View style={styles.credRow}>
+                                <Text style={styles.credLabel}>{t('Agent ID')}:</Text>
+                                <Text style={[styles.credValue, { fontFamily: font.bold, color: '#1B5FD9' }]}>
+                                    {createdResult.user.serial_number}
+                                </Text>
+                            </View>
+                            <View style={styles.credDivider} />
+                            <View style={styles.credRow}>
+                                <Text style={styles.credLabel}>{t('Login Email')}:</Text>
+                                <Text style={styles.credValue}>{createdResult.user.email}</Text>
+                            </View>
+                            <View style={styles.credDivider} />
+                            <View style={styles.credRow}>
+                                <Text style={styles.credLabel}>{t('Temporary Password')}:</Text>
+                                <View style={styles.passwordPill}>
+                                    <Text style={styles.passwordText}>{createdResult.password}</Text>
+                                </View>
+                            </View>
+                        </View>
+
+                        {/* Fast 1-Tap Sharing Triggers */}
+                        <Text style={styles.shareHeading}>{t('Direct Sharing Options')}</Text>
+                        <View style={styles.shareButtonsRow}>
+                            <TouchableOpacity style={styles.shareWhatsAppBtn} onPress={shareWhatsApp}>
+                                <Ionicons name="logo-whatsapp" size={18} color="#FFF" />
+                                <Text style={styles.shareBtnText}>{t('WhatsApp')}</Text>
+                            </TouchableOpacity>
+
+                            <TouchableOpacity style={styles.shareSMSBtn} onPress={shareSMS}>
+                                <MaterialIcons name="sms" size={18} color="#FFF" />
+                                <Text style={styles.shareBtnText}>{t('SMS')}</Text>
+                            </TouchableOpacity>
+
+                            <TouchableOpacity style={styles.shareCopyBtn} onPress={copyCredentials}>
+                                <MaterialIcons name="content-copy" size={18} color="#1E293B" />
+                                <Text style={[styles.shareBtnText, { color: '#1E293B' }]}>{t('Copy')}</Text>
+                            </TouchableOpacity>
+                        </View>
+
+                        <View style={styles.actionButtonsCol}>
+                            <Button
+                                title={t('View in My Agents')}
+                                onPress={() => router.replace('/coordinator/agents')}
+                                style={styles.primaryNavBtn}
+                            />
+                            <Button
+                                title={t('Onboard Another Agent')}
+                                variant="secondary"
+                                onPress={handleReset}
+                                style={styles.secondaryNavBtn}
+                            />
+                        </View>
                     </View>
-
-                    <Input
-                        label={t('First name')}
-                        placeholder={t("Enter the agent's first name")}
-                        value={formData.first_name}
-                        onChangeText={v => setFormData({ ...formData, first_name: v })}
-                        icon="person-outline"
-                        containerStyle={styles.field}
-                    />
-                    <Input
-                        label={t('Last name')}
-                        placeholder={t("Enter the agent's last name")}
-                        value={formData.last_name}
-                        onChangeText={v => setFormData({ ...formData, last_name: v })}
-                        icon="person-outline"
-                        containerStyle={styles.field}
-                    />
-                    <Input
-                        label={t('Phone number')}
-                        placeholder="080..."
-                        keyboardType="phone-pad"
-                        value={formData.phone}
-                        onChangeText={v => setFormData({ ...formData, phone: v })}
-                        icon="phone-iphone"
-                        containerStyle={styles.field}
-                    />
-                    <Input
-                        label={t('Email (optional)')}
-                        placeholder={t('Enter their email address')}
-                        keyboardType="email-address"
-                        autoCapitalize="none"
-                        value={formData.email}
-                        onChangeText={v => setFormData({ ...formData, email: v })}
-                        icon="mail-outline"
-                        containerStyle={styles.field}
-                    />
-
-                    <SearchablePickerField
-                        label={t('LGA')}
-                        placeholder={t('Select the LGA this agent will cover')}
-                        searchPlaceholder={t('Search LGA…')}
-                        value={formData.lga}
-                        onValueChange={(v) => setFormData({ ...formData, lga: v })}
-                        items={lgas}
-                    />
-
-                    <View style={styles.divider} />
-
-                    <View style={styles.noteBanner}>
-                        <MaterialIcons name="lock-outline" size={16} color={color.brand600} />
-                        <Text style={styles.noteText}>
-                            {t("A one-time password will be generated and shown to you after creation — you'll need to share it with the agent yourself.")}
-                        </Text>
-                    </View>
-
-                    <View style={styles.noteBanner}>
-                        <MaterialIcons name="pending-actions" size={16} color={color.brand600} />
-                        <Text style={styles.noteText}>
-                            {t('New agents start out Pending Approval — they cannot use the Agent Dashboard until you approve them from My Agents.')}
-                        </Text>
-                    </View>
-
-                    <Button
-                        title={t('Create agent')}
-                        onPress={handleCreate}
-                        loading={loading}
-                        style={styles.submitButton}
-                    />
                 </ScrollView>
-            </KeyboardAvoidingView>
+            ) : (
+                /* FORM VIEW */
+                <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={{ flex: 1 }}>
+                    <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
+                        <View style={styles.noteBanner}>
+                            <MaterialIcons name="shield" size={18} color="#D97706" />
+                            <Text style={styles.noteText}>
+                                {t('Assigning agent territory under')}{' '}
+                                <Text style={styles.noteStrong}>{user?.state_details?.name || t('your state')}</Text>.
+                            </Text>
+                        </View>
+
+                        <Input
+                            label={t('First name')}
+                            placeholder={t("Enter agent's first name")}
+                            value={formData.first_name}
+                            onChangeText={v => setFormData({ ...formData, first_name: v })}
+                            icon="person-outline"
+                            containerStyle={styles.field}
+                        />
+
+                        <Input
+                            label={t('Last name')}
+                            placeholder={t("Enter agent's last name")}
+                            value={formData.last_name}
+                            onChangeText={v => setFormData({ ...formData, last_name: v })}
+                            icon="person-outline"
+                            containerStyle={styles.field}
+                        />
+
+                        <Input
+                            label={t('Agent personal email (Mandatory)')}
+                            placeholder="agent@example.com"
+                            keyboardType="email-address"
+                            autoCapitalize="none"
+                            autoCorrect={false}
+                            value={formData.email}
+                            onChangeText={v => setFormData({ ...formData, email: v })}
+                            icon="mail-outline"
+                            containerStyle={styles.field}
+                        />
+
+                        <Input
+                            label={t('Phone number (Mandatory)')}
+                            placeholder="08012345678"
+                            keyboardType="phone-pad"
+                            value={formData.phone}
+                            onChangeText={v => setFormData({ ...formData, phone: v })}
+                            icon="phone-iphone"
+                            containerStyle={styles.field}
+                        />
+
+                        <SearchablePickerField
+                            label={t('Assigned LGA')}
+                            placeholder={t('Select the LGA this agent will oversee')}
+                            searchPlaceholder={t('Search LGA…')}
+                            value={formData.lga}
+                            onValueChange={v => setFormData({ ...formData, lga: v })}
+                            items={lgas}
+                        />
+
+                        <Input
+                            label={t('Coordinator referral code (Optional)')}
+                            placeholder="SMAHI-KN-XXXX"
+                            value={formData.referral_code}
+                            onChangeText={v => setFormData({ ...formData, referral_code: v })}
+                            icon="qr-code"
+                            autoCapitalize="characters"
+                            autoCorrect={false}
+                            containerStyle={styles.field}
+                        />
+
+                        <View style={styles.infoBox}>
+                            <Ionicons name="information-circle-outline" size={18} color="#1E40AF" />
+                            <Text style={styles.infoText}>
+                                {t('An official welcome email with login credentials and a simple default password will be automatically dispatched to the agent upon submission.')}
+                            </Text>
+                        </View>
+
+                        <Button
+                            title={t('Onboard Agent & Send Credentials')}
+                            onPress={handleCreate}
+                            loading={loading}
+                            style={styles.submitButton}
+                        />
+                    </ScrollView>
+                </KeyboardAvoidingView>
+            )}
         </View>
     );
 }
 
 const styles = StyleSheet.create({
-    container: { flex: 1, backgroundColor: color.surfaceSunken },
+    container: { flex: 1, backgroundColor: '#F8FAFC' },
 
-    headerSafe: { backgroundColor: color.brand900 },
+    headerSafe: { backgroundColor: '#0B2E5B' },
     header: {
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'space-between',
         paddingHorizontal: space.xl,
         paddingVertical: space.md,
-        backgroundColor: color.brand900,
+        backgroundColor: '#0B2E5B',
     },
     headerTitle: { fontFamily: font.extrabold, fontSize: 16, color: '#FFF' },
     backButton: {
-        width: 40,
-        height: 40,
+        width: 38,
+        height: 38,
         borderRadius: radius.md,
         backgroundColor: 'rgba(255,255,255,0.12)',
         alignItems: 'center',
@@ -260,17 +381,199 @@ const styles = StyleSheet.create({
         flexDirection: 'row',
         alignItems: 'center',
         gap: 8,
-        backgroundColor: color.brand100,
+        backgroundColor: '#FEF3C7',
         borderRadius: radius.md,
         padding: space.md,
-        marginBottom: space.xl,
+        marginBottom: space.lg,
     },
-    noteText: { flex: 1, fontFamily: font.medium, fontSize: 13, color: color.brand600 },
+    noteText: { flex: 1, fontFamily: font.medium, fontSize: 13, color: '#92400E' },
     noteStrong: { fontFamily: font.extrabold },
 
     field: { marginBottom: space.lg },
 
-    divider: { height: 1, backgroundColor: color.border, marginVertical: space.lg },
+    infoBox: {
+        flexDirection: 'row',
+        backgroundColor: '#EFF6FF',
+        borderRadius: radius.md,
+        padding: space.md,
+        gap: 10,
+        marginVertical: space.lg,
+        alignItems: 'center',
+    },
+    infoText: {
+        flex: 1,
+        fontFamily: font.medium,
+        fontSize: 12.5,
+        color: '#1E40AF',
+        lineHeight: 18,
+    },
 
-    submitButton: { marginTop: space.md },
+    submitButton: { marginTop: space.sm, marginBottom: space.xxl },
+
+    /* SUCCESS STYLES */
+    successScroll: {
+        padding: space.xl,
+        paddingBottom: 60,
+    },
+    successCard: {
+        backgroundColor: '#FFFFFF',
+        borderRadius: 24,
+        padding: 24,
+        alignItems: 'center',
+        borderWidth: 1,
+        borderColor: '#E2E8F0',
+        shadowColor: '#0F172A',
+        shadowOpacity: 0.08,
+        shadowRadius: 16,
+        shadowOffset: { width: 0, height: 6 },
+        elevation: 4,
+    },
+    successIconCircle: {
+        width: 72,
+        height: 72,
+        borderRadius: 36,
+        backgroundColor: '#ECFDF5',
+        alignItems: 'center',
+        justifyContent: 'center',
+        marginBottom: 16,
+    },
+    successTitle: {
+        fontFamily: font.extrabold,
+        fontSize: 20,
+        color: '#0F172A',
+        textAlign: 'center',
+    },
+    successSubtitle: {
+        fontFamily: font.medium,
+        fontSize: 13,
+        color: '#64748B',
+        textAlign: 'center',
+        marginTop: 4,
+        marginBottom: 18,
+    },
+    emailBanner: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        backgroundColor: '#EFF6FF',
+        borderRadius: 14,
+        padding: 14,
+        gap: 12,
+        width: '100%',
+        marginBottom: 18,
+        borderWidth: 1,
+        borderColor: '#BFDBFE',
+    },
+    emailBannerTitle: {
+        fontFamily: font.bold,
+        fontSize: 13,
+        color: '#1E40AF',
+    },
+    emailBannerText: {
+        fontFamily: font.medium,
+        fontSize: 12,
+        color: '#3B82F6',
+        marginTop: 2,
+    },
+    credentialsBox: {
+        width: '100%',
+        backgroundColor: '#F8FAFC',
+        borderRadius: 16,
+        padding: 16,
+        borderWidth: 1,
+        borderColor: '#E2E8F0',
+        marginBottom: 20,
+    },
+    credRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        paddingVertical: 6,
+    },
+    credLabel: {
+        fontFamily: font.medium,
+        fontSize: 13,
+        color: '#64748B',
+    },
+    credValue: {
+        fontFamily: font.bold,
+        fontSize: 13.5,
+        color: '#0F172A',
+    },
+    credDivider: {
+        height: 1,
+        backgroundColor: '#E2E8F0',
+        marginVertical: 4,
+    },
+    passwordPill: {
+        backgroundColor: '#DBEAFE',
+        paddingHorizontal: 10,
+        paddingVertical: 4,
+        borderRadius: 8,
+    },
+    passwordText: {
+        fontFamily: font.extrabold,
+        fontSize: 14,
+        color: '#1E40AF',
+        letterSpacing: 1,
+    },
+    shareHeading: {
+        fontFamily: font.bold,
+        fontSize: 13,
+        color: '#475569',
+        alignSelf: 'flex-start',
+        marginBottom: 10,
+        textTransform: 'uppercase',
+        letterSpacing: 0.6,
+    },
+    shareButtonsRow: {
+        flexDirection: 'row',
+        width: '100%',
+        gap: 10,
+        marginBottom: 24,
+    },
+    shareWhatsAppBtn: {
+        flex: 1,
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        backgroundColor: '#25D366',
+        paddingVertical: 12,
+        borderRadius: 12,
+        gap: 6,
+    },
+    shareSMSBtn: {
+        flex: 1,
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        backgroundColor: '#1E40AF',
+        paddingVertical: 12,
+        borderRadius: 12,
+        gap: 6,
+    },
+    shareCopyBtn: {
+        flex: 0.9,
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        backgroundColor: '#E2E8F0',
+        paddingVertical: 12,
+        borderRadius: 12,
+        gap: 6,
+    },
+    shareBtnText: {
+        fontFamily: font.bold,
+        fontSize: 13,
+        color: '#FFF',
+    },
+    actionButtonsCol: {
+        width: '100%',
+        gap: 10,
+    },
+    primaryNavBtn: {
+        width: '100%',
+    },
+    secondaryNavBtn: {
+        width: '100%',
+    },
 });

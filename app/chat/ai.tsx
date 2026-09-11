@@ -10,7 +10,7 @@ import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { Audio } from 'expo-av';
+import { Audio } from '@/src/utils/safeAudio';
 import * as Clipboard from 'expo-clipboard';
 import * as Speech from 'expo-speech';
 import { useTranslation } from 'react-i18next';
@@ -181,11 +181,13 @@ export default function AIChatScreen() {
     setSpeakingMessageId(null);
 
     try {
-      const { sound } = await Audio.Sound.createAsync(require('@/assets/sounds/sent.wav'));
-      await sound.playAsync();
-      sound.setOnPlaybackStatusUpdate(async (status) => {
-        if (status.isLoaded && status.didJustFinish) await sound.unloadAsync();
-      });
+      if (Audio?.Sound) {
+        const { sound } = await Audio.Sound.createAsync(require('@/assets/sounds/sent.wav'));
+        await sound.playAsync();
+        sound.setOnPlaybackStatusUpdate(async (status: any) => {
+          if (status.isLoaded && status.didJustFinish) await sound.unloadAsync();
+        });
+      }
     } catch {}
 
     setIsRecording(true);

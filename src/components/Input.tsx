@@ -7,7 +7,7 @@ import {
     TextInputProps,
     Pressable,
 } from "react-native";
-import { useTheme } from "@react-navigation/native";
+import { useTheme } from "expo-router/react-navigation";
 import Animated, {
     useAnimatedStyle,
     withTiming,

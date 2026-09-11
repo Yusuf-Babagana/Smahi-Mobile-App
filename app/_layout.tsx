@@ -20,9 +20,10 @@ import { useNetworkState } from "expo-network";
 import {
   DarkTheme,
   DefaultTheme,
-  Theme,
   ThemeProvider,
-} from "@react-navigation/native";
+} from "expo-router/react-navigation";
+
+type Theme = typeof DefaultTheme;
 import { StatusBar } from "expo-status-bar";
 import { WidgetProvider } from "@/src/contexts/WidgetContext";
 

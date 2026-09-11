@@ -24,8 +24,8 @@ import { color, font, radius, space, type } from '@/constants/theme';
 import { Button, CountryPickerField, GenderField, Input, SearchablePickerField, StepHeader, useToast, useConfirm } from '@/src/components/ui';
 import '@/src/i18n'; // Ensure i18n is initialized
 
-// Define expanded roles locally for this screen
-type ExpandedRole = UserRole | 'state_coordinator';
+// Coordinators are created exclusively from the Admin dashboard — never
+// through self-registration — so this screen stays within UserRole.
 
 const STEP_META = [
   { title: 'Before we start', subtitle: 'A quick look at how S-MAHII works.' },
@@ -61,7 +61,7 @@ export default function RegisterScreen() {
   // Optional — never required to complete registration; powers a male/
   // female fallback avatar in place of initials when there's no photo.
   const [gender, setGender] = useState<'' | 'male' | 'female'>('');
-  const [role, setRole] = useState<ExpandedRole>('client');
+  const [role, setRole] = useState<UserRole>('client');
   const [loading, setLoading] = useState(false);
   const [errors, setErrors] = useState<{ [key: string]: string }>({});
 
@@ -96,6 +96,13 @@ export default function RegisterScreen() {
   const [selectedCountry, setSelectedCountry] = useState('');
   const [selectedState, setSelectedState] = useState('');
   const [selectedLga, setSelectedLga] = useState('');
+
+  // Optional referral code — if the person was sent here by a Coordinator or
+  // Field Agent (e.g. "use my code SMAHI-KN-XXXX"), entering it claims their
+  // new account under that referrer's network. Purely optional; the backend
+  // validates it on submit (invalid/cross-state codes are rejected with a
+  // clear error), and it's never shown again after this screen.
+  const [referralCode, setReferralCode] = useState('');
 
   // Captures the device's real GPS fix during registration itself (best-
   // effort — never blocks registration if permission is denied or there's
@@ -251,6 +258,8 @@ export default function RegisterScreen() {
         country: selectedCountry,
         state: selectedState,
         lga: selectedLga,
+        // Optional — only sent when the person entered a referrer's code.
+        referral_code: referralCode.trim() || undefined,
         // Best-effort — undefined (omitted entirely, not sent as 0,0) if
         // permission was denied or no fix arrived in time; the dashboard's
         // own location sync (app/artisan/(tabs)/dashboard.tsx) still picks
@@ -267,7 +276,7 @@ export default function RegisterScreen() {
       }
 
       // ✅ Non-artisans: check for locked roles
-      if (['agent', 'state_coordinator'].includes(role)) {
+      if (role === 'agent') {
         showToast('Account created — it requires activation. Please log in to enter your Serial Number.', { type: 'success' });
         router.replace('/login');
       } else {
@@ -489,13 +498,12 @@ export default function RegisterScreen() {
             {/* STEP 3: ROLE SELECTION */}
             {currentStep === 3 && (
               <View style={styles.formSection}>
-                <RoleCard title={t('Hire artisans')} subtitle={t('Find verified professionals near you')} icon="search" selected={role === 'client'} onPress={() => setRole('client')} />
+                <RoleCard title={t('Client')} subtitle={t('Find verified professionals near you')} icon="search" selected={role === 'client'} onPress={() => setRole('client')} />
                 <RoleCard title={t('Work as an artisan')} subtitle={t('Offer services & earn')} icon="handyman" selected={role === 'artisan'} onPress={() => setRole('artisan')} />
                 <RoleCard title={t('Register a business')} subtitle={t('Hospital, hotel, shop & more')} icon="storefront" selected={role === 'business'} onPress={() => setRole('business')} />
                 <RoleCard title={t('Field agent')} subtitle={t('Register artisans (approval required)')} icon="badge" selected={role === 'agent'} onPress={() => setRole('agent')} />
-                <RoleCard title={t('State coordinator')} subtitle={t('Manage state operations (approval required)')} icon="map" selected={role === 'state_coordinator'} onPress={() => setRole('state_coordinator')} />
 
-                {['agent', 'state_coordinator'].includes(role) && (
+                {role === 'agent' && (
                   <View style={styles.activationNote}>
                     <MaterialIcons name="info-outline" size={16} color={color.warn600} />
                     <Text style={styles.activationNoteText}>
@@ -623,6 +631,23 @@ export default function RegisterScreen() {
                   </View>
                   {(errors.country || errors.state || errors.lga) && (
                     <Text style={styles.errorText}>{t('Please complete all location fields')}</Text>
+                  )}
+
+                  {role !== 'agent' && (
+                    <View style={{ marginTop: space.lg }}>
+                      <Input
+                        label={t('Referral code (optional)')}
+                        placeholder={t('e.g. SMAHI-KN-XXXX')}
+                        value={referralCode}
+                        onChangeText={setReferralCode}
+                        icon="qr-code"
+                        autoCapitalize="characters"
+                        autoCorrect={false}
+                      />
+                      <Text style={styles.referralHint}>
+                        {t("Registering through a Coordinator or Field Agent? Enter their code so they can track your registration.")}
+                      </Text>
+                    </View>
                   )}
                 </View>
               </View>
@@ -912,6 +937,10 @@ const styles = StyleSheet.create({
   locationHint: {
     fontFamily: font.medium, fontSize: 12.5, lineHeight: 18, color: color.ink400,
     marginTop: -space.sm, marginBottom: space.lg,
+  },
+  referralHint: {
+    fontFamily: font.medium, fontSize: 12, lineHeight: 17, color: color.ink400,
+    marginTop: space.sm,
   },
   row: { flexDirection: 'row' },
 

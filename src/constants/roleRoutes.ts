@@ -13,7 +13,7 @@ export const ROLE_HOME_ROUTES = {
     // app/business/dashboard.tsx).
     business: '/business/dashboard',
     agent: '/agent/dashboard',
-    state_coordinator: '/agent/dashboard',
+    state_coordinator: '/coordinator/dashboard',
     admin: '/admin/dashboard',
 } as const;
 

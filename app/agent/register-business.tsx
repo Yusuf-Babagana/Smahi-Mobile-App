@@ -48,6 +48,10 @@ export default function AgentRegisterBusinessScreen() {
         // Category the same way the public "Other" registration flow does.
         businessType: '',
         lga: '',
+        // Optional — forwarded like the public registration flow so a
+        // referrer's code claims this business in their network; the
+        // physical registrar is still recorded as whoever pressed register.
+        referral_code: '',
     });
 
     const draftLoaded = useRef(false);
@@ -95,6 +99,7 @@ export default function AgentRegisterBusinessScreen() {
                 country: user?.country,
                 state: user?.state,
                 lga: isCoordinator ? formData.lga : user?.lga,
+                referral_code: formData.referral_code?.trim() || undefined,
             };
 
             const queued = await enqueue(QUEUE_TYPE, payload);
@@ -176,7 +181,7 @@ export default function AgentRegisterBusinessScreen() {
     };
 
     const resetForm = () => {
-        setFormData({ ...formData, business_name: '', first_name: '', last_name: '', email: '', phone: '' });
+        setFormData({ ...formData, business_name: '', first_name: '', last_name: '', email: '', phone: '', businessType: '', lga: '', referral_code: '' });
     };
 
     return (
@@ -265,6 +270,17 @@ export default function AgentRegisterBusinessScreen() {
                         value={formData.businessType}
                         onChangeText={v => setFormData({ ...formData, businessType: v })}
                         icon="category"
+                        containerStyle={styles.field}
+                    />
+
+                    <Input
+                        label={t('Referral code (optional)')}
+                        placeholder={t('e.g. SMAHI-KN-XXXX')}
+                        value={formData.referral_code}
+                        onChangeText={v => setFormData({ ...formData, referral_code: v })}
+                        icon="qr-code"
+                        autoCapitalize="characters"
+                        autoCorrect={false}
                         containerStyle={styles.field}
                     />
 

@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import {
+  Dimensions,
   Image,
   KeyboardAvoidingView,
   Platform,
@@ -14,6 +15,7 @@ import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
 import Animated, { FadeInDown, FadeInUp } from 'react-native-reanimated';
+import { LinearGradient } from 'expo-linear-gradient';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useTranslation } from 'react-i18next';
 
@@ -22,6 +24,8 @@ import { getHomeRouteForRole } from '@/src/constants/roleRoutes';
 import { color, font, radius, shadow, space, type } from '@/constants/theme';
 import { Button, Input, useToast } from '@/src/components/ui';
 import { paymentAPI } from '@/src/api/client';
+
+const { width } = Dimensions.get('window');
 
 export default function LoginScreen() {
   const router = useRouter();
@@ -63,8 +67,8 @@ export default function LoginScreen() {
         return;
       }
 
-      // ✅ Artisans who haven't paid registration fee are redirected to payment
-      if (user.role === 'artisan' && user.registration_fee_paid === false) {
+      // ✅ Artisans and businesses who haven't paid registration fee are redirected to payment
+      if ((user.role === 'artisan' || user.role === 'business') && user.registration_fee_paid === false) {
         try {
           const payResult = await paymentAPI.initialize();
           router.replace({
@@ -74,22 +78,17 @@ export default function LoginScreen() {
               reference: payResult.reference,
             },
           });
+          return;
         } catch (payErr: any) {
           // Fee already settled server-side (stale local flag): continue in.
           if (payErr?.response?.data?.already_paid) {
             router.replace(getHomeRouteForRole(user.role));
             return;
           }
-          // 503 = payments not configured yet on the backend: the fee stays
-          // owed, but the artisan must not be locked out of the app.
-          if (payErr?.response?.status === 503) {
-            showToast('Payments are not available yet. You can use the app now and complete your registration fee later.', { type: 'info' });
-            router.replace(getHomeRouteForRole(user.role));
-          } else {
-            showToast('You need to pay the registration fee to activate your account. Please try again.', { type: 'error' });
-          }
+          const errorMsg = payErr?.response?.data?.error || 'You must pay the ₦2,500 registration fee to activate your account. Please try again.';
+          showToast(errorMsg, { type: 'error' });
+          return;
         }
-        return;
       }
 
       router.replace(getHomeRouteForRole(user.role));
@@ -108,8 +107,21 @@ export default function LoginScreen() {
     <SafeAreaView style={styles.container}>
       <StatusBar style="dark" />
 
-      {/* Soft brand glow behind the hero */}
-      <View style={styles.glow} pointerEvents="none" />
+      {/* Layered Ambient Brand Glows (strict color preservation: brand100 & accent100) */}
+      <View style={styles.ambientContainer} pointerEvents="none">
+        <LinearGradient
+          colors={[color.brand100, 'rgba(253, 253, 252, 0)']}
+          style={styles.topGlow}
+          start={{ x: 0.5, y: 0 }}
+          end={{ x: 0.5, y: 1 }}
+        />
+        <LinearGradient
+          colors={[color.accent100, 'rgba(253, 253, 252, 0)']}
+          style={styles.bottomGlow}
+          start={{ x: 0, y: 1 }}
+          end={{ x: 1, y: 0 }}
+        />
+      </View>
 
       <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
@@ -120,7 +132,8 @@ export default function LoginScreen() {
           showsVerticalScrollIndicator={false}
           keyboardShouldPersistTaps="handled"
         >
-          <Animated.View entering={FadeInUp.duration(300)}>
+          {/* Top Bar Navigation */}
+          <Animated.View entering={FadeInUp.duration(350)}>
             <Pressable
               onPress={() => (router.canGoBack() ? router.back() : router.replace('/welcome'))}
               accessibilityRole="button"
@@ -131,29 +144,33 @@ export default function LoginScreen() {
             </Pressable>
           </Animated.View>
 
-          {/* Hero */}
-          <Animated.View entering={FadeInUp.delay(60).duration(350)} style={styles.hero}>
-            <View style={styles.logoTile}>
-              <Image
-                source={require('@/assets/images/smahi.png')}
-                style={styles.logo}
-                resizeMode="contain"
-              />
+          {/* Hero Header */}
+          <Animated.View entering={FadeInUp.delay(60).duration(400)} style={styles.hero}>
+            <View style={styles.logoRing}>
+              <View style={styles.logoTile}>
+                <Image
+                  source={require('@/assets/images/smahi.png')}
+                  style={styles.logo}
+                  resizeMode="contain"
+                />
+              </View>
             </View>
             <Text style={styles.title}>{t('Welcome back')}</Text>
             <Text style={styles.subtitle}>{t('Sign in to continue where you left off.')}</Text>
           </Animated.View>
 
-          {/* Form card */}
-          <Animated.View entering={FadeInDown.delay(140).duration(350)} style={styles.card}>
+          {/* Elevated Glassmorphic Form Card */}
+          <Animated.View entering={FadeInDown.delay(140).duration(400)} style={styles.card}>
+            <View style={styles.accentBar} />
             <Input
-              label={t('Email address')}
-              placeholder={t('Enter your email address')}
+              label={t('Email or phone number')}
+              placeholder={t('Enter your email or phone number')}
               value={email}
               onChangeText={setEmail}
               keyboardType="email-address"
               autoCapitalize="none"
-              icon="mail-outline"
+              autoCorrect={false}
+              icon="person-outline"
               containerStyle={styles.field}
             />
             <Input
@@ -172,6 +189,7 @@ export default function LoginScreen() {
               onPress={() => router.push('/forgot-password')}
               style={styles.forgotBtn}
               accessibilityRole="button"
+              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
             >
               <Text style={styles.forgotText}>{t('Forgot password?')}</Text>
             </TouchableOpacity>
@@ -179,14 +197,16 @@ export default function LoginScreen() {
             <Button title={t('Sign in')} onPress={handleLogin} loading={loading} />
           </Animated.View>
 
-          {/* Trust note */}
-          <Animated.View entering={FadeInDown.delay(220).duration(350)} style={styles.trustRow}>
-            <MaterialIcons name="verified-user" size={14} color={color.accent600} />
-            <Text style={styles.trustText}>{t('Trusted by verified artisans across Nigeria')}</Text>
+          {/* Verified Trust Badge */}
+          <Animated.View entering={FadeInDown.delay(220).duration(400)} style={styles.trustBadgeWrapper}>
+            <View style={styles.trustBadge}>
+              <MaterialIcons name="verified-user" size={15} color={color.accent600} />
+              <Text style={styles.trustText}>{t('Trusted by verified artisans across Nigeria')}</Text>
+            </View>
           </Animated.View>
 
           {/* Footer */}
-          <Animated.View entering={FadeInDown.delay(280).duration(350)} style={styles.footer}>
+          <Animated.View entering={FadeInDown.delay(280).duration(400)} style={styles.footer}>
             <Text style={styles.footerText}>{t("Don't have an account?")}</Text>
             <TouchableOpacity onPress={() => router.push('/register')} accessibilityRole="button">
               <Text style={styles.footerLink}>{t('Create account')}</Text>
@@ -199,16 +219,31 @@ export default function LoginScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: color.canvas },
-  glow: {
+  container: {
+    flex: 1,
+    backgroundColor: color.canvas,
+  },
+  ambientContainer: {
+    ...(StyleSheet.absoluteFill as object),
+    overflow: 'hidden',
+  },
+  topGlow: {
     position: 'absolute',
-    top: -140,
+    top: -120,
     alignSelf: 'center',
-    width: 420,
-    height: 420,
-    borderRadius: 210,
-    backgroundColor: color.brand100,
-    opacity: 0.55,
+    width: width * 1.3,
+    height: 380,
+    borderRadius: 200,
+    opacity: 0.8,
+  },
+  bottomGlow: {
+    position: 'absolute',
+    bottom: -80,
+    left: -60,
+    width: 260,
+    height: 260,
+    borderRadius: 130,
+    opacity: 0.5,
   },
   scroll: {
     flexGrow: 1,
@@ -217,29 +252,49 @@ const styles = StyleSheet.create({
     paddingBottom: space.xxl,
   },
   backBtn: {
-    width: 40,
-    height: 40,
+    width: 42,
+    height: 42,
     borderRadius: radius.md,
     borderWidth: 1.5,
-    borderColor: color.border,
+    borderColor: '#EDF2F8',
     backgroundColor: color.surface,
     alignItems: 'center',
     justifyContent: 'center',
+    ...shadow.e1,
   },
 
-  hero: { alignItems: 'center', marginTop: space.xl, marginBottom: space.xxl },
+  hero: {
+    alignItems: 'center',
+    marginTop: space.lg,
+    marginBottom: space.xxl,
+  },
+  logoRing: {
+    padding: 3,
+    borderRadius: 30,
+    backgroundColor: 'rgba(27, 95, 217, 0.08)',
+    marginBottom: space.lg,
+  },
   logoTile: {
-    width: 88,
-    height: 88,
-    borderRadius: 26,
+    width: 80,
+    height: 80,
+    borderRadius: 24,
     backgroundColor: color.surface,
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: space.xl,
+    borderWidth: 1.5,
+    borderColor: '#EEF2F8',
     ...shadow.e2,
   },
-  logo: { width: 58, height: 58 },
-  title: { ...type.titleLg, textAlign: 'center' },
+  logo: {
+    width: 52,
+    height: 52,
+  },
+  title: {
+    ...type.titleLg,
+    fontSize: 27,
+    letterSpacing: -0.5,
+    textAlign: 'center',
+  },
   subtitle: {
     fontFamily: font.medium,
     fontSize: 14,
@@ -252,23 +307,56 @@ const styles = StyleSheet.create({
   card: {
     backgroundColor: color.surface,
     borderRadius: radius.xxl,
-    borderWidth: 1,
+    borderWidth: 1.5,
     borderColor: '#EEF2F8',
     padding: space.xxl,
+    overflow: 'hidden',
     ...shadow.e2,
   },
-  field: { marginBottom: space.lg },
-  forgotBtn: { alignSelf: 'flex-end', marginBottom: space.xl, marginTop: -4 },
-  forgotText: { fontFamily: font.extrabold, fontSize: 13, color: color.brand600 },
+  accentBar: {
+    position: 'absolute',
+    top: 0,
+    left: space.xxl,
+    right: space.xxl,
+    height: 3,
+    backgroundColor: color.brand100,
+    borderBottomLeftRadius: 3,
+    borderBottomRightRadius: 3,
+  },
+  field: {
+    marginBottom: space.lg,
+  },
+  forgotBtn: {
+    alignSelf: 'flex-end',
+    marginBottom: space.xl,
+    marginTop: -2,
+  },
+  forgotText: {
+    fontFamily: font.extrabold,
+    fontSize: 13,
+    color: color.brand600,
+  },
 
-  trustRow: {
-    flexDirection: 'row',
+  trustBadgeWrapper: {
     alignItems: 'center',
-    justifyContent: 'center',
-    gap: 6,
     marginTop: space.xl,
   },
-  trustText: { fontFamily: font.bold, fontSize: 12, color: color.ink400 },
+  trustBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: color.accent100,
+    paddingHorizontal: space.md,
+    paddingVertical: 6,
+    borderRadius: radius.full,
+    borderWidth: 1,
+    borderColor: 'rgba(13, 148, 136, 0.18)',
+  },
+  trustText: {
+    fontFamily: font.bold,
+    fontSize: 11.5,
+    color: color.accent600,
+  },
 
   footer: {
     flexDirection: 'row',
@@ -278,6 +366,14 @@ const styles = StyleSheet.create({
     marginTop: 'auto',
     paddingTop: space.xxl,
   },
-  footerText: { fontFamily: font.medium, fontSize: 14, color: color.ink400 },
-  footerLink: { fontFamily: font.extrabold, fontSize: 14, color: color.brand600 },
+  footerText: {
+    fontFamily: font.medium,
+    fontSize: 14,
+    color: color.ink400,
+  },
+  footerLink: {
+    fontFamily: font.extrabold,
+    fontSize: 14,
+    color: color.brand600,
+  },
 });

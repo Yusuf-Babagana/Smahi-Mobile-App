@@ -9,7 +9,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useTranslation } from 'react-i18next';
-import { useFocusEffect } from '@react-navigation/native';
+import { useFocusEffect } from "expo-router/react-navigation";
 
 import { agentAPI, authAPI, paymentAPI } from '@/src/api/client';
 import { useAuth } from '@/src/contexts/AuthContext';
@@ -88,13 +88,21 @@ export default function PaymentScreen() {
           // The verify endpoint doesn't return the updated user — fetch it so
           // AuthContext reflects the now-active, fee-paid account instead of
           // leaving the dashboard to discover this on its own.
+          let userRole = 'artisan';
           try {
             const freshUser = await authAPI.getProfile();
-            if (freshUser) await setAuthUser(freshUser);
+            if (freshUser) {
+              await setAuthUser(freshUser);
+              userRole = freshUser.role;
+            }
           } catch { /* dashboard still self-fetches as a fallback */ }
 
-          showToast('Your account is now active! Welcome to S-MAHII.', { type: 'success' });
-          router.replace('/artisan/(tabs)/dashboard');
+          showToast('Your account is now active! Welcome to S-MAHI.', { type: 'success' });
+          if (userRole === 'business') {
+            router.replace('/business/dashboard');
+          } else {
+            router.replace('/artisan/(tabs)/dashboard');
+          }
         }
       } else {
         showToast('Payment was not successful. Please try again.', { type: 'error' });
@@ -257,7 +265,7 @@ const styles = StyleSheet.create({
   webview: { flex: 1 },
 
   loadingOverlay: {
-    ...StyleSheet.absoluteFillObject,
+    ...(StyleSheet.absoluteFill as object),
     top: 80,
     justifyContent: 'center',
     alignItems: 'center',

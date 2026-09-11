@@ -10,7 +10,7 @@ import { useAuth } from '@/src/contexts/AuthContext';
 import { color, font, radius, space } from '@/constants/theme';
 import { Avatar, Badge, EmptyState, SkeletonCard, SegmentedControl, useToast, useConfirm } from '@/src/components/ui';
 
-type StatusFilter = 'all' | 'pending';
+type StatusFilter = 'all' | 'unpaid' | 'pending';
 
 // Artisan/Business -> Coordinator Dashboard Connection (item 9): a
 // business's registration and verification status are visible here
@@ -34,15 +34,17 @@ export default function AgentBusinessListScreen() {
     const [filter, setFilter] = useState<StatusFilter>('all');
     const [updatingId, setUpdatingId] = useState<number | null>(null);
     const [deactivatingId, setDeactivatingId] = useState<number | null>(null);
+    const [collectingId, setCollectingId] = useState<number | null>(null);
 
     const fetchBusinesses = useCallback(async (pageNumber: number, search?: string, statusFilter?: StatusFilter) => {
         try {
             if (pageNumber === 1) setLoading(true);
             else setLoadingMore(true);
 
-            const params: { search?: string; verification_status?: string } = {};
+            const params: { search?: string; verification_status?: string; payment_status?: string } = {};
             if (search) params.search = search;
             if (statusFilter === 'pending') params.verification_status = 'pending';
+            if (statusFilter === 'unpaid') params.payment_status = 'unpaid';
 
             const data = await agentAPI.getBusinesses(pageNumber, Object.keys(params).length ? params : undefined);
             const newResults = data.results || [];
@@ -75,7 +77,39 @@ export default function AgentBusinessListScreen() {
         if (!loadingMore && hasMore) fetchBusinesses(page + 1, searchQuery.trim(), filter);
     };
 
+    const handleCollectPayment = async (business: any) => {
+        const userId = Number(business.user);
+        if (!userId) return;
+        setCollectingId(business.id);
+        try {
+            const payResult = await agentAPI.initializeRegistrationPayment(userId);
+            router.push({
+                pathname: '/payment',
+                params: {
+                    authorizationUrl: payResult.authorization_url,
+                    reference: payResult.reference,
+                    agentUserId: String(userId),
+                },
+            });
+        } catch (err: any) {
+            if (err?.response?.data?.already_paid) {
+                showToast(t('This business has already paid its registration fee.'), { type: 'info' });
+                fetchBusinesses(1, searchQuery.trim(), filter);
+            } else {
+                const msg = err?.response?.data?.error || t('Could not start payment. Please try again.');
+                showToast(msg, { type: 'error' });
+            }
+        } finally {
+            setCollectingId(null);
+        }
+    };
+
     const setVerification = async (business: any, newStatus: 'approved' | 'rejected') => {
+        if (newStatus === 'approved' && business.user_details?.registration_fee_paid === false) {
+            showToast(t('Cannot approve: ₦2,500 registration fee has not been paid.'), { type: 'warn' });
+            return;
+        }
+
         const verb = newStatus === 'approved' ? t('Approve') : t('Reject');
         const ok = await confirm({
             title: `${verb} ${business.business_name}?`,
@@ -133,6 +167,8 @@ export default function AgentBusinessListScreen() {
         const pending = item.verification_status === 'pending';
         const approved = item.verification_status === 'approved';
         const isUpdating = updatingId === item.id;
+        const isUnpaid = owner.registration_fee_paid === false;
+        const isCollecting = collectingId === item.id;
         // Coordinator CRUD ("any user he register") — only for a business
         // THIS coordinator personally registered; AgentBusinessListView's
         // full BusinessProfileSerializer already includes registered_by
@@ -154,10 +190,18 @@ export default function AgentBusinessListScreen() {
                             </Text>
                         </View>
                     </View>
-                    <Badge
-                        label={approved ? t('Verified') : pending ? t('Pending') : t('Rejected')}
-                        status={approved ? 'verified' : pending ? 'pending' : 'cancelled'}
-                    />
+                    {isUnpaid ? (
+                        <Badge
+                            label={t('⚠️ Unpaid ₦2.5k')}
+                            status="cancelled"
+                            icon="error-outline"
+                        />
+                    ) : (
+                        <Badge
+                            label={approved ? t('Verified') : pending ? t('Pending') : t('Rejected')}
+                            status={approved ? 'verified' : pending ? 'pending' : 'cancelled'}
+                        />
+                    )}
                 </View>
                 {!!ownerName && <Text style={styles.ownerText}>{t('Owner')}: {ownerName}</Text>}
                 {canManage && (
@@ -192,7 +236,26 @@ export default function AgentBusinessListScreen() {
                         </Pressable>
                     </View>
                 )}
-                {pending && (
+                {isUnpaid ? (
+                    <View style={styles.unpaidActionRow}>
+                        <Pressable
+                            style={({ pressed }) => [styles.collectBtn, pressed && { opacity: 0.85 }]}
+                            onPress={() => handleCollectPayment(item)}
+                            disabled={isCollecting}
+                            accessibilityRole="button"
+                            accessibilityLabel={t('Collect ₦2,500')}
+                        >
+                            {isCollecting ? (
+                                <ActivityIndicator size="small" color="#FFFFFF" />
+                            ) : (
+                                <>
+                                    <MaterialIcons name="payment" size={15} color="#FFFFFF" style={{ marginRight: 6 }} />
+                                    <Text style={styles.collectBtnText}>{t('Collect ₦2,500 Registration Fee')}</Text>
+                                </>
+                            )}
+                        </Pressable>
+                    </View>
+                ) : pending && (
                     <View style={styles.actionRow}>
                         <Pressable
                             style={({ pressed }) => [styles.approveBtn, pressed && { opacity: 0.7 }]}
@@ -257,16 +320,15 @@ export default function AgentBusinessListScreen() {
                 <MaterialIcons name="search" size={18} color={color.ink400} />
                 <TextInput
                     style={styles.searchInput}
-                    placeholder={t('Search by name…')}
+                    placeholder={t('Search businesses or owners...')}
                     placeholderTextColor={color.ink300}
                     value={searchQuery}
                     onChangeText={setSearchQuery}
-                    autoCapitalize="none"
-                    autoCorrect={false}
+                    returnKeyType="search"
                 />
                 {searchQuery.length > 0 && (
-                    <Pressable onPress={() => setSearchQuery('')} accessibilityRole="button" accessibilityLabel={t('Clear search')} hitSlop={8}>
-                        <MaterialIcons name="close" size={18} color={color.ink400} />
+                    <Pressable onPress={() => setSearchQuery('')} hitSlop={8}>
+                        <MaterialIcons name="close" size={16} color={color.ink400} />
                     </Pressable>
                 )}
             </View>
@@ -274,6 +336,7 @@ export default function AgentBusinessListScreen() {
             <SegmentedControl
                 segments={[
                     { value: 'all', label: t('All') },
+                    { value: 'unpaid', label: t('Unpaid (₦2.5k)') },
                     { value: 'pending', label: t('Pending') },
                 ]}
                 value={filter}
@@ -419,4 +482,19 @@ const styles = StyleSheet.create({
         borderColor: '#FCA5A5',
     },
     rejectText: { fontFamily: font.extrabold, fontSize: 12.5, color: '#B91C1C' },
+
+    unpaidActionRow: { marginTop: space.md },
+    collectBtn: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        backgroundColor: '#1B5FD9',
+        paddingVertical: space.md,
+        borderRadius: radius.md,
+    },
+    collectBtnText: {
+        fontFamily: font.extrabold,
+        fontSize: 13,
+        color: '#FFFFFF',
+    },
 });

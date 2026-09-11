@@ -158,6 +158,10 @@ export const authAPI = {
       // as optional.
       latitude: data.latitude,
       longitude: data.longitude,
+      // Optional referral code — lets a self-registering artisan/business/
+      // client get claimed under whoever referred them (a coordinator or an
+      // agent). The backend resolves & validates it; blank is simply omitted.
+      referral_code: data.referral_code ? String(data.referral_code).trim() : undefined,
     };
 
     // Artisan category: either an existing category ID or a custom name
@@ -244,6 +248,15 @@ export const authAPI = {
     return response.data;
   },
 
+  changePassword: async (currentPassword: string, newPassword: string, confirmPassword?: string) => {
+    const response = await apiClient.post('auth/change-password/', {
+      current_password: currentPassword,
+      new_password: newPassword,
+      confirm_password: confirmPassword || newPassword,
+    });
+    return response.data;
+  },
+
   logout: async () => {
     await SecureStore.deleteItemAsync('accessToken');
     await SecureStore.deleteItemAsync('refreshToken');
@@ -307,6 +320,11 @@ export const bookingAPI = {
 
   createBooking: async (data: any) => {
     const response = await apiClient.post('bookings/', data);
+    return response.data;
+  },
+
+  create: async (artisanId: number, description: string, date: string) => {
+    const response = await apiClient.post('bookings/', { artisan: artisanId, service_description: description, scheduled_time: date });
     return response.data;
   },
 
@@ -855,6 +873,29 @@ export const favoriteAPI = {
 export const presenceAPI = {
   heartbeat: async () => {
     const response = await apiClient.post('v1/presence/heartbeat/');
+    return response.data;
+  },
+};
+
+// --- REFERRAL NETWORK (Coordinator -> Agent -> Service Provider) ---
+// Lives under /api/v1/ — same versioning decision as disputeAPI. Backed by
+// core/views.py ReferralMeView / ReferralValidateView.
+export const referralAPI = {
+  // The logged-in user's own referral dashboard — their referral code
+  // (agents/coordinators), the Coordinator they report to (agents only),
+  // and their recruitment statistics. Owner-only server-side; another
+  // user's network data is never exposed here.
+  getMyReferral: async () => {
+    const response = await apiClient.get('v1/referrals/me/');
+    return response.data;
+  },
+
+  // Resolve a referral code to its owner (name/role/serial/state only —
+  // never email/phone/address). `valid: false` responses carry a specific
+  // error string: 'Invalid referral code.' vs 'This referral code is no
+  // longer valid.'
+  validate: async (code: string) => {
+    const response = await apiClient.post('v1/referrals/validate/', { code });
     return response.data;
   },
 };

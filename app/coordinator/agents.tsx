@@ -197,6 +197,12 @@ export default function CoordinatorAgentList() {
                     {!!item.serial_number && (
                         <Text style={styles.serialText} numberOfLines={1}>{item.serial_number}</Text>
                     )}
+                    {!!item.referral_code && (
+                        <View style={styles.referralRow}>
+                            <MaterialIcons name="qr-code" size={11} color={color.accent600} />
+                            <Text style={styles.referralText} numberOfLines={1}>{item.referral_code}</Text>
+                        </View>
+                    )}
                     {item.lga_details?.name && (
                         <View style={styles.lgaRow}>
                             <MaterialIcons name="place" size={11} color={color.ink400} />
@@ -451,6 +457,8 @@ const styles = StyleSheet.create({
     name: { fontFamily: font.extrabold, fontSize: 14.5, color: color.ink900 },
     email: { fontFamily: font.bold, fontSize: 12, color: color.ink400, marginTop: 2 },
     serialText: { fontFamily: font.bold, fontSize: 11, color: color.brand600, marginTop: 2, letterSpacing: 0.3 },
+    referralRow: { flexDirection: 'row', alignItems: 'center', gap: 3, marginTop: 2 },
+    referralText: { fontFamily: font.bold, fontSize: 11, color: color.accent600, letterSpacing: 0.3 },
     lgaRow: { flexDirection: 'row', alignItems: 'center', gap: 3, marginTop: 2 },
     lgaText: { fontFamily: font.bold, fontSize: 11, color: color.ink400 },
     statsRow: { flexDirection: 'row', gap: space.sm, marginTop: 6 },

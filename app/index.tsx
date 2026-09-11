@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { View, ActivityIndicator, StyleSheet, Image } from 'react-native';
 import { useRouter } from 'expo-router';
-import { useTheme } from '@react-navigation/native';
+import { useTheme } from "expo-router/react-navigation";
 import * as SecureStore from 'expo-secure-store';
 import { storage } from '@/src/utils/storage';
 import { authAPI } from '@/src/api/client';

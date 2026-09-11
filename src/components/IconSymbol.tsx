@@ -11,13 +11,13 @@ import {
 import MaterialIcons from "@expo/vector-icons/MaterialIcons";
 
 // Add your SFSymbol to MaterialIcons mappings here.
-const MAPPING = {
+const MAPPING: Record<string, any> = {
   // See MaterialIcons here: https://icons.expo.fyi
   // See SF Symbols in the SF Symbols app on Mac.
 
   // Navigation & Home
   "house.fill": "home",
-  "house": "home-outlined",
+  "house": "home",
   "arrow.left": "arrow-back",
   "arrow.right": "arrow-forward",
   "arrow.up": "arrow-upward",
@@ -35,7 +35,7 @@ const MAPPING = {
   "envelope.fill": "mail",
   "envelope": "mail-outline",
   "phone.fill": "phone",
-  "phone": "phone-outlined",
+  "phone": "phone",
   "message.fill": "chat",
   "message": "chat-bubble-outline",
   "bell.fill": "notifications",
@@ -160,15 +160,9 @@ const MAPPING = {
   "eye.slash.fill": "visibility-off",
   "lightbulb.fill": "lightbulb",
   "moon.fill": "dark-mode",
-  "sun.max.fill": "light-mode",
-} as Partial<
-  Record<
-    import("expo-symbols").SymbolViewProps["name"],
-    React.ComponentProps<typeof MaterialIcons>["name"]
-  >
->;
+};
 
-export type IconSymbolName = keyof typeof MAPPING;
+export type IconSymbolName = string;
 
 /**
  * An icon component that uses native SFSymbols on iOS, and MaterialIcons on Android and web. This ensures a consistent look across platforms, and optimal resource usage.

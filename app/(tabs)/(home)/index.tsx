@@ -371,7 +371,7 @@ export default function ClientHomeScreen() {
 
       if (shouldRefresh || pageNum === 1) {
         setArtisans(processedData);
-        if (categoryToUse === 'All' && !searchToUse) {
+        if (!categoryToUse && !searchToUse) {
           AsyncStorage.setItem(CACHE_KEY, JSON.stringify(processedData)).catch(e => console.log(e));
         }
       } else {

@@ -11,7 +11,7 @@ import { useRouter, usePathname } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { IconSymbol } from '@/src/components/IconSymbol';
 import { BlurView } from 'expo-blur';
-import { useTheme } from '@react-navigation/native';
+import { useTheme } from "expo-router/react-navigation";
 import Animated, {
   useAnimatedStyle,
   useSharedValue,
@@ -226,7 +226,7 @@ const styles = StyleSheet.create({
     // borderRadius and other styling applied dynamically
   },
   background: {
-    ...StyleSheet.absoluteFillObject,
+    ...(StyleSheet.absoluteFill as object),
     // Dynamic styling applied in component
   },
   indicator: {

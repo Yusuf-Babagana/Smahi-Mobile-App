@@ -119,7 +119,7 @@ export const ArtisanCard = ({ artisan, onPress, formattedLocation, formattedPhon
                             <Text style={styles.name} numberOfLines={1}>{displayName}</Text>
                             {isVerified && (
                                 <View style={styles.verifiedBadge}>
-                                    <Ionicons name="checkmark-seal" size={14} color="#3B82F6" />
+                                    <Ionicons name="checkmark-circle" size={14} color="#3B82F6" />
                                 </View>
                             )}
                         </View>

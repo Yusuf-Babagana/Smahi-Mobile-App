@@ -9,7 +9,7 @@ import { MaterialIcons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useTranslation } from 'react-i18next';
 
-import { artisanAPI, coordinatorAPI } from '@/src/api/client';
+import { agentAPI, artisanAPI, coordinatorAPI } from '@/src/api/client';
 import { useAuth } from '@/src/contexts/AuthContext';
 import { color, font, radius, shadow, space, type } from '@/constants/theme';
 import { Badge, useToast, useConfirm } from '@/src/components/ui';
@@ -25,6 +25,7 @@ export default function ArtisanDetailScreen() {
     const [loading, setLoading] = useState(true);
     const [verifying, setVerifying] = useState(false);
     const [deactivating, setDeactivating] = useState(false);
+    const [collectingPayment, setCollectingPayment] = useState(false);
     // Whether the logged-in coordinator personally registered this artisan
     // — derived from a real 200/404 against CoordinatorRegisteredUserDetailView
     // rather than re-deriving it client-side, since the public artisan
@@ -65,7 +66,39 @@ export default function ArtisanDetailScreen() {
         }
     };
 
+    const handleCollectPayment = async () => {
+        const userId = Number(artisan?.user);
+        if (!userId) return;
+        setCollectingPayment(true);
+        try {
+            const payResult = await agentAPI.initializeRegistrationPayment(userId);
+            router.push({
+                pathname: '/payment',
+                params: {
+                    authorizationUrl: payResult.authorization_url,
+                    reference: payResult.reference,
+                    agentUserId: String(userId),
+                },
+            });
+        } catch (err: any) {
+            if (err?.response?.data?.already_paid) {
+                showToast(t('Registration fee is already paid.'), { type: 'info' });
+                fetchDetails();
+            } else {
+                const msg = err?.response?.data?.error || t('Could not start payment. Please try again.');
+                showToast(msg, { type: 'error' });
+            }
+        } finally {
+            setCollectingPayment(false);
+        }
+    };
+
     const handleVerify = async () => {
+        const person = artisan?.user_details || {};
+        if (person.registration_fee_paid === false) {
+            showToast(t('Cannot verify: ₦2,500 registration fee has not been paid.'), { type: 'warn' });
+            return;
+        }
         const ok = await confirm({
             title: "Confirm Verification",
             message: "By clicking Confirm, you certify that you have physically inspected this artisan's business location and identity.",
@@ -164,14 +197,55 @@ export default function ArtisanDetailScreen() {
                     </Text>
 
                     <View style={styles.statusRow}>
-                        <Badge
-                            label={person.is_verified ? t('Verified') : t('Pending')}
-                            status={person.is_verified ? 'verified' : 'pending'}
-                            icon={person.is_verified ? 'verified' : 'schedule'}
-                        />
+                        {person.registration_fee_paid === false ? (
+                            <Badge
+                                label={t('⚠️ Unpaid ₦2.5k')}
+                                status="cancelled"
+                                icon="error-outline"
+                            />
+                        ) : (
+                            <Badge
+                                label={person.is_verified ? t('Verified') : t('Pending')}
+                                status={person.is_verified ? 'verified' : 'pending'}
+                                icon={person.is_verified ? 'verified' : 'schedule'}
+                            />
+                        )}
                         <Badge label={`ID: ${id}`} bg={color.surfaceChip} fg={color.ink600} />
                     </View>
                 </View>
+
+                {/* Registration Fee Unpaid Alert */}
+                {person.registration_fee_paid === false && (
+                    <View style={styles.unpaidBanner}>
+                        <View style={styles.unpaidBannerTop}>
+                            <View style={styles.unpaidIconCircle}>
+                                <MaterialIcons name="warning" size={20} color="#DC2626" />
+                            </View>
+                            <View style={{ flex: 1 }}>
+                                <Text style={styles.unpaidBannerTitle}>{t('Registration Fee Unpaid (₦2,500 Due)')}</Text>
+                                <Text style={styles.unpaidBannerDesc}>
+                                    {t('This artisan has not completed their ₦2,500 registration fee. Verification is locked until payment is confirmed.')}
+                                </Text>
+                            </View>
+                        </View>
+                        <Pressable
+                            style={({ pressed }) => [styles.collectActionBtn, pressed && { opacity: 0.9 }]}
+                            onPress={handleCollectPayment}
+                            disabled={collectingPayment}
+                            accessibilityRole="button"
+                            accessibilityLabel={t('Collect ₦2,500 Registration Fee')}
+                        >
+                            {collectingPayment ? (
+                                <ActivityIndicator size="small" color="#FFFFFF" />
+                            ) : (
+                                <>
+                                    <MaterialIcons name="payment" size={18} color="#FFFFFF" style={{ marginRight: 6 }} />
+                                    <Text style={styles.collectActionBtnText}>{t('Collect ₦2,500 via Paystack')}</Text>
+                                </>
+                            )}
+                        </Pressable>
+                    </View>
+                )}
 
                 {/* 3. Contact & Location */}
                 <View style={styles.card}>
@@ -238,25 +312,55 @@ export default function ArtisanDetailScreen() {
                 {/* 4. Action Button */}
                 {!person.is_verified && (
                     <View style={styles.footer}>
-                        <Pressable
-                            style={({ pressed }) => [styles.verifyButton, pressed && { opacity: 0.9 }]}
-                            onPress={handleVerify}
-                            disabled={verifying}
-                            accessibilityRole="button"
-                            accessibilityLabel={t('Verify artisan')}
-                        >
-                            {verifying ? (
-                                <ActivityIndicator color="#FFF" />
-                            ) : (
-                                <>
-                                    <MaterialIcons name="verified-user" size={22} color="#FFF" />
-                                    <Text style={styles.verifyText}>{t('Verify artisan')}</Text>
-                                </>
-                            )}
-                        </Pressable>
-                        <Text style={styles.disclaimer}>
-                            {t('Only verify artisans you have physically met.')}
-                        </Text>
+                        {person.registration_fee_paid === false ? (
+                            <View style={styles.lockedBox}>
+                                <View style={styles.lockedRow}>
+                                    <MaterialIcons name="lock" size={16} color="#B91C1C" />
+                                    <Text style={styles.lockedTitle}>{t('Physical verification is locked')}</Text>
+                                </View>
+                                <Text style={styles.lockedDesc}>
+                                    {t('Pay the ₦2,500 registration fee first so this artisan account is activated.')}
+                                </Text>
+                                <Pressable
+                                    style={({ pressed }) => [styles.collectActionBtn, pressed && { opacity: 0.9 }]}
+                                    onPress={handleCollectPayment}
+                                    disabled={collectingPayment}
+                                    accessibilityRole="button"
+                                    accessibilityLabel={t('Pay ₦2,500 Fee to Unlock Verification')}
+                                >
+                                    {collectingPayment ? (
+                                        <ActivityIndicator size="small" color="#FFFFFF" />
+                                    ) : (
+                                        <>
+                                            <MaterialIcons name="payment" size={18} color="#FFFFFF" style={{ marginRight: 6 }} />
+                                            <Text style={styles.collectActionBtnText}>{t('Pay ₦2,500 Fee to Unlock')}</Text>
+                                        </>
+                                    )}
+                                </Pressable>
+                            </View>
+                        ) : (
+                            <>
+                                <Pressable
+                                    style={({ pressed }) => [styles.verifyButton, pressed && { opacity: 0.9 }]}
+                                    onPress={handleVerify}
+                                    disabled={verifying}
+                                    accessibilityRole="button"
+                                    accessibilityLabel={t('Verify artisan')}
+                                >
+                                    {verifying ? (
+                                        <ActivityIndicator color="#FFF" />
+                                    ) : (
+                                        <>
+                                            <MaterialIcons name="verified-user" size={22} color="#FFF" />
+                                            <Text style={styles.verifyText}>{t('Verify artisan')}</Text>
+                                        </>
+                                    )}
+                                </Pressable>
+                                <Text style={styles.disclaimer}>
+                                    {t('Only verify artisans you have physically met.')}
+                                </Text>
+                            </>
+                        )}
                     </View>
                 )}
 
@@ -372,5 +476,81 @@ const styles = StyleSheet.create({
         color: color.ink300,
         fontSize: 12,
         marginTop: space.md,
+    },
+
+    // Unpaid Banner & Locked Verification Styles
+    unpaidBanner: {
+        backgroundColor: '#FEF2F2',
+        borderRadius: radius.lg,
+        borderWidth: 1.5,
+        borderColor: '#FECACA',
+        padding: space.lg,
+        marginBottom: space.xl,
+    },
+    unpaidBannerTop: {
+        flexDirection: 'row',
+        alignItems: 'flex-start',
+        marginBottom: space.md,
+    },
+    unpaidIconCircle: {
+        width: 36,
+        height: 36,
+        borderRadius: radius.full,
+        backgroundColor: '#FEE2E2',
+        alignItems: 'center',
+        justifyContent: 'center',
+        marginRight: space.sm,
+    },
+    unpaidBannerTitle: {
+        fontFamily: font.extrabold,
+        fontSize: 14.5,
+        color: '#991B1B',
+    },
+    unpaidBannerDesc: {
+        fontFamily: font.medium,
+        fontSize: 12.5,
+        color: '#7F1D1D',
+        marginTop: 2,
+        lineHeight: 18,
+    },
+    collectActionBtn: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        backgroundColor: '#1B5FD9',
+        height: 48,
+        borderRadius: radius.md,
+        ...shadow.e1,
+    },
+    collectActionBtnText: {
+        color: '#FFFFFF',
+        fontFamily: font.extrabold,
+        fontSize: 14,
+    },
+
+    lockedBox: {
+        backgroundColor: '#F8FAFC',
+        borderRadius: radius.lg,
+        borderWidth: 1,
+        borderColor: '#E2E8F0',
+        padding: space.lg,
+    },
+    lockedRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 6,
+        marginBottom: 4,
+    },
+    lockedTitle: {
+        fontFamily: font.extrabold,
+        fontSize: 13.5,
+        color: '#B91C1C',
+    },
+    lockedDesc: {
+        fontFamily: font.medium,
+        fontSize: 12,
+        color: '#64748B',
+        marginBottom: space.md,
+        lineHeight: 17,
     },
 });

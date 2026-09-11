@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import { AppState } from 'react-native';
-import { Audio } from 'expo-av';
+import { Audio } from '@/src/utils/safeAudio';
 import { chatAPI } from '@/src/api/client';
 import { storage } from '@/src/utils/storage';
 import { InAppNotification } from '@/src/components/InAppNotification';
@@ -22,6 +22,7 @@ export const NotificationProvider = ({ children }: { children: React.ReactNode }
 
     // 2. Play Sound
     const playSound = async () => {
+        if (!Audio?.Sound) return;
         try {
             const { sound } = await Audio.Sound.createAsync(
                 require('@/assets/sounds/received.wav')

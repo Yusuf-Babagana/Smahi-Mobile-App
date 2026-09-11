@@ -51,7 +51,7 @@ export default function TabLayout() {
         name="(home)"
         options={{
           title: 'Home',
-          tabBarIcon: ({ color, focused }) => (
+          tabBarIcon: ({ color, focused }: { color: string; focused: boolean }) => (
             <View style={focused ? styles.activeIconContainer : null}>
               <Ionicons
                 name={focused ? "home" : "home-outline"}
@@ -68,7 +68,7 @@ export default function TabLayout() {
         name="bookings"
         options={{
           title: 'Bookings',
-          tabBarIcon: ({ color, focused }) => (
+          tabBarIcon: ({ color, focused }: { color: string; focused: boolean }) => (
             <View style={focused ? styles.activeIconContainer : null}>
               <Ionicons
                 name={focused ? "calendar" : "calendar-outline"}
@@ -85,7 +85,7 @@ export default function TabLayout() {
         name="chats"
         options={{
           title: 'Chat',
-          tabBarIcon: ({ color, focused }) => (
+          tabBarIcon: ({ color, focused }: { color: string; focused: boolean }) => (
             <View style={focused ? styles.activeIconContainer : null}>
               <Ionicons
                 name={focused ? "chatbubbles" : "chatbubbles-outline"}
@@ -102,7 +102,7 @@ export default function TabLayout() {
         name="profile"
         options={{
           title: 'Profile',
-          tabBarIcon: ({ color, focused }) => (
+          tabBarIcon: ({ color, focused }: { color: string; focused: boolean }) => (
             <View style={focused ? styles.activeIconContainer : null}>
               <Ionicons
                 name={focused ? "person" : "person-outline"}

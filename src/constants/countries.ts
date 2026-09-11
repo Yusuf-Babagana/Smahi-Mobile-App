@@ -1,4 +1,4 @@
-import { Country } from '../types';
+import { Country, State } from '../types';
 
 // Comprehensive list of ALL countries in the world alphabetically
 export const countries: Country[] = [

@@ -54,6 +54,12 @@ export default function AgentRegisterScreen() {
         // flow has always used.
         skill: '',
         lga: '',
+        // Optional — if the person being registered has a Coordinator's or
+        // fellow Agent's referral code (e.g. a Field Agent sent them down a
+        // WhatsApp link), it's forwarded so that referrer's network gets the
+        // claim. Whatever is here, the physical registrar is still recorded
+        // as the one who entered them.
+        referral_code: '',
     });
 
     // Restore whatever the agent had typed before the app was killed/
@@ -115,6 +121,7 @@ export default function AgentRegisterScreen() {
                 // their own state); a plain agent stays locked to their own —
                 // the backend enforces this either way, this is just what's sent.
                 lga: isCoordinator ? formData.lga : user?.lga,
+                referral_code: formData.referral_code?.trim() || undefined,
             };
 
             // Queue first, then attempt a sync right away — this is what
@@ -214,7 +221,7 @@ export default function AgentRegisterScreen() {
     };
 
     const resetForm = () => {
-        setFormData({ ...formData, first_name: '', last_name: '', email: '', phone: '' });
+        setFormData({ ...formData, first_name: '', last_name: '', email: '', phone: '', skill: '', lga: '', referral_code: '' });
     };
 
     return (
@@ -298,6 +305,17 @@ export default function AgentRegisterScreen() {
                         value={formData.skill}
                         onChangeText={v => setFormData({ ...formData, skill: v })}
                         icon="build"
+                        containerStyle={styles.field}
+                    />
+
+                    <Input
+                        label={t('Referral code (optional)')}
+                        placeholder={t('e.g. SMAHI-KN-XXXX')}
+                        value={formData.referral_code}
+                        onChangeText={v => setFormData({ ...formData, referral_code: v })}
+                        icon="qr-code"
+                        autoCapitalize="characters"
+                        autoCorrect={false}
                         containerStyle={styles.field}
                     />
 

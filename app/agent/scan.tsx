@@ -13,7 +13,7 @@ export default function QRScannerScreen() {
     return (
         <View style={styles.container}>
             <Stack.Screen options={{ headerShown: false }} />
-            <View style={[StyleSheet.absoluteFillObject, styles.placeholder]}>
+            <View style={[StyleSheet.absoluteFill, styles.placeholder]}>
                 <Ionicons name="camera-outline" size={80} color="#374151" />
                 <Text style={styles.placeholderTitle}>Scanning is coming soon</Text>
                 <Text style={styles.placeholderBody}>

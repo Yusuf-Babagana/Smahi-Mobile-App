@@ -8,7 +8,7 @@ import { KeyboardAvoidingView } from '@/src/components/Keyboard';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
-import { Audio } from 'expo-av';
+import { Audio } from '@/src/utils/safeAudio';
 import { useTranslation } from 'react-i18next';
 
 import { chatAPI, artisanAPI } from '@/src/api/client';
@@ -44,13 +44,14 @@ export default function ChatRoomScreen() {
     // --- SOUND LOGIC ---
     const playSound = async (type: 'send' | 'receive') => {
         try {
+            if (!Audio?.Sound) return;
             const { sound } = await Audio.Sound.createAsync(
                 type === 'send'
                     ? require('@/assets/sounds/sent.wav')
                     : require('@/assets/sounds/received.wav')
             );
             await sound.playAsync();
-            sound.setOnPlaybackStatusUpdate(async (status) => {
+            sound.setOnPlaybackStatusUpdate(async (status: any) => {
                 if (status.isLoaded && status.didJustFinish) await sound.unloadAsync();
             });
         } catch (error) {
