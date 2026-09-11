@@ -50,7 +50,7 @@ export default function Index() {
       router.replace('/welcome');
     } finally {
       setIsReady(true);
-      SplashScreen.hideAsync();
+      SplashScreen.hideAsync().catch(() => {});
     }
   };
 

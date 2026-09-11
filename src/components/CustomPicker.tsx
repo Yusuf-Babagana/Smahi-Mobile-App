@@ -115,7 +115,7 @@ export default function CustomPicker({
                         >
                             <Picker.Item label={placeholder} value="" color="#999" />
                             {items.map((item) => (
-                                <Picker.Item key={item.value} label={item.label} value={item.value} color={theme.colors.text} />
+                                <Picker.Item key={item.value} label={item.label} value={item.value} color={theme.colors.text as string} />
                             ))}
                         </Picker>
                     </View>

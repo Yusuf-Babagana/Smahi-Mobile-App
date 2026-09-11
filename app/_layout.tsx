@@ -101,9 +101,11 @@ function OfflineSyncManager() {
   return null;
 }
 
+export { ErrorBoundary } from 'expo-router';
+
 export default function RootLayout() {
   const colorScheme = useColorScheme();
-  const [loaded] = useFonts({
+  const [loaded, error] = useFonts({
     SpaceMono: require("../assets/fonts/SpaceMono-Regular.ttf"),
     Manrope_400Regular,
     Manrope_500Medium,
@@ -113,12 +115,12 @@ export default function RootLayout() {
   });
 
   useEffect(() => {
-    if (loaded) {
-      SplashScreen.hideAsync();
+    if (loaded || error) {
+      SplashScreen.hideAsync().catch(() => {});
     }
-  }, [loaded]);
+  }, [loaded, error]);
 
-  if (!loaded) {
+  if (!loaded && !error) {
     return null;
   }
 

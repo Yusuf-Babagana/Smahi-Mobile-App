@@ -64,7 +64,6 @@
           "locationAlwaysAndWhenInUsePermission": "Allow S-MAHII to use your location to find nearby artisans."
         }
       ],
-      "expo-location",
       [
         "expo-notifications",
         {
