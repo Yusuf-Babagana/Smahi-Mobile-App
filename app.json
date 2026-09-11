@@ -6,7 +6,6 @@
     "orientation": "portrait",
     "icon": "./assets/images/smahi.png",
     "userInterfaceStyle": "automatic",
-    "newArchEnabled": true,
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.smahi.app",
@@ -24,9 +23,8 @@
         "foregroundImage": "./assets/images/smahi.png",
         "backgroundColor": "#ffffff"
       },
-      "edgeToEdgeEnabled": true,
       "package": "com.smahi.app",
-      "versionCode": 39,
+      "versionCode": 40,
       "config": {
         "googleMaps": {
           "apiKey": "AIzaSyBypBFMwHGnv-gGDXL3VlG-IMUkU3sOT6E"
