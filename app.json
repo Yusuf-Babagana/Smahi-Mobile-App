@@ -24,7 +24,7 @@
         "backgroundColor": "#ffffff"
       },
       "package": "com.smahi.app",
-      "versionCode": 41,
+      "versionCode": 42,
       "config": {
         "googleMaps": {
           "apiKey": "AIzaSyBypBFMwHGnv-gGDXL3VlG-IMUkU3sOT6E"
