@@ -1,6 +1,5 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
-import { AppState } from 'react-native';
-import { Audio } from '@/src/utils/safeAudio';
+import { AppState, Vibration } from 'react-native';
 import { chatAPI } from '@/src/api/client';
 import { storage } from '@/src/utils/storage';
 import { InAppNotification } from '@/src/components/InAppNotification';
@@ -20,16 +19,12 @@ export const NotificationProvider = ({ children }: { children: React.ReactNode }
         storage.getCurrentUser().then(u => u && setCurrentUserId(u.id));
     }, []);
 
-    // 2. Play Sound
-    const playSound = async () => {
-        if (!Audio?.Sound) return;
+    // 2. Play Sound / Haptic
+    const playSound = () => {
         try {
-            const { sound } = await Audio.Sound.createAsync(
-                require('@/assets/sounds/received.wav')
-            );
-            await sound.playAsync();
-        } catch (error) {
-            // console.log("Sound error");
+            Vibration.vibrate(200);
+        } catch {
+            // ignore vibration error
         }
     };
 

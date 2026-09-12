@@ -1,32 +1,23 @@
 // src/utils/safeAudio.ts
-// Defensive wrapper around expo-av so the app boots cleanly in Expo Go
-// (where the native ExponentAV module was removed in modern SDKs).
+// Pure JS fallback audio stub — avoids loading deprecated native expo-av on modern React Native.
 
-let AudioModule: any = null;
+export const isAudioAvailable = false;
 
-try {
-  // eslint-disable-next-line @typescript-eslint/no-var-requires
-  const expoAv = require('expo-av');
-  AudioModule = expoAv?.Audio || null;
-} catch {
-  // ExponentAV native module not available in Expo Go
-}
-
-export const isAudioAvailable = !!AudioModule;
+const dummySound = {
+  playAsync: async () => {},
+  setOnPlaybackStatusUpdate: (_cb?: any) => {},
+  unloadAsync: async () => {},
+};
 
 const dummyAudio = {
   Sound: {
-    createAsync: async () => ({
-      sound: {
-        playAsync: async () => {},
-        setOnPlaybackStatusUpdate: () => {},
-        unloadAsync: async () => {},
-      },
+    createAsync: async (..._args: any[]): Promise<{ sound: typeof dummySound }> => ({
+      sound: dummySound,
     }),
   },
   Recording: {
-    createAsync: async () => {
-      throw new Error('Audio recording is not supported in Expo Go. Please use a development build.');
+    createAsync: async (..._args: any[]): Promise<{ recording: any }> => {
+      throw new Error('Audio recording is not supported on this build.');
     },
   },
   requestPermissionsAsync: async () => ({
@@ -35,11 +26,11 @@ const dummyAudio = {
     canAskAgain: false,
     expires: 'never',
   }),
-  setAudioModeAsync: async () => {},
+  setAudioModeAsync: async (..._args: any[]) => {},
   RecordingOptionsPresets: {
     HIGH_QUALITY: {},
     LOW_QUALITY: {},
   },
 };
 
-export const Audio = AudioModule || dummyAudio;
+export const Audio: any = dummyAudio;

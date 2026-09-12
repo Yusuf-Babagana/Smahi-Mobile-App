@@ -12,7 +12,6 @@ import {
 } from "@expo-google-fonts/manrope";
 import { Stack } from "expo-router";
 import * as SplashScreen from "expo-splash-screen";
-import { SystemBars } from "react-native-edge-to-edge";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { KeyboardProvider } from "@/src/components/Keyboard";
 import { useColorScheme, View } from "react-native";
@@ -215,7 +214,6 @@ export default function RootLayout() {
                   <Stack.Screen name="+not-found" />
                 </Stack>
 
-                <SystemBars style="auto" />
                 </ConfirmProvider>
                 </ToastProvider>
                 </KeyboardProvider>
