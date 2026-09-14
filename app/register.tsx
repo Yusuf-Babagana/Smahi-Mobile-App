@@ -275,14 +275,8 @@ export default function RegisterScreen() {
         return;
       }
 
-      // ✅ Non-artisans: check for locked roles
-      if (role === 'agent') {
-        showToast('Account created — it requires activation. Please log in to enter your Serial Number.', { type: 'success' });
-        router.replace('/login');
-      } else {
-        showToast('Account created!', { type: 'success' });
-        router.replace('/login');
-      }
+      showToast('Account created!', { type: 'success' });
+      router.replace('/login');
 
     } catch (error: any) {
       const msg = error.response?.data ? JSON.stringify(error.response.data) : 'Registration Failed';
@@ -501,16 +495,6 @@ export default function RegisterScreen() {
                 <RoleCard title={t('Client')} subtitle={t('Find verified professionals near you')} icon="search" selected={role === 'client'} onPress={() => setRole('client')} />
                 <RoleCard title={t('Work as an artisan')} subtitle={t('Offer services & earn')} icon="handyman" selected={role === 'artisan'} onPress={() => setRole('artisan')} />
                 <RoleCard title={t('Register a business')} subtitle={t('Hospital, hotel, shop & more')} icon="storefront" selected={role === 'business'} onPress={() => setRole('business')} />
-                <RoleCard title={t('Field agent')} subtitle={t('Register artisans (approval required)')} icon="badge" selected={role === 'agent'} onPress={() => setRole('agent')} />
-
-                {role === 'agent' && (
-                  <View style={styles.activationNote}>
-                    <MaterialIcons name="info-outline" size={16} color={color.warn600} />
-                    <Text style={styles.activationNoteText}>
-                      {t('This role needs a serial number to activate. You can log in after registering to enter it.')}
-                    </Text>
-                  </View>
-                )}
               </View>
             )}
 
@@ -633,8 +617,7 @@ export default function RegisterScreen() {
                     <Text style={styles.errorText}>{t('Please complete all location fields')}</Text>
                   )}
 
-                  {role !== 'agent' && (
-                    <View style={{ marginTop: space.lg }}>
+                  <View style={{ marginTop: space.lg }}>
                       <Input
                         label={t('Referral code (optional)')}
                         placeholder={t('e.g. SMAHI-KN-XXXX')}
@@ -648,7 +631,6 @@ export default function RegisterScreen() {
                         {t("Registering through a Coordinator or Field Agent? Enter their code so they can track your registration.")}
                       </Text>
                     </View>
-                  )}
                 </View>
               </View>
             )}
@@ -909,21 +891,6 @@ const styles = StyleSheet.create({
   },
   radioSelected: { borderColor: color.brand600 },
   radioDot: { width: 10, height: 10, borderRadius: 5, backgroundColor: color.brand600 },
-  activationNote: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: 8,
-    backgroundColor: color.warn100,
-    borderRadius: radius.md,
-    padding: space.md,
-  },
-  activationNoteText: {
-    flex: 1,
-    fontFamily: font.bold,
-    fontSize: 12.5,
-    lineHeight: 18,
-    color: color.warn600,
-  },
 
   // STEP 4
   sectionCard: {

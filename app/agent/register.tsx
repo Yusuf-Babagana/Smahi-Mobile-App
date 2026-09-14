@@ -139,6 +139,15 @@ export default function AgentRegisterScreen() {
                 const generatedPassword = synced.serverResult?.generated_password;
                 const alreadyRegistered = synced.serverResult?.already_registered;
                 const newUserId = synced.serverResult?.user?.id;
+                // Coordinator registrations get a credentials welcome email
+                // dispatched automatically server-side (the same Brevo flow
+                // used for coordinator-created agents) — surfaced here so the
+                // coordinator knows delivery happened instead of being told to
+                // share the password by hand.
+                const emailSent = Boolean(synced.serverResult?.email_sent);
+                const registeredEmail = synced.serverResult?.user?.email
+                    || formData.email
+                    || `${formData.phone}@smahi.com`;
                 await clearDraft(DRAFT_KEY);
 
                 // Collect the ₦2,500 fee right now via Paystack — on the
@@ -157,6 +166,8 @@ export default function AgentRegisterScreen() {
                                 reference: payResult.reference,
                                 agentUserId: String(newUserId),
                                 generatedPassword: generatedPassword || '',
+                                emailSent: String(emailSent),
+                                registeredEmail: registeredEmail,
                             },
                         });
                         return;
@@ -185,7 +196,9 @@ export default function AgentRegisterScreen() {
                     message: alreadyRegistered
                         ? (synced.serverResult?.message || "This artisan was already registered — no new account was created.")
                         : generatedPassword
-                            ? `Share this one-time password with them securely — it will not be shown again:\n\n${generatedPassword}`
+                            ? emailSent
+                                ? `A welcome email with login credentials has been sent to ${registeredEmail}.\n\nThis one-time password is your backup — it will not be shown again:\n\n${generatedPassword}`
+                                : `Share this one-time password with them securely — it will not be shown again:\n\n${generatedPassword}`
                             : "Artisan registered successfully.",
                     confirmLabel: "Done",
                     cancelLabel: "Register Another",
@@ -331,7 +344,9 @@ export default function AgentRegisterScreen() {
                     <View style={styles.noteBanner}>
                         <MaterialIcons name="lock-outline" size={16} color={color.brand600} />
                         <Text style={styles.noteText}>
-                            {t("A one-time password will be generated and shown to you after registration — you'll need to share it with the artisan yourself.")}
+                            {isCoordinator
+                                ? t("A welcome email with login credentials will be dispatched automatically to the artisan's email after registration. A one-time password will also be shown to you as a backup.")
+                                : t("A one-time password will be generated and shown to you after registration — you'll need to share it with the artisan yourself.")}
                         </Text>
                     </View>
 

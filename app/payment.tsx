@@ -21,7 +21,7 @@ export default function PaymentScreen() {
   const { t } = useTranslation();
   const { show: showToast } = useToast();
   const confirm = useConfirm();
-  const { authorizationUrl, reference, agentUserId, generatedPassword } = useLocalSearchParams<{
+  const { authorizationUrl, reference, agentUserId, generatedPassword, emailSent, registeredEmail } = useLocalSearchParams<{
     authorizationUrl: string;
     reference: string;
     // Present only when a Coordinator/Agent is collecting this fee (right
@@ -30,6 +30,10 @@ export default function PaymentScreen() {
     // self-service flow (an artisan paying their own fee at login).
     agentUserId?: string;
     generatedPassword?: string;
+    // Whether the welcome email with credentials was dispatched to the
+    // new account (coordinator-created accounts only).
+    emailSent?: string;
+    registeredEmail?: string;
   }>();
   // Whichever of the two flows this screen is running: who it verifies
   // as, and where it lands afterward, all branch on this one flag.
@@ -77,7 +81,9 @@ export default function PaymentScreen() {
           if (generatedPassword) {
             await confirm({
               title: 'Registered & Paid',
-              message: `Share this one-time password with them securely — it will not be shown again:\n\n${generatedPassword}`,
+              message: emailSent === 'true'
+                ? `A welcome email with login credentials has been sent to ${registeredEmail}.\n\nThis one-time password is your backup — it will not be shown again:\n\n${generatedPassword}`
+                : `Share this one-time password with them securely — it will not be shown again:\n\n${generatedPassword}`,
               confirmLabel: 'Done',
             });
           } else {
@@ -115,7 +121,7 @@ export default function PaymentScreen() {
     } finally {
       setVerifying(false);
     }
-  }, [router, isAgentInitiated, agentUserId, generatedPassword, confirm]);
+  }, [router, isAgentInitiated, agentUserId, generatedPassword, emailSent, registeredEmail, confirm, setAuthUser, showToast]);
 
   const handleNavigationStateChange = useCallback((navState: any) => {
     const url = navState.url || '';
