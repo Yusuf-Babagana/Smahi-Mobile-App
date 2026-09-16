@@ -16,6 +16,23 @@ import { useAuth } from '@/src/contexts/AuthContext';
 import { color, font, radius, shadow, space } from '@/constants/theme';
 import { useToast, useConfirm } from '@/src/components/ui';
 
+// This screen is reachable via a deep link (natively://payment?authorizationUrl=...),
+// so `authorizationUrl` must be treated as untrusted input, not just a value we
+// passed to ourselves — otherwise a crafted link could open a fully attacker-
+// controlled, JS-enabled page inside what looks like our own "Secure payment
+// via Paystack" screen. Only Paystack's own checkout host is accepted as the
+// entry point; once loaded, Paystack's own redirects (e.g. to a card issuer's
+// 3D Secure/OTP page) are left alone, since those are legitimate parts of a
+// real payment already in progress on a page we trust.
+function isTrustedPaystackUrl(url: string): boolean {
+  try {
+    const { protocol, hostname } = new URL(url);
+    return protocol === 'https:' && hostname === 'checkout.paystack.com';
+  } catch {
+    return false;
+  }
+}
+
 export default function PaymentScreen() {
   const router = useRouter();
   const { t } = useTranslation();
@@ -162,7 +179,7 @@ export default function PaymentScreen() {
     if (ok) router.replace(isAgentInitiated ? '/agent/dashboard' : '/login');
   };
 
-  if (!authorizationUrl) {
+  if (!authorizationUrl || !isTrustedPaystackUrl(authorizationUrl)) {
     return (
       <SafeAreaView style={styles.container}>
         <StatusBar style="dark" />
@@ -238,6 +255,11 @@ export default function PaymentScreen() {
         domStorageEnabled
         startInLoadingState
         renderLoading={() => <></>}
+        // Paystack's real checkout flow legitimately redirects through
+        // third-party card-issuer/3D-Secure domains, so we can't pin this
+        // to a single host past the entry point — but every hop, including
+        // those, is still expected to be plain https.
+        originWhitelist={['https://*']}
       />
     </SafeAreaView>
   );

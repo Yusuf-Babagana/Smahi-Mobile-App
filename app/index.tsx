@@ -4,7 +4,7 @@ import { useRouter } from 'expo-router';
 import { useTheme } from "expo-router/react-navigation";
 import * as SecureStore from 'expo-secure-store';
 import { storage } from '@/src/utils/storage';
-import { authAPI } from '@/src/api/client';
+import { authAPI, paymentAPI } from '@/src/api/client';
 import { getHomeRouteForRole } from '@/src/constants/roleRoutes';
 import * as SplashScreen from 'expo-splash-screen';
 
@@ -38,6 +38,28 @@ export default function Index() {
           router.replace('/login');
         } else if (user.account_status === 'pending_approval') {
           router.replace('/agent-pending-approval');
+        } else if ((user.role === 'artisan' || user.role === 'business') && user.registration_fee_paid === false) {
+          // Same gate login.tsx applies on a fresh sign-in — needed here too
+          // for a restored session (e.g. the user backed out of payment
+          // last time and just reopened the app), since their own
+          // dashboard/profile endpoints now 403 until the fee is paid.
+          try {
+            const payResult = await paymentAPI.initialize();
+            router.replace({
+              pathname: '/payment',
+              params: { authorizationUrl: payResult.authorization_url, reference: payResult.reference },
+            });
+          } catch (payErr: any) {
+            if (payErr?.response?.data?.already_paid) {
+              // Stale local flag — the fee is actually settled server-side.
+              router.replace(getHomeRouteForRole(user.role));
+            } else {
+              // Payment provider unreachable right now — send them to login
+              // rather than the dashboard, whose profile calls would just
+              // 403 until the fee clears; login.tsx surfaces a clear retry.
+              router.replace('/login');
+            }
+          }
         } else {
           router.replace(getHomeRouteForRole(user.role));
         }
