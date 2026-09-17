@@ -103,6 +103,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
             setUser(null);
             await AsyncStorage.removeItem('user');
+            // AI chat history is cached under one global (not per-user) key
+            // — app/chat/ai.tsx's MESSAGES_KEY, kept as a literal here to
+            // avoid importing a route file into this context. Without this,
+            // the next person to log in on the same device (a real pattern
+            // here — agents/coordinators share devices for in-person
+            // registration/payment) would see the previous user's entire AI
+            // conversation, which can include other people's names/phone
+            // numbers/booking details.
+            await AsyncStorage.removeItem('@smaahi_ai_chat_messages');
             await SecureStore.deleteItemAsync('accessToken');
             await SecureStore.deleteItemAsync('refreshToken');
 

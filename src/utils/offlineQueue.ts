@@ -44,6 +44,22 @@ export interface QueueItem<TPayload = any> {
   updatedAt: number;
   lastError?: string;
   serverResult?: any;
+  // Who was logged in when this was queued (AuthContext's cached user.id).
+  // A submit always goes out under whichever account's token is currently
+  // active — undefined/null for items queued before this field existed,
+  // which stay submittable exactly as before (best we can do without
+  // knowing their real owner).
+  ownerUserId?: number | null;
+}
+
+async function getCurrentUserId(): Promise<number | null> {
+  try {
+    const raw = await AsyncStorage.getItem('user'); // same key AuthContext uses
+    const parsed = raw ? JSON.parse(raw) : null;
+    return parsed?.id ?? null;
+  } catch {
+    return null;
+  }
 }
 
 const STORAGE_KEY = 'smahii_offline_queue_v1';
@@ -123,6 +139,7 @@ export async function enqueue<TPayload>(type: string, payload: TPayload): Promis
     attempts: 0,
     createdAt: Date.now(),
     updatedAt: Date.now(),
+    ownerUserId: await getCurrentUserId(),
   };
   const all = await getAll();
   await persist([...all, item]);
@@ -152,8 +169,21 @@ export type Submitter = (payload: any, clientRequestId: string) => Promise<any>;
 export async function processQueue(submitters: Record<string, Submitter>): Promise<void> {
   const all = await getAll();
   const due = all.filter((i) => i.status === 'pending_sync' || i.status === 'failed');
+  if (due.length === 0) return;
+
+  // A submit always goes out under whichever account's token is currently
+  // active (apiClient attaches it, not this queue) — if the logged-in
+  // account has changed since an item was queued (session expired mid-
+  // offline-stretch and a different agent logged in, or a manual handoff
+  // on a shared device), submitting it now would create the record under
+  // the WRONG person. Leave those items queued untouched rather than
+  // silently misattributing them; they'll sync once their own owner is
+  // logged in again.
+  const currentUserId = await getCurrentUserId();
 
   for (const item of due) {
+    if (item.ownerUserId != null && item.ownerUserId !== currentUserId) continue;
+
     const submit = submitters[item.type];
     if (!submit) continue; // no handler registered for this type right now
 

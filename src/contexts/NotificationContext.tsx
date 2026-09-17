@@ -1,23 +1,26 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import { AppState, Vibration } from 'react-native';
 import { chatAPI } from '@/src/api/client';
-import { storage } from '@/src/utils/storage';
 import { InAppNotification } from '@/src/components/InAppNotification';
+import { useAuth } from '@/src/contexts/AuthContext';
 
 const NotificationContext = createContext({});
 
 export const NotificationProvider = ({ children }: { children: React.ReactNode }) => {
     const [lastMessageId, setLastMessageId] = useState<number | null>(null);
-    const [currentUserId, setCurrentUserId] = useState<number | null>(null);
+    // Derived from useAuth() (not a one-time storage read) so it updates
+    // immediately on login/logout — this context is mounted once, app-wide,
+    // for the whole session, so a stale id here previously kept pointing at
+    // whoever was logged in FIRST: on a shared device, switching accounts
+    // made every incoming message from the old user look like "from me"
+    // (toast wrongly suppressed) and every message the new user sent look
+    // like "not from me" (toast wrongly shown for their own outgoing text).
+    const { user } = useAuth();
+    const currentUserId = user?.id ?? null;
 
     // Toast State
     const [toastVisible, setToastVisible] = useState(false);
     const [toastData, setToastData] = useState({ message: '', senderName: '', chatId: 0 });
-
-    // 1. Load Current User
-    useEffect(() => {
-        storage.getCurrentUser().then(u => u && setCurrentUserId(u.id));
-    }, []);
 
     // 2. Play Sound / Haptic
     const playSound = () => {
