@@ -65,7 +65,9 @@ export default function RegisterScreen() {
   const [loading, setLoading] = useState(false);
   const [errors, setErrors] = useState<{ [key: string]: string }>({});
 
-  const totalSteps = role === 'artisan' ? 5 : 4;
+  // Artisans and businesses both owe the one-time registration fee, so
+  // both get the extra payment step; client/agent stop at step 4.
+  const totalSteps = (role === 'artisan' || role === 'business') ? 5 : 4;
 
   // Clamp step if role change reduces totalSteps
   useEffect(() => {
@@ -206,7 +208,7 @@ export default function RegisterScreen() {
   const handleRegister = async () => {
     // Already registered in this session (e.g. user went back from the
     // payment step): don't create a duplicate, just return to payment.
-    if (role === 'artisan' && regAccessToken) {
+    if ((role === 'artisan' || role === 'business') && regAccessToken) {
       setCurrentStep(5);
       return;
     }
@@ -248,8 +250,9 @@ export default function RegisterScreen() {
       });
       setRegAccessToken(regResponse?.tokens?.access || null);
 
-      // ✅ Artisans advance to payment step (step 5)
-      if (role === 'artisan') {
+      // ✅ Artisans and businesses both owe the registration fee — advance
+      // to the payment step (step 5) instead of finishing here.
+      if (role === 'artisan' || role === 'business') {
         setCurrentStep(5);
         return;
       }
@@ -314,7 +317,7 @@ export default function RegisterScreen() {
   const meta = STEP_META[currentStep - 1];
   const continueDisabled = loading || (currentStep === 1 && !acceptedTerms);
 
-  const isPaymentStep = role === 'artisan' && currentStep === 5;
+  const isPaymentStep = (role === 'artisan' || role === 'business') && currentStep === 5;
 
   const buttonLabel = isPaymentStep
     ? t('Pay ₦2,500 & Activate')
@@ -324,10 +327,11 @@ export default function RegisterScreen() {
         ? t('Create account')
         : t('Continue');
 
-  // Step 4 ALWAYS creates the account. For artisans totalSteps is 5, so
-  // step 4 is not the "last" step — routing it through nextStep() used to
-  // skip registration entirely, sending artisans to the payment step with
-  // no account (hence 401 "Could not identify the user" when paying).
+  // Step 4 ALWAYS creates the account. For artisans/businesses totalSteps
+  // is 5, so step 4 is not the "last" step — routing it through
+  // nextStep() used to skip registration entirely, sending them to the
+  // payment step with no account (hence 401 "Could not identify the
+  // user" when paying).
   const handleButtonPress = isPaymentStep
     ? handlePayNow
     : currentStep === 4
@@ -592,8 +596,8 @@ export default function RegisterScreen() {
               </View>
             )}
 
-            {/* STEP 5: ARTISAN PAYMENT (only for artisans) */}
-            {currentStep === 5 && role === 'artisan' && (
+            {/* STEP 5: REGISTRATION FEE PAYMENT (artisans and businesses only) */}
+            {currentStep === 5 && (role === 'artisan' || role === 'business') && (
               <View style={styles.formSection}>
                 <View style={styles.paymentCard}>
                   <View style={styles.paymentHeader}>
@@ -621,8 +625,14 @@ export default function RegisterScreen() {
                     </View>
                     <View style={styles.paymentRow}>
                       <Text style={styles.paymentLabel}>Role</Text>
-                      <Text style={styles.paymentValue}>Artisan</Text>
+                      <Text style={styles.paymentValue}>{role === 'business' ? 'Business' : 'Artisan'}</Text>
                     </View>
+                    {role === 'business' && (
+                      <View style={styles.paymentRow}>
+                        <Text style={styles.paymentLabel}>Business</Text>
+                        <Text style={styles.paymentValue}>{businessName}</Text>
+                      </View>
+                    )}
                     <View style={styles.paymentRow}>
                       <Text style={styles.paymentLabel}>Location</Text>
                       <Text style={styles.paymentValue}>
