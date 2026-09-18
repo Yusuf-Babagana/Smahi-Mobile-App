@@ -316,8 +316,8 @@ export default function CoordinatorDashboardScreen() {
               </View>
             </View>
             <Text style={styles.metricValue}>{stats.total_clients || 0}</Text>
-            <Text style={styles.metricLabel}>{t('State Clients')}</Text>
-            <Text style={styles.metricSubtext}>{t('Across state territory')}</Text>
+            <Text style={styles.metricLabel}>{t('My Clients')}</Text>
+            <Text style={styles.metricSubtext}>{t('Registered or assigned to you')}</Text>
           </TouchableOpacity>
         </View>
 

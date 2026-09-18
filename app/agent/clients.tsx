@@ -20,8 +20,10 @@ export default function AgentClientList() {
     const [loadingMore, setLoadingMore] = useState(false); // Pagination Load
     const [page, setPage] = useState(1);
     const [hasMore, setHasMore] = useState(true);      // Are there more pages?
-    // Only a state_coordinator sees the whole state — a plain agent is
-    // scoped server-side to their own LGA (AgentClientListView).
+    // A state_coordinator sees only clients registered or assigned to
+    // them (never a colleague coordinator's, even in the same state) — a
+    // plain agent is scoped server-side to their own LGA plus anyone
+    // admin-assigned to them directly (AgentClientListView).
     const isCoordinator = user?.role === 'state_coordinator';
 
     useEffect(() => {
@@ -37,7 +39,8 @@ export default function AgentClientList() {
             if (pageNumber === 1) setLoading(true);
             else setLoadingMore(true);
 
-            // Scoped server-side to the agent's own state.
+            // Scoped server-side: own claim for a coordinator, own LGA
+            // (+ admin-assigned) for a plain agent.
             const data = await agentAPI.getStateClients({}, pageNumber);
 
             const newResults = data.results || [];
@@ -111,20 +114,22 @@ export default function AgentClientList() {
                     <Pressable onPress={() => router.back()} style={styles.backButton} accessibilityRole="button" accessibilityLabel={t('Back')}>
                         <MaterialIcons name="arrow-back" size={20} color={color.ink900} />
                     </Pressable>
-                    <Text style={styles.headerTitle}>{isCoordinator ? t('My state clients') : t('My LGA clients')}</Text>
+                    <Text style={styles.headerTitle}>{isCoordinator ? t('My clients') : t('My LGA clients')}</Text>
                     <View style={{ width: 40 }} />
                 </View>
             </SafeAreaView>
 
             <View style={styles.subHeader}>
-                <MaterialIcons name="place" size={14} color={color.brand600} />
+                <MaterialIcons name={isCoordinator ? 'person' : 'place'} size={14} color={color.brand600} />
                 <Text style={styles.subHeaderText}>
-                    {t('Listing all clients in')}{' '}
-                    <Text style={styles.subHeaderStrong}>
-                        {isCoordinator
-                            ? (user?.state_details?.name || t('your state'))
-                            : (user?.lga_details?.name || t('your LGA'))}
-                    </Text>
+                    {isCoordinator ? (
+                        t('Registered or assigned to you')
+                    ) : (
+                        <>
+                            {t('Listing all clients in')}{' '}
+                            <Text style={styles.subHeaderStrong}>{user?.lga_details?.name || t('your LGA')}</Text>
+                        </>
+                    )}
                 </Text>
             </View>
 
@@ -148,9 +153,9 @@ export default function AgentClientList() {
                     ListEmptyComponent={
                         <EmptyState
                             icon="person-search"
-                            title={isCoordinator ? t('No clients found in this state.') : t('No clients found in this LGA.')}
+                            title={isCoordinator ? t('No clients yet.') : t('No clients found in this LGA.')}
                             message={isCoordinator
-                                ? t('Clients who register in your state will appear here.')
+                                ? t('Clients you register, or that are assigned to you, will appear here.')
                                 : t('Clients who register in your LGA will appear here.')}
                         />
                     }
