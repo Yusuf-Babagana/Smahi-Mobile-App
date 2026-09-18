@@ -69,13 +69,21 @@ export default function AdminCreateCoordinatorScreen() {
             const result = await adminAPI.createCoordinator(payload);
             const generatedPassword = result?.generated_password;
             const alreadyRegistered = result?.already_registered;
+            // Credentials are now emailed automatically server-side (same
+            // Brevo flow used for coordinator-created agents) — surfaced
+            // here so Admin knows delivery happened instead of being told
+            // to share the password by hand.
+            const emailSent = Boolean(result?.email_sent);
+            const registeredEmail = result?.user?.email || payload.email;
 
             const done = await confirm({
                 title: alreadyRegistered ? t('Already created') : t('Coordinator created'),
                 message: alreadyRegistered
                     ? (result?.message || t('This coordinator was already created.'))
                     : generatedPassword
-                        ? t('Share this one-time password with them securely — it will not be shown again:') + `\n\n${generatedPassword}`
+                        ? emailSent
+                            ? t('A welcome email with login credentials has been sent to {{email}}.', { email: registeredEmail }) + '\n\n' + t('This one-time password is your backup — it will not be shown again:') + `\n\n${generatedPassword}`
+                            : t('Share this one-time password with them securely — it will not be shown again:') + `\n\n${generatedPassword}`
                         : t('Coordinator created successfully.'),
                 confirmLabel: t('Done'),
                 cancelLabel: t('Create another'),
@@ -180,7 +188,7 @@ export default function AdminCreateCoordinatorScreen() {
                     <View style={styles.noteBanner}>
                         <MaterialIcons name="lock-outline" size={16} color={color.brand600} />
                         <Text style={styles.noteText}>
-                            {t("A one-time password will be generated and shown to you after creation — you'll need to share it with the coordinator yourself.")}
+                            {t("A one-time password will be generated and emailed to the coordinator automatically — it's also shown to you here as a backup.")}
                         </Text>
                     </View>
 

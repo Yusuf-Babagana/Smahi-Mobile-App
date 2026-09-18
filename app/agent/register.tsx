@@ -139,10 +139,11 @@ export default function AgentRegisterScreen() {
                 const generatedPassword = synced.serverResult?.generated_password;
                 const alreadyRegistered = synced.serverResult?.already_registered;
                 const newUserId = synced.serverResult?.user?.id;
-                // Coordinator registrations get a credentials welcome email
+                // Every registration gets a credentials welcome email
                 // dispatched automatically server-side (the same Brevo flow
-                // used for coordinator-created agents) — surfaced here so the
-                // coordinator knows delivery happened instead of being told to
+                // used for coordinator-created agents), whether the
+                // registrar is an Agent or a Coordinator — surfaced here so
+                // they know delivery happened instead of being told to
                 // share the password by hand.
                 const emailSent = Boolean(synced.serverResult?.email_sent);
                 const registeredEmail = synced.serverResult?.user?.email
