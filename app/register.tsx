@@ -36,9 +36,9 @@ const STEP_META = [
 ];
 
 const TERMS_POINTS: { icon: keyof typeof MaterialIcons.glyphMap; text: string }[] = [
-  { icon: 'verified-user', text: 'Artisans are identity-verified; bookings and payments follow S. MAHI Global Service Ltd policy.' },
-  { icon: 'lock-outline', text: 'Your personal data is used only to run the marketplace and is never sold.' },
-  { icon: 'gavel', text: 'Misuse, fraud or abusive behaviour can lead to suspension of your account.' },
+  { icon: 'payment', text: 'Pay registration and service fees only through official S-MAHII payment channels — never directly to an individual.' },
+  { icon: 'verified-user', text: "Verify a person's profile and verification status before transacting or meeting them in person." },
+  { icon: 'gavel', text: 'Payments are generally non-refundable once completed. Misuse, fraud or unlawful activity can lead to account suspension.' },
 ];
 
 export default function RegisterScreen() {
