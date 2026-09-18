@@ -82,13 +82,11 @@ export default function RegisterScreen() {
   const [customIcon, setCustomIcon] = useState('');
 
   // Business registration — deliberately separate from artisan (a
-  // business isn't an individual tradesperson): its own name and its own
-  // category list (Category.category_type='business' server-side, never
-  // mixed with the artisan profession list above).
+  // business isn't an individual tradesperson): just its name at
+  // self-service signup. No business-type/category field here — that's
+  // still collected in the agent-assisted flow (app/agent/register-
+  // business.tsx), untouched by this.
   const [businessName, setBusinessName] = useState('');
-  const [businessCategories, setBusinessCategories] = useState<any[]>([]);
-  const [selectedBusinessCategory, setSelectedBusinessCategory] = useState('');
-  const [customBusinessCategoryName, setCustomBusinessCategoryName] = useState('');
   const [countries, setCountries] = useState<any[]>([]);
   const [states, setStates] = useState<any[]>([]);
   const [lgas, setLgas] = useState<any[]>([]);
@@ -139,18 +137,6 @@ export default function RegisterScreen() {
       mapped.push({ label: 'Other (type below…)', value: '__custom__' });
       setServices(mapped);
     }).catch(err => console.error("❌ CATEGORIES ERROR:", err));
-
-    // Business types (Hospital, Hotel, Grocery Store, etc.) — a completely
-    // separate list from the artisan professions above, never mixed
-    // together (see Category.category_type server-side).
-    categoryAPI.getBusinessCategoriesFlat().then(data => {
-      const mapped = data.map((cat: any) => ({
-        label: cat.name,
-        value: cat.id.toString()
-      }));
-      mapped.push({ label: 'Other (type below…)', value: '__custom__' });
-      setBusinessCategories(mapped);
-    }).catch(err => console.error("❌ BUSINESS CATEGORIES ERROR:", err));
   }, []);
 
   useEffect(() => {
@@ -200,11 +186,6 @@ export default function RegisterScreen() {
       }
       if (role === 'business') {
         if (!businessName.trim()) newErrors['businessName'] = "Enter your business name";
-        if (!selectedBusinessCategory) {
-          newErrors['businessCategory'] = "Select your business type";
-        } else if (selectedBusinessCategory === '__custom__' && !customBusinessCategoryName.trim()) {
-          newErrors['customBusinessCategory'] = "Enter your business type";
-        }
       }
     }
     setErrors(newErrors);
@@ -247,11 +228,9 @@ export default function RegisterScreen() {
         gender: gender || undefined,
         category_id:
           role === 'artisan' && selectedService !== '__custom__' ? selectedService :
-          role === 'business' && selectedBusinessCategory !== '__custom__' ? selectedBusinessCategory :
           undefined,
         custom_category_name:
           role === 'artisan' && selectedService === '__custom__' ? customCategoryName.trim() :
-          role === 'business' && selectedBusinessCategory === '__custom__' ? customBusinessCategoryName.trim() :
           undefined,
         custom_category_icon: role === 'artisan' && selectedService === '__custom__' ? customIcon || undefined : undefined,
         business_name: role === 'business' ? businessName.trim() : undefined,
@@ -555,29 +534,7 @@ export default function RegisterScreen() {
                       onChangeText={setBusinessName}
                       icon="storefront"
                       error={errors.businessName}
-                      containerStyle={{ marginBottom: space.md }}
                     />
-                    <ServiceCategoryPicker
-                      label={t('Business type')}
-                      placeholder={t('Select business type')}
-                      value={selectedBusinessCategory}
-                      onValueChange={(val) => { setSelectedBusinessCategory(val); setCustomBusinessCategoryName(''); }}
-                      items={businessCategories}
-                    />
-                    {errors.businessCategory && <Text style={styles.errorText}>{errors.businessCategory}</Text>}
-
-                    {selectedBusinessCategory === '__custom__' && (
-                      <View style={{ marginTop: space.md }}>
-                        <Input
-                          label={t('Your business type')}
-                          placeholder={t('e.g. Furniture Showroom')}
-                          value={customBusinessCategoryName}
-                          onChangeText={setCustomBusinessCategoryName}
-                          icon="edit"
-                          error={errors.customBusinessCategory}
-                        />
-                      </View>
-                    )}
                   </View>
                 )}
 
