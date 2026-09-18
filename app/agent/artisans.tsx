@@ -1,6 +1,6 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import { View, Text, StyleSheet, FlatList, TouchableOpacity, ActivityIndicator, Pressable } from 'react-native';
-import { useRouter, useLocalSearchParams, Stack } from 'expo-router';
+import { useRouter, useLocalSearchParams, useFocusEffect, Stack } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useTranslation } from 'react-i18next';
@@ -44,6 +44,18 @@ export default function AgentArtisanList() {
         }
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [user, filter]);
+
+    // Refetch whenever this screen regains focus — e.g. navigating back
+    // from registering a new artisan, which keeps this screen's earlier
+    // instance mounted rather than remounting it, so the plain
+    // mount-time effect above never reruns and a just-registered
+    // artisan stayed invisible until a manual pull-to-refresh.
+    useFocusEffect(
+        useCallback(() => {
+            if (user) fetchLocalArtisans(1, filter);
+            // eslint-disable-next-line react-hooks/exhaustive-deps
+        }, [user, filter])
+    );
 
     const fetchLocalArtisans = async (pageNumber: number, statusFilter: VerificationFilter) => {
         if (!hasMore && pageNumber > 1) return;

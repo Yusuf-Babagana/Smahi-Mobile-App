@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import { View, Text, StyleSheet, FlatList, ActivityIndicator, Pressable, TextInput } from 'react-native';
-import { useRouter, Stack } from 'expo-router';
+import { useRouter, useFocusEffect, Stack } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useTranslation } from 'react-i18next';
@@ -67,6 +67,19 @@ export default function AgentBusinessListScreen() {
         if (user) fetchBusinesses(1, searchQuery.trim(), filter);
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [user, filter, fetchBusinesses]);
+
+    // Refetch whenever this screen regains focus — e.g. navigating back
+    // (router.back()) from Register New Business, which keeps this
+    // screen's earlier instance mounted rather than remounting it, so
+    // the plain mount-time effect above never reruns and a just-
+    // registered business stayed invisible until a manual pull-to-
+    // refresh or app restart.
+    useFocusEffect(
+        useCallback(() => {
+            if (user) fetchBusinesses(1, searchQuery.trim(), filter);
+            // eslint-disable-next-line react-hooks/exhaustive-deps
+        }, [user, filter])
+    );
 
     useEffect(() => {
         const delay = setTimeout(() => {

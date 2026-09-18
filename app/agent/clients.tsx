@@ -1,6 +1,6 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import { View, Text, StyleSheet, FlatList, ActivityIndicator, Pressable } from 'react-native';
-import { useRouter, Stack } from 'expo-router';
+import { useRouter, useFocusEffect, Stack } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useTranslation } from 'react-i18next';
@@ -31,6 +31,17 @@ export default function AgentClientList() {
             fetchStateClients(1); // Load Page 1 on start
         }
     }, [user]);
+
+    // Refetch whenever this screen regains focus — e.g. navigating back
+    // after a client gets admin-assigned elsewhere — which keeps this
+    // screen's earlier instance mounted rather than remounting it, so
+    // the plain mount-time effect above never reruns on its own.
+    useFocusEffect(
+        useCallback(() => {
+            if (user) fetchStateClients(1);
+            // eslint-disable-next-line react-hooks/exhaustive-deps
+        }, [user])
+    );
 
     const fetchStateClients = async (pageNumber: number) => {
         if (!hasMore && pageNumber > 1) return;

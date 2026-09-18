@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   View,
   Text,
@@ -10,7 +10,7 @@ import {
   Dimensions,
   Linking,
 } from 'react-native';
-import { useRouter, Stack } from 'expo-router';
+import { useRouter, useFocusEffect, Stack } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialIcons, Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -84,6 +84,17 @@ export default function AgentDashboard() {
   useEffect(() => {
     fetchAgentData();
   }, []);
+
+  // Refetch whenever this screen regains focus — e.g. navigating back
+  // after registering an artisan/business/agent, which keeps this
+  // screen's earlier instance mounted rather than remounting it, so
+  // the counts otherwise stayed stale until a manual pull-to-refresh.
+  useFocusEffect(
+    useCallback(() => {
+      fetchAgentData();
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [])
+  );
 
   const onRefresh = () => {
     setRefreshing(true);
