@@ -7,24 +7,20 @@ import {
   RefreshControl,
   TouchableOpacity,
   Pressable,
-  Dimensions,
   Linking,
 } from 'react-native';
 import { useRouter, useFocusEffect, Stack } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialIcons, Ionicons } from '@expo/vector-icons';
-import { LinearGradient } from 'expo-linear-gradient';
 import * as Clipboard from 'expo-clipboard';
 import { useTranslation } from 'react-i18next';
 
 import { useAuth } from '@/src/contexts/AuthContext';
 import { agentAPI, referralAPI } from '@/src/api/client';
 import { color, font, radius, space, shadow } from '@/constants/theme';
-import { Avatar, useToast, useConfirm } from '@/src/components/ui';
+import { Avatar, Button, StatTile, useToast, useConfirm } from '@/src/components/ui';
 import { useOfflineQueue } from '@/src/utils/offlineQueue';
 import { ReferralSummary } from '@/src/types';
-
-const { width } = Dimensions.get('window');
 
 export default function AgentDashboard() {
   const router = useRouter();
@@ -151,391 +147,232 @@ export default function AgentDashboard() {
     <View style={styles.container}>
       <Stack.Screen options={{ headerShown: false }} />
 
-      {/* 1. HERO FIELD CREDENTIAL HEADER */}
-      <LinearGradient
-        colors={['#071E3D', '#0B2E5B', '#1B5FD9']}
-        start={{ x: 0, y: 0 }}
-        end={{ x: 1, y: 1 }}
-        style={styles.fieldHeader}
-      >
-        <SafeAreaView edges={['top']} style={styles.safeHeader}>
-          {/* Top Bar: Live Jurisdiction Pill, Key & Logout */}
-          <View style={styles.topBar}>
-            <View style={styles.territoryBadge}>
-              <View style={styles.liveDot} />
-              <Ionicons name="location-sharp" size={13} color="#22D3EE" />
-              <Text style={styles.territoryText}>{lgaName.toUpperCase()} {t('FIELD OFFICE')}</Text>
-            </View>
+      {/* HEADER */}
+      <SafeAreaView edges={['top']} style={styles.headerSafe}>
+        <View style={styles.headerRow}>
+          <Avatar name={displayName} uri={user?.profile_picture} gender={user?.gender} size={48} borderRadius={14} />
 
-            <View style={styles.topActionsRow}>
-              <TouchableOpacity
-                style={styles.headerIconButton}
-                onPress={() => router.push('/change-password')}
-                accessibilityRole="button"
-                accessibilityLabel={t('Change password')}
-              >
-                <Ionicons name="key-outline" size={17} color="#38BDF8" />
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                style={styles.headerIconButton}
-                onPress={handleLogout}
-                accessibilityRole="button"
-                accessibilityLabel={t('Log out')}
-              >
-                <MaterialIcons name="logout" size={18} color="rgba(255,255,255,0.9)" />
-              </TouchableOpacity>
+          <View style={styles.headerTextWrap}>
+            <Text style={styles.headerRole}>{t('Field Agent')}</Text>
+            <Text style={styles.headerName} numberOfLines={1}>{displayName}</Text>
+            <View style={styles.headerMetaRow}>
+              <MaterialIcons name="place" size={13} color={color.ink300} />
+              <Text style={styles.headerMetaText} numberOfLines={1}>{lgaName}, {stateName}</Text>
             </View>
           </View>
 
-          {/* Agent Identity Tile */}
-          <View style={styles.agentProfileRow}>
-            <View style={styles.avatarGlowWrap}>
-              <Avatar
-                name={displayName}
-                uri={user?.profile_picture}
-                gender={user?.gender}
-                size={62}
-                borderRadius={20}
-              />
-            </View>
-
-            <View style={styles.profileTextWrap}>
-              <View style={styles.roleTag}>
-                <Ionicons name="shield-checkmark" size={12} color="#38BDF8" />
-                <Text style={styles.roleLabel}>{t('OFFICIAL FIELD AGENT')}</Text>
-              </View>
-
-              <Text style={styles.agentName} numberOfLines={1}>{displayName}</Text>
-
-              <View style={styles.badgeRow}>
-                <TouchableOpacity
-                  style={styles.idBadge}
-                  onPress={copyAgentId}
-                  accessibilityRole="button"
-                  accessibilityLabel={t('Copy Agent ID')}
-                >
-                  <MaterialIcons name="fingerprint" size={13} color="#22D3EE" />
-                  <Text style={styles.idBadgeText}>{user?.serial_number || 'AGT-ID'}</Text>
-                  <MaterialIcons name="content-copy" size={11} color="rgba(255,255,255,0.7)" />
-                </TouchableOpacity>
-
-                <View style={styles.locationPill}>
-                  <Ionicons name="map-outline" size={12} color="#93C5FD" />
-                  <Text style={styles.locationText}>{lgaName}, {stateName}</Text>
-                </View>
-              </View>
-            </View>
+          <View style={styles.headerActions}>
+            <TouchableOpacity
+              style={styles.iconButton}
+              onPress={() => router.push('/change-password')}
+              accessibilityRole="button"
+              accessibilityLabel={t('Change password')}
+            >
+              <Ionicons name="key-outline" size={18} color={color.ink600} />
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.iconButton}
+              onPress={handleLogout}
+              accessibilityRole="button"
+              accessibilityLabel={t('Log out')}
+            >
+              <MaterialIcons name="logout" size={18} color={color.ink600} />
+            </TouchableOpacity>
           </View>
+        </View>
 
-          {/* Coordinator Supervisor Endorsement */}
+        <View style={styles.idRow}>
+          <View style={styles.idPill}>
+            <MaterialIcons name="badge" size={13} color={color.brand600} />
+            <Text style={styles.idPillText}>{user?.serial_number || t('No ID assigned')}</Text>
+          </View>
+          <TouchableOpacity onPress={copyAgentId} accessibilityRole="button" accessibilityLabel={t('Copy Agent ID')}>
+            <MaterialIcons name="content-copy" size={14} color={color.ink300} />
+          </TouchableOpacity>
+
           {referral?.coordinator && (
-            <View style={styles.sponsorBanner}>
-              <MaterialIcons name="verified-user" size={15} color="#34D399" />
-              <Text style={styles.sponsorText}>
-                {t('Supervised by State Coordinator {{name}}', { name: referral.coordinator.name })}
+            <View style={styles.sponsorRow}>
+              <MaterialIcons name="verified-user" size={13} color={color.accent600} />
+              <Text style={styles.sponsorText} numberOfLines={1}>
+                {t('Supervised by {{name}}', { name: referral.coordinator.name })}
               </Text>
             </View>
           )}
-        </SafeAreaView>
-      </LinearGradient>
+        </View>
+      </SafeAreaView>
 
-      {/* 2. ELEVATED FLOATING KPI DECK (4 Interactive Pods) */}
-      <View style={styles.statsOverlapContainer}>
-        <View style={styles.statsCard}>
-          {/* Stat 1: Total Artisans */}
-          <TouchableOpacity
-            style={styles.statCell}
-            onPress={() => router.push('/agent/artisans')}
-            activeOpacity={0.7}
-          >
-            <View style={[styles.statIconTile, { backgroundColor: '#EFF6FF' }]}>
-              <MaterialIcons name="engineering" size={16} color="#1D4ED8" />
-            </View>
-            <Text style={[styles.statValue, { color: '#0F172A' }]}>{stats.total_artisans}</Text>
-            <Text style={styles.statLabel}>{t('Artisans')}</Text>
+      <ScrollView
+        style={styles.scrollContent}
+        contentContainerStyle={styles.scrollContainer}
+        showsVerticalScrollIndicator={false}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={color.brand600} />}
+      >
+        {/* STATS */}
+        <View style={styles.statsRow}>
+          <TouchableOpacity style={styles.statCell} onPress={() => router.push('/agent/artisans')} activeOpacity={0.7}>
+            <StatTile icon="engineering" value={stats.total_artisans} label={t('Artisans')} />
           </TouchableOpacity>
-
-          <View style={styles.statDivider} />
-
-          {/* Stat 2: Verified Badges */}
           <TouchableOpacity
             style={styles.statCell}
             onPress={() => router.push({ pathname: '/agent/artisans', params: { filter: 'approved' } })}
             activeOpacity={0.7}
           >
-            <View style={[styles.statIconTile, { backgroundColor: '#ECFDF5' }]}>
-              <MaterialIcons name="verified" size={16} color="#059669" />
-            </View>
-            <Text style={[styles.statValue, { color: '#059669' }]}>{stats.verified_artisans}</Text>
-            <Text style={styles.statLabel}>{t('Verified')}</Text>
+            <StatTile icon="verified" value={stats.verified_artisans} label={t('Verified')} tileBg={color.accent100} tileFg={color.accent600} />
           </TouchableOpacity>
-
-          <View style={styles.statDivider} />
-
-          {/* Stat 3: Pending Review */}
           <TouchableOpacity
             style={styles.statCell}
             onPress={() => router.push({ pathname: '/agent/artisans', params: { filter: 'pending' } })}
             activeOpacity={0.7}
           >
-            <View style={[styles.statIconTile, { backgroundColor: '#FFFBEB' }]}>
-              <MaterialIcons name="hourglass-top" size={16} color="#D97706" />
-            </View>
-            <Text style={[styles.statValue, { color: '#D97706' }]}>{stats.pending_verification}</Text>
-            <Text style={styles.statLabel}>{t('Pending')}</Text>
+            <StatTile icon="hourglass-top" value={stats.pending_verification} label={t('Pending')} tileBg={color.warn100} tileFg={color.warn600} />
           </TouchableOpacity>
-
-          <View style={styles.statDivider} />
-
-          {/* Stat 4: Service Requests */}
-          <TouchableOpacity
-            style={styles.statCell}
-            onPress={() => router.push('/agent/service-requests')}
-            activeOpacity={0.7}
-          >
-            <View style={[styles.statIconTile, { backgroundColor: stats.pending_service_requests > 0 ? '#FEF2F2' : '#EEF2FF' }]}>
-              <MaterialIcons
-                name="event-note"
-                size={16}
-                color={stats.pending_service_requests > 0 ? '#DC2626' : '#4F46E5'}
-              />
-            </View>
-            <Text
-              style={[
-                styles.statValue,
-                { color: stats.pending_service_requests > 0 ? '#DC2626' : '#4F46E5' },
-              ]}
-            >
-              {stats.pending_service_requests}
-            </Text>
-            <Text style={styles.statLabel}>{t('Requests')}</Text>
+          <TouchableOpacity style={styles.statCell} onPress={() => router.push('/agent/service-requests')} activeOpacity={0.7}>
+            <StatTile
+              icon="event-note"
+              value={stats.pending_service_requests}
+              label={t('Requests')}
+              tileBg={stats.pending_service_requests > 0 ? '#FDECEC' : color.brand100}
+              tileFg={stats.pending_service_requests > 0 ? color.danger600 : color.brand600}
+            />
           </TouchableOpacity>
         </View>
-      </View>
 
-      {/* 3. SCROLLABLE OPERATIONS STREAM */}
-      <ScrollView
-        style={styles.scrollContent}
-        contentContainerStyle={styles.scrollContainer}
-        showsVerticalScrollIndicator={false}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#1B5FD9" />}
-      >
-        {/* OFFLINE SYNC CARD */}
+        {/* OFFLINE SYNC */}
         {syncCounts.total > 0 && (
           <View style={styles.syncCard}>
             <View style={styles.syncHeaderRow}>
-              <View style={[styles.syncIconWrap, { backgroundColor: syncCounts.pending_sync > 0 ? '#FEF3C7' : '#DCFCE7' }]}>
+              <View style={[styles.syncIconWrap, { backgroundColor: syncCounts.pending_sync > 0 ? color.warn100 : color.accent100 }]}>
                 <MaterialIcons
                   name={syncCounts.pending_sync > 0 ? 'cloud-upload' : 'cloud-done'}
                   size={18}
-                  color={syncCounts.pending_sync > 0 ? '#D97706' : '#16A34A'}
+                  color={syncCounts.pending_sync > 0 ? color.warn600 : color.accent600}
                 />
               </View>
               <View style={{ flex: 1 }}>
-                <Text style={styles.syncTitle}>{t('Offline Sync Queue')}</Text>
+                <Text style={styles.syncTitle}>{t('Sync status')}</Text>
                 <Text style={styles.syncSubtitle}>
                   {syncCounts.pending_sync > 0
-                    ? t('{{count}} items queued for cloud upload', { count: syncCounts.pending_sync })
-                    : t('All registrations synced with server')}
+                    ? t('{{count}} items queued for upload', { count: syncCounts.pending_sync })
+                    : t('All registrations synced')}
                 </Text>
               </View>
             </View>
 
             <View style={styles.syncCountsRow}>
               <View style={styles.syncCountBox}>
-                <Text style={[styles.syncCountValue, { color: '#D97706' }]}>{syncCounts.pending_sync}</Text>
+                <Text style={[styles.syncCountValue, { color: color.warn600 }]}>{syncCounts.pending_sync}</Text>
                 <Text style={styles.syncCountLabel}>{t('Pending')}</Text>
               </View>
               <View style={styles.syncCountBox}>
-                <Text style={[styles.syncCountValue, { color: '#059669' }]}>{syncCounts.server_verified}</Text>
+                <Text style={[styles.syncCountValue, { color: color.accent600 }]}>{syncCounts.server_verified}</Text>
                 <Text style={styles.syncCountLabel}>{t('Synced')}</Text>
               </View>
               {syncCounts.failed > 0 && (
                 <View style={styles.syncCountBox}>
-                  <Text style={[styles.syncCountValue, { color: '#DC2626' }]}>{syncCounts.failed}</Text>
-                  <Text style={styles.syncCountLabel}>{t('Needs Review')}</Text>
+                  <Text style={[styles.syncCountValue, { color: color.danger600 }]}>{syncCounts.failed}</Text>
+                  <Text style={styles.syncCountLabel}>{t('Needs review')}</Text>
                 </View>
               )}
             </View>
           </View>
         )}
 
-        {/* PRIMARY GROUND ACTIONS (Hero Banners) */}
-        <View style={styles.sectionHeaderRow}>
-          <Text style={styles.sectionTitle}>{t('Ground Operations')}</Text>
-          <Text style={styles.sectionCaption}>{t('Direct Field Registration')}</Text>
-        </View>
-
-        <View style={styles.heroActionDeck}>
-          {/* Hero 1: Register Artisan */}
-          <TouchableOpacity
-            style={styles.heroActionCard}
+        {/* REGISTER */}
+        <Text style={styles.sectionLabel}>{t('Register')}</Text>
+        <View style={styles.registerRow}>
+          <Button
+            title={t('Artisan')}
+            icon="person-add-alt-1"
             onPress={() => router.push('/agent/register')}
-            activeOpacity={0.85}
-          >
-            <LinearGradient
-              colors={['#1B5FD9', '#1044A5']}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 1 }}
-              style={styles.heroActionGradient}
-            >
-              <View style={styles.heroActionTop}>
-                <View style={styles.heroIconCircle}>
-                  <MaterialIcons name="person-add-alt-1" size={24} color="#FFFFFF" />
-                </View>
-                <View style={styles.heroBadgePill}>
-                  <Text style={styles.heroBadgeText}>{t('PRIMARY TASK')}</Text>
-                </View>
-              </View>
-
-              <Text style={styles.heroActionTitle}>{t('Register Artisan')}</Text>
-              <Text style={styles.heroActionDesc}>
-                {t('Onboard local tradespeople, mechanics, plumbers, and carpenters.')}
-              </Text>
-
-              <View style={styles.heroActionFooter}>
-                <Text style={styles.heroActionCta}>{t('Start Registration')}</Text>
-                <MaterialIcons name="arrow-forward" size={18} color="#FFFFFF" />
-              </View>
-            </LinearGradient>
-          </TouchableOpacity>
-
-          {/* Hero 2: Register Business */}
-          <TouchableOpacity
-            style={styles.heroActionCard}
+            style={styles.registerButton}
+          />
+          <Button
+            title={t('Business')}
+            icon="storefront"
+            variant="secondary"
             onPress={() => router.push('/agent/register-business')}
-            activeOpacity={0.85}
-          >
-            <LinearGradient
-              colors={['#0F766E', '#065F46']}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 1 }}
-              style={styles.heroActionGradient}
-            >
-              <View style={styles.heroActionTop}>
-                <View style={[styles.heroIconCircle, { backgroundColor: 'rgba(255,255,255,0.2)' }]}>
-                  <MaterialIcons name="storefront" size={24} color="#FFFFFF" />
-                </View>
-                <View style={[styles.heroBadgePill, { backgroundColor: 'rgba(255,255,255,0.2)' }]}>
-                  <Text style={styles.heroBadgeText}>{t('ENTERPRISE')}</Text>
-                </View>
-              </View>
-
-              <Text style={styles.heroActionTitle}>{t('Register Business')}</Text>
-              <Text style={styles.heroActionDesc}>
-                {t('Enroll shops, repair centers, clinics, and local enterprises.')}
-              </Text>
-
-              <View style={styles.heroActionFooter}>
-                <Text style={styles.heroActionCta}>{t('Register Shop')}</Text>
-                <MaterialIcons name="arrow-forward" size={18} color="#FFFFFF" />
-              </View>
-            </LinearGradient>
-          </TouchableOpacity>
+            style={styles.registerButton}
+          />
         </View>
 
-        {/* 4-GRID TERRITORY MANAGEMENT HUB */}
-        <View style={[styles.sectionHeaderRow, { marginTop: space.lg }]}>
-          <Text style={styles.sectionTitle}>{t('Territory Hub')}</Text>
-          <Text style={styles.sectionCaption}>{t('Manage LGA Directory')}</Text>
-        </View>
-
-        <View style={styles.hubGrid}>
-          {/* Hub 1: LGA Artisans Directory */}
-          <TouchableOpacity
-            style={styles.hubCard}
-            onPress={() => router.push('/agent/artisans')}
-            activeOpacity={0.8}
-          >
-            <View style={[styles.hubIconWrap, { backgroundColor: '#EFF6FF' }]}>
-              <MaterialIcons name="engineering" size={22} color="#1D4ED8" />
+        {/* MANAGE */}
+        <Text style={styles.sectionLabel}>{t('Manage')}</Text>
+        <View style={styles.listCard}>
+          <TouchableOpacity style={styles.listRow} onPress={() => router.push('/agent/artisans')} activeOpacity={0.7}>
+            <View style={[styles.listIconWrap, { backgroundColor: color.brand100 }]}>
+              <MaterialIcons name="engineering" size={20} color={color.brand600} />
             </View>
-            <Text style={styles.hubCardTitle}>{t('LGA Artisans')}</Text>
-            <Text style={styles.hubCardSub}>{t('{{count}} enrolled', { count: stats.total_artisans })}</Text>
-            <View style={styles.hubChevronWrap}>
-              <MaterialIcons name="chevron-right" size={18} color="#94A3B8" />
+            <View style={styles.listTextWrap}>
+              <Text style={styles.listTitle}>{t('Artisans')}</Text>
+              <Text style={styles.listSubtitle}>{t('{{count}} enrolled', { count: stats.total_artisans })}</Text>
             </View>
+            <MaterialIcons name="chevron-right" size={20} color={color.ink300} />
           </TouchableOpacity>
 
-          {/* Hub 2: LGA Businesses Directory */}
-          <TouchableOpacity
-            style={styles.hubCard}
-            onPress={() => router.push('/agent/businesses')}
-            activeOpacity={0.8}
-          >
-            <View style={[styles.hubIconWrap, { backgroundColor: '#F0FDF4' }]}>
-              <MaterialIcons name="domain" size={22} color="#059669" />
+          <View style={styles.listDivider} />
+
+          <TouchableOpacity style={styles.listRow} onPress={() => router.push('/agent/businesses')} activeOpacity={0.7}>
+            <View style={[styles.listIconWrap, { backgroundColor: color.accent100 }]}>
+              <MaterialIcons name="domain" size={20} color={color.accent600} />
             </View>
-            <Text style={styles.hubCardTitle}>{t('LGA Businesses')}</Text>
-            <Text style={styles.hubCardSub}>{t('Physical verify')}</Text>
-            <View style={styles.hubChevronWrap}>
-              <MaterialIcons name="chevron-right" size={18} color="#94A3B8" />
+            <View style={styles.listTextWrap}>
+              <Text style={styles.listTitle}>{t('Businesses')}</Text>
+              <Text style={styles.listSubtitle}>{t('Registered businesses')}</Text>
             </View>
+            <MaterialIcons name="chevron-right" size={20} color={color.ink300} />
           </TouchableOpacity>
 
-          {/* Hub 3: Service Requests */}
-          <TouchableOpacity
-            style={styles.hubCard}
-            onPress={() => router.push('/agent/service-requests')}
-            activeOpacity={0.8}
-          >
-            <View style={[styles.hubIconWrap, { backgroundColor: stats.pending_service_requests > 0 ? '#FEF3C7' : '#EEF2FF' }]}>
+          <View style={styles.listDivider} />
+
+          <TouchableOpacity style={styles.listRow} onPress={() => router.push('/agent/service-requests')} activeOpacity={0.7}>
+            <View style={[styles.listIconWrap, { backgroundColor: stats.pending_service_requests > 0 ? color.warn100 : color.brand100 }]}>
               <MaterialIcons
                 name="assignment"
-                size={22}
-                color={stats.pending_service_requests > 0 ? '#D97706' : '#4F46E5'}
+                size={20}
+                color={stats.pending_service_requests > 0 ? color.warn600 : color.brand600}
               />
             </View>
-            <Text style={styles.hubCardTitle}>{t('Service Bookings')}</Text>
-            <Text
-              style={[
-                styles.hubCardSub,
-                stats.pending_service_requests > 0 && { color: '#D97706', fontFamily: font.bold },
-              ]}
-            >
-              {stats.pending_service_requests > 0
-                ? t('{{count}} waiting', { count: stats.pending_service_requests })
-                : t('Client requests')}
-            </Text>
-            <View style={styles.hubChevronWrap}>
-              <MaterialIcons name="chevron-right" size={18} color="#94A3B8" />
+            <View style={styles.listTextWrap}>
+              <Text style={styles.listTitle}>{t('Service requests')}</Text>
+              <Text style={[styles.listSubtitle, stats.pending_service_requests > 0 && { color: color.warn600, fontFamily: font.bold }]}>
+                {stats.pending_service_requests > 0
+                  ? t('{{count}} waiting', { count: stats.pending_service_requests })
+                  : t('Client requests')}
+              </Text>
             </View>
+            <MaterialIcons name="chevron-right" size={20} color={color.ink300} />
           </TouchableOpacity>
 
-          {/* Hub 4: LGA Clients */}
-          <TouchableOpacity
-            style={styles.hubCard}
-            onPress={() => router.push('/agent/clients')}
-            activeOpacity={0.8}
-          >
-            <View style={[styles.hubIconWrap, { backgroundColor: '#F3E8FF' }]}>
-              <MaterialIcons name="people-alt" size={22} color="#9333EA" />
+          <View style={styles.listDivider} />
+
+          <TouchableOpacity style={styles.listRow} onPress={() => router.push('/agent/clients')} activeOpacity={0.7}>
+            <View style={[styles.listIconWrap, { backgroundColor: '#F3E8FF' }]}>
+              <MaterialIcons name="people-alt" size={20} color="#9333EA" />
             </View>
-            <Text style={styles.hubCardTitle}>{t('LGA Clients')}</Text>
-            <Text style={styles.hubCardSub}>{t('{{count}} registered', { count: stats.total_clients })}</Text>
-            <View style={styles.hubChevronWrap}>
-              <MaterialIcons name="chevron-right" size={18} color="#94A3B8" />
+            <View style={styles.listTextWrap}>
+              <Text style={styles.listTitle}>{t('Clients')}</Text>
+              <Text style={styles.listSubtitle}>{t('{{count}} registered', { count: stats.total_clients })}</Text>
             </View>
+            <MaterialIcons name="chevron-right" size={20} color={color.ink300} />
           </TouchableOpacity>
         </View>
 
-        {/* 4. RECENT LGA ARTISANS LIST STREAM */}
-        <View style={[styles.sectionHeaderRow, { marginTop: space.xl }]}>
-          <Text style={styles.sectionTitle}>{t('Recent LGA Artisans')}</Text>
+        {/* RECENTLY REGISTERED */}
+        <View style={styles.sectionHeaderRow}>
+          <Text style={styles.sectionLabel}>{t('Recently registered')}</Text>
           <TouchableOpacity
             onPress={() => router.push('/agent/artisans')}
             style={styles.viewAllBtn}
             accessibilityRole="button"
             accessibilityLabel={t('View all artisans')}
           >
-            <Text style={styles.viewAllText}>{t('View All')}</Text>
-            <MaterialIcons name="chevron-right" size={16} color="#1B5FD9" />
+            <Text style={styles.viewAllText}>{t('View all')}</Text>
+            <MaterialIcons name="chevron-right" size={16} color={color.brand600} />
           </TouchableOpacity>
         </View>
 
         {recentArtisans.length > 0 ? (
-          <View style={styles.recentStreamCard}>
+          <View style={styles.listCard}>
             {recentArtisans.map((item, index) => {
               const person = item.user_details || {};
               const name = `${person.first_name || ''} ${person.last_name || ''}`.trim() || t('Artisan');
@@ -546,155 +383,93 @@ export default function AgentDashboard() {
               const isLast = index === recentArtisans.length - 1;
 
               return (
-                <Pressable
-                  key={item.id}
-                  style={({ pressed }) => [
-                    styles.artisanRow,
-                    isLast && { borderBottomWidth: 0 },
-                    pressed && { backgroundColor: '#F8FAFC' },
-                  ]}
-                  onPress={() => router.push({ pathname: '/agent/artisans/[id]', params: { id: item.id } })}
-                  accessibilityRole="button"
-                  accessibilityLabel={name}
-                >
-                  <Avatar
-                    name={name}
-                    uri={person.profile_picture}
-                    gender={person.gender}
-                    size={46}
-                    verified={isVerified}
-                  />
+                <React.Fragment key={item.id}>
+                  <Pressable
+                    style={({ pressed }) => [styles.artisanRow, pressed && { backgroundColor: color.surfaceSunken }]}
+                    onPress={() => router.push({ pathname: '/agent/artisans/[id]', params: { id: item.id } })}
+                    accessibilityRole="button"
+                    accessibilityLabel={name}
+                  >
+                    <Avatar name={name} uri={person.profile_picture} gender={person.gender} size={44} verified={isVerified} />
 
-                  <View style={styles.artisanMeta}>
-                    <Text style={styles.artisanName} numberOfLines={1}>{name}</Text>
-                    <View style={styles.tradePill}>
+                    <View style={styles.artisanMeta}>
+                      <Text style={styles.artisanName} numberOfLines={1}>{name}</Text>
                       <Text style={styles.tradeText} numberOfLines={1}>{trade}</Text>
                     </View>
-                  </View>
 
-                  {person.registration_fee_paid === false ? (
-                    <View style={[styles.statusBadge, { backgroundColor: '#FEF2F2' }]}>
-                      <MaterialIcons name="error-outline" size={13} color="#DC2626" />
-                      <Text style={[styles.statusBadgeText, { color: '#DC2626', fontFamily: font.extrabold }]}>
-                        {t('₦2.5k Unpaid')}
-                      </Text>
-                    </View>
-                  ) : (
-                    <View style={[styles.statusBadge, { backgroundColor: isVerified ? '#ECFDF5' : '#FFFBEB' }]}>
-                      <MaterialIcons
-                        name={isVerified ? 'verified' : 'schedule'}
-                        size={13}
-                        color={isVerified ? '#059669' : '#D97706'}
-                      />
-                      <Text style={[styles.statusBadgeText, { color: isVerified ? '#059669' : '#D97706' }]}>
-                        {isVerified ? t('Verified') : t('Pending')}
-                      </Text>
-                    </View>
-                  )}
-                </Pressable>
+                    {person.registration_fee_paid === false ? (
+                      <View style={[styles.statusBadge, { backgroundColor: '#FDECEC' }]}>
+                        <Text style={[styles.statusBadgeText, { color: color.danger600 }]}>{t('Unpaid')}</Text>
+                      </View>
+                    ) : (
+                      <View style={[styles.statusBadge, { backgroundColor: isVerified ? color.accent100 : color.warn100 }]}>
+                        <Text style={[styles.statusBadgeText, { color: isVerified ? color.accent600 : color.warn600 }]}>
+                          {isVerified ? t('Verified') : t('Pending')}
+                        </Text>
+                      </View>
+                    )}
+                  </Pressable>
+                  {!isLast && <View style={styles.listDivider} />}
+                </React.Fragment>
               );
             })}
           </View>
         ) : (
-          <View style={styles.emptyArtisansCard}>
+          <View style={styles.emptyCard}>
             <View style={styles.emptyIconCircle}>
-              <MaterialIcons name="engineering" size={32} color="#94A3B8" />
+              <MaterialIcons name="engineering" size={28} color={color.ink300} />
             </View>
             <Text style={styles.emptyTitle}>{t('No artisans registered yet')}</Text>
             <Text style={styles.emptySubtitle}>
-              {t('You are the official agent for this LGA. Start onboarding local tradespeople today!')}
+              {t("You're the agent for this LGA — start onboarding local tradespeople.")}
             </Text>
-            <TouchableOpacity
-              style={styles.emptyCtaButton}
+            <Button
+              title={t('Register your first artisan')}
+              icon="person-add"
               onPress={() => router.push('/agent/register')}
-            >
-              <MaterialIcons name="person-add" size={17} color="#FFFFFF" style={{ marginRight: 6 }} />
-              <Text style={styles.emptyCtaText}>{t('Register First Artisan')}</Text>
-            </TouchableOpacity>
+              compact
+              style={{ marginTop: space.md }}
+            />
           </View>
         )}
 
-        {/* 5. AGENT VIP RECRUITMENT PASS */}
-        <View style={[styles.sectionHeaderRow, { marginTop: space.xl }]}>
-          <Text style={styles.sectionTitle}>{t('Agent Recruitment Pass')}</Text>
-          <Text style={styles.sectionCaption}>{t('Share Your Referral Code')}</Text>
-        </View>
+        {/* REFERRAL CODE */}
+        <Text style={styles.sectionLabel}>{t('Your referral code')}</Text>
+        <View style={styles.referralCard}>
+          <Text style={styles.referralHint}>
+            {t('Share this code — anyone who registers with it is added to your network.')}
+          </Text>
 
-        <View style={styles.referralPassCard}>
-          <LinearGradient
-            colors={['#0F172A', '#1E293B']}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 1 }}
-            style={styles.referralPassHeader}
-          >
-            <View style={styles.passHeaderLeft}>
-              <View style={styles.passChip}>
-                <Ionicons name="sparkles" size={12} color="#F59E0B" />
-                <Text style={styles.passChipText}>{t('OFFICIAL PASS')}</Text>
-              </View>
-              <Text style={styles.passTitle}>{t('Field Referral Code')}</Text>
+          <View style={styles.codeBox}>
+            <Text style={styles.codeText} selectable>{agentReferralCode}</Text>
+          </View>
+
+          <View style={styles.shareRow}>
+            <TouchableOpacity style={styles.shareWhatsAppBtn} onPress={shareWhatsApp} activeOpacity={0.8}>
+              <Ionicons name="logo-whatsapp" size={16} color="#FFF" />
+              <Text style={styles.shareBtnText}>{t('WhatsApp')}</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity style={styles.shareSMSBtn} onPress={shareSMS} activeOpacity={0.8}>
+              <MaterialIcons name="sms" size={16} color="#FFF" />
+              <Text style={styles.shareBtnText}>{t('SMS')}</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity style={styles.shareCopyBtn} onPress={copyReferralCode} activeOpacity={0.8}>
+              <MaterialIcons name="content-copy" size={16} color={color.ink900} />
+              <Text style={[styles.shareBtnText, { color: color.ink900 }]}>{t('Copy')}</Text>
+            </TouchableOpacity>
+          </View>
+
+          <View style={styles.referralStatsRow}>
+            <View style={styles.referralStatBox}>
+              <Text style={styles.referralStatNum}>{referral?.total_artisans_registered ?? stats.total_artisans}</Text>
+              <Text style={styles.referralStatLabel}>{t('Enrolled')}</Text>
             </View>
-            <View style={styles.qrBadgeCircle}>
-              <MaterialIcons name="qr-code-2" size={24} color="#38BDF8" />
-            </View>
-          </LinearGradient>
-
-          <View style={styles.referralPassBody}>
-            <Text style={styles.passInstruction}>
-              {t('Share this code with artisans and businesses so they enroll under your direct field supervision.')}
-            </Text>
-
-            <View style={styles.codeContainer}>
-              <Text style={styles.codeText} selectable>
-                {agentReferralCode}
-              </Text>
-            </View>
-
-            {/* Tactile 1-Tap Share Triggers */}
-            <View style={styles.shareDeck}>
-              <TouchableOpacity
-                style={styles.shareWhatsAppBtn}
-                onPress={shareWhatsApp}
-                activeOpacity={0.8}
-              >
-                <Ionicons name="logo-whatsapp" size={16} color="#FFF" />
-                <Text style={styles.shareBtnText}>{t('WhatsApp')}</Text>
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                style={styles.shareSMSBtn}
-                onPress={shareSMS}
-                activeOpacity={0.8}
-              >
-                <MaterialIcons name="sms" size={16} color="#FFF" />
-                <Text style={styles.shareBtnText}>{t('SMS')}</Text>
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                style={styles.shareCopyBtn}
-                onPress={copyReferralCode}
-                activeOpacity={0.8}
-              >
-                <MaterialIcons name="content-copy" size={16} color="#0F172A" />
-                <Text style={[styles.shareBtnText, { color: '#0F172A' }]}>{t('Copy')}</Text>
-              </TouchableOpacity>
-            </View>
-
-            {/* Performance Stats */}
-            <View style={styles.passStatsRow}>
-              <View style={styles.passStatBox}>
-                <Text style={styles.passStatNum}>
-                  {referral?.total_artisans_registered ?? stats.total_artisans}
-                </Text>
-                <Text style={styles.passStatLabel}>{t('Artisans Enrolled')}</Text>
-              </View>
-              <View style={styles.passStatDivider} />
-              <View style={styles.passStatBox}>
-                <Text style={[styles.passStatNum, { color: '#059669' }]}>
-                  {stats.verified_artisans}
-                </Text>
-                <Text style={styles.passStatLabel}>{t('Verified Badges')}</Text>
-              </View>
+            <View style={styles.referralStatDivider} />
+            <View style={styles.referralStatBox}>
+              <Text style={[styles.referralStatNum, { color: color.accent600 }]}>{stats.verified_artisans}</Text>
+              <Text style={styles.referralStatLabel}>{t('Verified')}</Text>
             </View>
           </View>
         </View>
@@ -706,274 +481,182 @@ export default function AgentDashboard() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F6F8FB',
+    backgroundColor: color.surfaceSunken,
   },
 
-  /* 1. HERO FIELD HEADER */
-  fieldHeader: {
-    paddingBottom: 44,
-    borderBottomLeftRadius: 30,
-    borderBottomRightRadius: 30,
+  /* HEADER */
+  headerSafe: {
+    backgroundColor: color.surface,
+    borderBottomWidth: 1,
+    borderBottomColor: color.border,
+    paddingHorizontal: space.lg,
+    paddingBottom: space.md,
   },
-  safeHeader: {
-    paddingHorizontal: 18,
-  },
-  topBar: {
+  headerRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingVertical: 8,
+    paddingTop: space.sm,
+    gap: space.md,
   },
-  territoryBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: 'rgba(255, 255, 255, 0.12)',
-    borderRadius: 20,
-    paddingHorizontal: 11,
-    paddingVertical: 5,
-    gap: 6,
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.18)',
-  },
-  liveDot: {
-    width: 6.5,
-    height: 6.5,
-    borderRadius: 3.5,
-    backgroundColor: '#22C55E',
-  },
-  territoryText: {
-    fontFamily: font.bold,
-    fontSize: 11,
-    color: '#F8FAFC',
-    letterSpacing: 0.6,
-  },
-  topActionsRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  headerIconButton: {
-    width: 38,
-    height: 38,
-    borderRadius: 12,
-    backgroundColor: 'rgba(255, 255, 255, 0.14)',
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.15)',
-  },
-
-  agentProfileRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingTop: 12,
-    gap: 14,
-  },
-  avatarGlowWrap: {
-    padding: 2.5,
-    borderRadius: 24,
-    backgroundColor: 'rgba(255, 255, 255, 0.25)',
-  },
-  profileTextWrap: {
+  headerTextWrap: {
     flex: 1,
   },
-  roleTag: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-  },
-  roleLabel: {
-    fontFamily: font.extrabold,
-    fontSize: 10,
-    color: '#93C5FD',
-    letterSpacing: 1,
-  },
-  agentName: {
-    fontFamily: font.extrabold,
-    fontSize: 20,
-    color: '#FFFFFF',
-    marginTop: 2,
-    letterSpacing: -0.3,
-  },
-  badgeRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginTop: 6,
-    gap: 8,
-    flexWrap: 'wrap',
-  },
-  idBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: 'rgba(255, 255, 255, 0.18)',
-    borderRadius: 8,
-    paddingHorizontal: 8,
-    paddingVertical: 3.5,
-    gap: 5,
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.15)',
-  },
-  idBadgeText: {
+  headerRole: {
     fontFamily: font.bold,
-    fontSize: 11,
-    color: '#FFFFFF',
+    fontSize: 11.5,
+    color: color.ink400,
+    textTransform: 'uppercase',
     letterSpacing: 0.4,
   },
-  locationPill: {
+  headerName: {
+    fontFamily: font.extrabold,
+    fontSize: 18,
+    color: color.ink900,
+    marginTop: 1,
+  },
+  headerMetaRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: 'rgba(0, 0, 0, 0.2)',
-    borderRadius: 8,
-    paddingHorizontal: 8,
-    paddingVertical: 3.5,
-    gap: 4,
+    gap: 3,
+    marginTop: 3,
   },
-  locationText: {
+  headerMetaText: {
     fontFamily: font.medium,
-    fontSize: 11,
-    color: '#E0F2FE',
+    fontSize: 12,
+    color: color.ink400,
   },
-  sponsorBanner: {
+  headerActions: {
+    flexDirection: 'row',
+    gap: space.sm,
+  },
+  iconButton: {
+    width: 38,
+    height: 38,
+    borderRadius: radius.md,
+    backgroundColor: color.surfaceChip,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  idRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
-    backgroundColor: 'rgba(255, 255, 255, 0.12)',
-    borderRadius: 10,
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    marginTop: 14,
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.1)',
+    gap: space.sm,
+    marginTop: space.md,
+    flexWrap: 'wrap',
+  },
+  idPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: color.brand100,
+    borderRadius: radius.sm,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+  },
+  idPillText: {
+    fontFamily: font.bold,
+    fontSize: 11.5,
+    color: color.brand600,
+  },
+  sponsorRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    flexShrink: 1,
   },
   sponsorText: {
     fontFamily: font.medium,
     fontSize: 11.5,
-    color: '#E0F2FE',
+    color: color.ink400,
+    flexShrink: 1,
   },
 
-  /* 2. ELEVATED FLOATING STATS CARD */
-  statsOverlapContainer: {
-    paddingHorizontal: 16,
-    marginTop: -30,
-  },
-  statsCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#FFFFFF',
-    borderRadius: 20,
-    paddingVertical: 14,
-    paddingHorizontal: 8,
-    shadowColor: '#071E3D',
-    shadowOpacity: 0.09,
-    shadowRadius: 18,
-    shadowOffset: { width: 0, height: 6 },
-    elevation: 5,
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-  },
-  statCell: {
-    flex: 1,
-    alignItems: 'center',
-  },
-  statIconTile: {
-    width: 32,
-    height: 32,
-    borderRadius: 10,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 4,
-  },
-  statValue: {
-    fontFamily: font.extrabold,
-    fontSize: 17,
-    letterSpacing: -0.3,
-  },
-  statLabel: {
-    fontFamily: font.bold,
-    fontSize: 11,
-    color: '#64748B',
-    marginTop: 2,
-  },
-  statDivider: {
-    width: 1,
-    height: 36,
-    backgroundColor: '#F1F5F9',
-  },
-
-  /* 3. SCROLL CONTENT */
+  /* SCROLL CONTENT */
   scrollContent: {
     flex: 1,
   },
   scrollContainer: {
-    paddingHorizontal: 16,
-    paddingTop: 18,
+    paddingHorizontal: space.lg,
+    paddingTop: space.lg,
     paddingBottom: 110,
+  },
+
+  statsRow: {
+    flexDirection: 'row',
+    gap: space.sm,
+    marginBottom: space.lg,
+  },
+  statCell: {
+    flex: 1,
+  },
+
+  sectionLabel: {
+    fontFamily: font.extrabold,
+    fontSize: 13,
+    color: color.ink900,
+    marginBottom: space.sm,
   },
   sectionHeaderRow: {
     flexDirection: 'row',
-    alignItems: 'baseline',
+    alignItems: 'center',
     justifyContent: 'space-between',
-    marginBottom: 10,
+    marginBottom: space.sm,
+    marginTop: space.lg,
   },
-  sectionTitle: {
-    fontFamily: font.extrabold,
-    fontSize: 14.5,
-    color: '#0F172A',
-    textTransform: 'uppercase',
-    letterSpacing: 0.6,
+  viewAllBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 2,
   },
-  sectionCaption: {
-    fontFamily: font.medium,
-    fontSize: 11.5,
-    color: '#94A3B8',
+  viewAllText: {
+    fontFamily: font.bold,
+    fontSize: 12.5,
+    color: color.brand600,
   },
 
   /* SYNC CARD */
   syncCard: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 16,
-    padding: 14,
-    marginBottom: 16,
+    backgroundColor: color.surface,
+    borderRadius: radius.lg,
+    padding: space.md,
+    marginBottom: space.lg,
     borderWidth: 1,
-    borderColor: '#E2E8F0',
-    shadowColor: '#0F172A',
-    shadowOpacity: 0.03,
-    shadowRadius: 8,
-    elevation: 2,
+    borderColor: color.border,
+    ...shadow.e1,
   },
   syncHeaderRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 10,
-    marginBottom: 10,
+    gap: space.sm,
+    marginBottom: space.sm,
   },
   syncIconWrap: {
     width: 34,
     height: 34,
-    borderRadius: 10,
+    borderRadius: radius.md,
     alignItems: 'center',
     justifyContent: 'center',
   },
   syncTitle: {
     fontFamily: font.bold,
     fontSize: 13,
-    color: '#0F172A',
+    color: color.ink900,
   },
   syncSubtitle: {
     fontFamily: font.medium,
     fontSize: 11,
-    color: '#64748B',
+    color: color.ink400,
     marginTop: 1,
   },
   syncCountsRow: {
     flexDirection: 'row',
-    gap: 8,
+    gap: space.sm,
   },
   syncCountBox: {
     flex: 1,
-    backgroundColor: '#F8FAFC',
-    borderRadius: 10,
-    padding: 8,
+    backgroundColor: color.surfaceSunken,
+    borderRadius: radius.sm,
+    padding: space.sm,
     alignItems: 'center',
   },
   syncCountValue: {
@@ -983,161 +666,69 @@ const styles = StyleSheet.create({
   syncCountLabel: {
     fontFamily: font.medium,
     fontSize: 10.5,
-    color: '#64748B',
+    color: color.ink400,
     marginTop: 2,
   },
 
-  /* HERO ACTIONS DECK */
-  heroActionDeck: {
+  /* REGISTER */
+  registerRow: {
     flexDirection: 'row',
-    gap: 12,
-    marginBottom: 18,
+    gap: space.sm,
+    marginBottom: space.lg,
   },
-  heroActionCard: {
+  registerButton: {
     flex: 1,
-    borderRadius: 20,
+  },
+
+  /* LIST CARD (Manage / Recently registered) */
+  listCard: {
+    backgroundColor: color.surface,
+    borderRadius: radius.lg,
+    borderWidth: 1,
+    borderColor: color.border,
     overflow: 'hidden',
-    shadowColor: '#0F172A',
-    shadowOpacity: 0.12,
-    shadowRadius: 12,
-    shadowOffset: { width: 0, height: 5 },
-    elevation: 4,
+    marginBottom: space.lg,
+    ...shadow.e1,
   },
-  heroActionGradient: {
-    padding: 16,
-    minHeight: 180,
-    justifyContent: 'space-between',
-  },
-  heroActionTop: {
+  listRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
+    padding: space.md,
+    gap: space.md,
   },
-  heroIconCircle: {
-    width: 42,
-    height: 42,
-    borderRadius: 14,
-    backgroundColor: 'rgba(255, 255, 255, 0.22)',
+  listIconWrap: {
+    width: 40,
+    height: 40,
+    borderRadius: radius.md,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  heroBadgePill: {
-    backgroundColor: 'rgba(255, 255, 255, 0.22)',
-    paddingHorizontal: 7,
-    paddingVertical: 3,
-    borderRadius: 6,
+  listTextWrap: {
+    flex: 1,
   },
-  heroBadgeText: {
+  listTitle: {
     fontFamily: font.bold,
-    fontSize: 9.5,
-    color: '#FFFFFF',
-    letterSpacing: 0.4,
+    fontSize: 14.5,
+    color: color.ink900,
   },
-  heroActionTitle: {
-    fontFamily: font.extrabold,
-    fontSize: 17,
-    color: '#FFFFFF',
-    marginTop: 10,
-    letterSpacing: -0.3,
-  },
-  heroActionDesc: {
+  listSubtitle: {
     fontFamily: font.medium,
-    fontSize: 11.5,
-    color: 'rgba(255, 255, 255, 0.85)',
-    marginTop: 4,
-    lineHeight: 16,
-  },
-  heroActionFooter: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    marginTop: 12,
-    paddingTop: 10,
-    borderTopWidth: 1,
-    borderTopColor: 'rgba(255, 255, 255, 0.18)',
-  },
-  heroActionCta: {
-    fontFamily: font.bold,
     fontSize: 12,
-    color: '#FFFFFF',
+    color: color.ink400,
+    marginTop: 2,
+  },
+  listDivider: {
+    height: 1,
+    backgroundColor: color.border,
+    marginLeft: space.md + 40 + space.md,
   },
 
-  /* 4-GRID HUB */
-  hubGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 10,
-    marginBottom: 20,
-  },
-  hubCard: {
-    width: (width - 32 - 10) / 2,
-    backgroundColor: '#FFFFFF',
-    borderRadius: 18,
-    padding: 14,
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-    shadowColor: '#0F172A',
-    shadowOpacity: 0.04,
-    shadowRadius: 8,
-    shadowOffset: { width: 0, height: 3 },
-    elevation: 2,
-    position: 'relative',
-  },
-  hubIconWrap: {
-    width: 38,
-    height: 38,
-    borderRadius: 12,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 10,
-  },
-  hubCardTitle: {
-    fontFamily: font.bold,
-    fontSize: 14,
-    color: '#0F172A',
-  },
-  hubCardSub: {
-    fontFamily: font.medium,
-    fontSize: 11.5,
-    color: '#64748B',
-    marginTop: 3,
-  },
-  hubChevronWrap: {
-    position: 'absolute',
-    top: 14,
-    right: 12,
-  },
-
-  /* RECENT ARTISANS STREAM */
-  viewAllBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  viewAllText: {
-    fontFamily: font.bold,
-    fontSize: 12.5,
-    color: '#1B5FD9',
-  },
-  recentStreamCard: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 18,
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-    paddingVertical: 2,
-    marginBottom: 20,
-    shadowColor: '#0F172A',
-    shadowOpacity: 0.04,
-    shadowRadius: 10,
-    elevation: 2,
-  },
+  /* RECENTLY REGISTERED ROWS */
   artisanRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: 12,
-    paddingHorizontal: 14,
-    borderBottomWidth: 1,
-    borderBottomColor: '#F1F5F9',
-    gap: 12,
+    padding: space.md,
+    gap: space.md,
   },
   artisanMeta: {
     flex: 1,
@@ -1145,155 +736,91 @@ const styles = StyleSheet.create({
   artisanName: {
     fontFamily: font.bold,
     fontSize: 14,
-    color: '#0F172A',
-  },
-  tradePill: {
-    alignSelf: 'flex-start',
-    backgroundColor: '#F1F5F9',
-    paddingHorizontal: 7,
-    paddingVertical: 2,
-    borderRadius: 6,
-    marginTop: 3,
+    color: color.ink900,
   },
   tradeText: {
     fontFamily: font.medium,
-    fontSize: 11,
-    color: '#475569',
+    fontSize: 12,
+    color: color.ink400,
+    marginTop: 1,
   },
   statusBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
     paddingHorizontal: 8,
     paddingVertical: 4,
-    borderRadius: 10,
-    gap: 4,
+    borderRadius: radius.sm,
   },
   statusBadgeText: {
     fontFamily: font.bold,
     fontSize: 11,
   },
-  emptyArtisansCard: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 18,
+  emptyCard: {
+    backgroundColor: color.surface,
+    borderRadius: radius.lg,
     borderWidth: 1,
-    borderColor: '#E2E8F0',
-    padding: 24,
+    borderColor: color.border,
+    padding: space.xl,
     alignItems: 'center',
-    marginBottom: 20,
+    marginBottom: space.lg,
   },
   emptyIconCircle: {
-    width: 56,
-    height: 56,
-    borderRadius: 28,
-    backgroundColor: '#F1F5F9',
+    width: 52,
+    height: 52,
+    borderRadius: 26,
+    backgroundColor: color.surfaceSunken,
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: 8,
+    marginBottom: space.sm,
   },
   emptyTitle: {
     fontFamily: font.bold,
     fontSize: 14.5,
-    color: '#0F172A',
+    color: color.ink900,
   },
   emptySubtitle: {
     fontFamily: font.medium,
     fontSize: 12,
-    color: '#64748B',
+    color: color.ink400,
     textAlign: 'center',
     marginTop: 4,
     lineHeight: 18,
-    paddingHorizontal: 12,
-  },
-  emptyCtaButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#1B5FD9',
-    paddingHorizontal: 18,
-    paddingVertical: 10,
-    borderRadius: 10,
-    marginTop: 14,
-  },
-  emptyCtaText: {
-    fontFamily: font.bold,
-    fontSize: 13,
-    color: '#FFFFFF',
   },
 
-  /* 5. AGENT VIP RECRUITMENT PASS */
-  referralPassCard: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 20,
+  /* REFERRAL CODE */
+  referralCard: {
+    backgroundColor: color.surface,
+    borderRadius: radius.lg,
     borderWidth: 1,
-    borderColor: '#E2E8F0',
-    overflow: 'hidden',
-    shadowColor: '#0F172A',
-    shadowOpacity: 0.06,
-    shadowRadius: 12,
-    elevation: 3,
-    marginBottom: 24,
+    borderColor: color.border,
+    padding: space.lg,
+    marginBottom: space.xl,
+    ...shadow.e1,
   },
-  referralPassHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 16,
-    paddingVertical: 14,
-  },
-  passHeaderLeft: {},
-  passChip: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-  },
-  passChipText: {
-    fontFamily: font.bold,
-    fontSize: 10,
-    color: '#F59E0B',
-    letterSpacing: 0.6,
-  },
-  passTitle: {
-    fontFamily: font.extrabold,
-    fontSize: 16,
-    color: '#FFFFFF',
-    marginTop: 2,
-  },
-  qrBadgeCircle: {
-    width: 40,
-    height: 40,
-    borderRadius: 12,
-    backgroundColor: 'rgba(255, 255, 255, 0.1)',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  referralPassBody: {
-    padding: 16,
-  },
-  passInstruction: {
+  referralHint: {
     fontFamily: font.medium,
-    fontSize: 12,
-    color: '#64748B',
-    lineHeight: 17,
+    fontSize: 12.5,
+    color: color.ink400,
+    lineHeight: 18,
   },
-  codeContainer: {
-    backgroundColor: '#F8FAFC',
+  codeBox: {
+    backgroundColor: color.surfaceSunken,
     borderWidth: 1.5,
     borderStyle: 'dashed',
-    borderColor: '#93C5FD',
-    borderRadius: 12,
-    paddingVertical: 10,
-    paddingHorizontal: 16,
+    borderColor: color.brand600,
+    borderRadius: radius.md,
+    paddingVertical: space.sm,
+    paddingHorizontal: space.lg,
     alignItems: 'center',
-    marginVertical: 12,
+    marginVertical: space.md,
   },
   codeText: {
     fontFamily: font.extrabold,
     fontSize: 18,
-    color: '#1B5FD9',
+    color: color.brand600,
     letterSpacing: 2,
   },
-  shareDeck: {
+  shareRow: {
     flexDirection: 'row',
-    gap: 8,
+    gap: space.sm,
   },
   shareWhatsAppBtn: {
     flex: 1,
@@ -1302,7 +829,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     backgroundColor: '#25D366',
     paddingVertical: 10,
-    borderRadius: 10,
+    borderRadius: radius.sm,
     gap: 6,
   },
   shareSMSBtn: {
@@ -1310,9 +837,9 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#1B5FD9',
+    backgroundColor: color.brand600,
     paddingVertical: 10,
-    borderRadius: 10,
+    borderRadius: radius.sm,
     gap: 6,
   },
   shareCopyBtn: {
@@ -1320,9 +847,9 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#F1F5F9',
+    backgroundColor: color.surfaceChip,
     paddingVertical: 10,
-    borderRadius: 10,
+    borderRadius: radius.sm,
     gap: 6,
   },
   shareBtnText: {
@@ -1330,32 +857,32 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: '#FFFFFF',
   },
-  passStatsRow: {
+  referralStatsRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginTop: 14,
-    paddingTop: 12,
+    marginTop: space.md,
+    paddingTop: space.md,
     borderTopWidth: 1,
-    borderTopColor: '#F1F5F9',
+    borderTopColor: color.border,
   },
-  passStatBox: {
+  referralStatBox: {
     flex: 1,
     alignItems: 'center',
   },
-  passStatNum: {
+  referralStatNum: {
     fontFamily: font.extrabold,
     fontSize: 16,
-    color: '#0F172A',
+    color: color.ink900,
   },
-  passStatLabel: {
+  referralStatLabel: {
     fontFamily: font.medium,
     fontSize: 11,
-    color: '#64748B',
+    color: color.ink400,
     marginTop: 2,
   },
-  passStatDivider: {
+  referralStatDivider: {
     width: 1,
     height: 24,
-    backgroundColor: '#E2E8F0',
+    backgroundColor: color.border,
   },
 });
