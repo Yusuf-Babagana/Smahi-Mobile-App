@@ -27,6 +27,23 @@ import '@/src/i18n'; // Ensure i18n is initialized
 // Coordinators are created exclusively from the Admin dashboard — never
 // through self-registration — so this screen stays within UserRole.
 
+// DRF validation errors come back as { field: [messages] } (or a top-level
+// { detail } / { error }) — surfacing that raw JSON blob in a toast (the
+// previous behavior) is exactly the kind of unreadable error that made
+// real registration failures, including a rejected referral code, look
+// like the app was just broken. This picks the first human-readable
+// message out of whichever shape the API returned.
+const firstApiErrorMessage = (error: any): string => {
+  const data = error?.response?.data;
+  if (!data) return 'Registration failed. Please check your connection and try again.';
+  if (typeof data === 'string') return data;
+  if (data.detail) return data.detail;
+  if (data.error) return data.error;
+  const firstField = Object.values(data).find(v => Array.isArray(v) && v.length) as string[] | undefined;
+  if (firstField) return firstField[0];
+  return 'Registration failed. Please try again.';
+};
+
 const STEP_META = [
   { title: 'Before we start', subtitle: 'A quick look at how S-MAHII works.' },
   { title: 'Tell us about you', subtitle: "Let's get to know you." },
@@ -261,8 +278,7 @@ export default function RegisterScreen() {
       router.replace('/login');
 
     } catch (error: any) {
-      const msg = error.response?.data ? JSON.stringify(error.response.data) : 'Registration Failed';
-      showToast(msg, { type: 'error' });
+      showToast(firstApiErrorMessage(error), { type: 'error' });
     } finally {
       setLoading(false);
     }
