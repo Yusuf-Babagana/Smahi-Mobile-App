@@ -31,8 +31,11 @@ export default function AgentArtisanList() {
         initialFilter === 'approved' || initialFilter === 'pending' || initialFilter === 'unpaid' ? initialFilter : 'all'
     );
     const [collectingId, setCollectingId] = useState<number | null>(null);
-    // Only a state_coordinator sees the whole state — a plain agent is
-    // scoped server-side to their own LGA (AgentArtisanListView).
+    // A state_coordinator sees artisans they registered directly plus
+    // anyone registered by one of their own agents (never a colleague
+    // coordinator's network, even in the same state) — a plain agent is
+    // scoped server-side to only what they personally registered
+    // (AgentArtisanListView / core.referrals._recruited_query).
     const isCoordinator = user?.role === 'state_coordinator';
 
     useEffect(() => {
@@ -49,8 +52,9 @@ export default function AgentArtisanList() {
             if (pageNumber === 1) setLoading(true);
             else setLoadingMore(true);
 
-            // Scoped server-side to the agent's own state — includes every
-            // artisan there regardless of availability/verification status.
+            // Scoped server-side to the caller's own network (see
+            // isCoordinator comment above) — includes every artisan there
+            // regardless of availability/verification status.
             const params: any = {};
             if (statusFilter === 'unpaid') {
                 params.payment_status = 'unpaid';
@@ -202,20 +206,22 @@ export default function AgentArtisanList() {
                     <Pressable onPress={() => router.back()} style={styles.backButton} accessibilityRole="button" accessibilityLabel={t('Back')}>
                         <MaterialIcons name="arrow-back" size={20} color={color.ink900} />
                     </Pressable>
-                    <Text style={styles.headerTitle}>{isCoordinator ? t('My state artisans') : t('My LGA artisans')}</Text>
+                    <Text style={styles.headerTitle}>{isCoordinator ? t('My artisans') : t('My LGA artisans')}</Text>
                     <View style={{ width: 40 }} />
                 </View>
             </SafeAreaView>
 
             <View style={styles.subHeader}>
-                <MaterialIcons name="place" size={14} color={color.brand600} />
+                <MaterialIcons name={isCoordinator ? 'groups' : 'place'} size={14} color={color.brand600} />
                 <Text style={styles.subHeaderText}>
-                    {t('Listing all artisans in')}{' '}
-                    <Text style={styles.subHeaderStrong}>
-                        {isCoordinator
-                            ? (user?.state_details?.name || t('your state'))
-                            : (user?.lga_details?.name || t('your LGA'))}
-                    </Text>
+                    {isCoordinator ? (
+                        t('Registered by you or your agents')
+                    ) : (
+                        <>
+                            {t('Listing all artisans in')}{' '}
+                            <Text style={styles.subHeaderStrong}>{user?.lga_details?.name || t('your LGA')}</Text>
+                        </>
+                    )}
                 </Text>
             </View>
 
@@ -254,9 +260,9 @@ export default function AgentArtisanList() {
                             icon="person-search"
                             title={filter !== 'all'
                                 ? t('No matching artisans found.')
-                                : (isCoordinator ? t('No artisans found in this state.') : t('No artisans found in this LGA.'))}
+                                : (isCoordinator ? t('No artisans yet.') : t('No artisans found in this LGA.'))}
                             message={isCoordinator
-                                ? t('Artisans registered in your state will appear here.')
+                                ? t('Artisans you register, or that your agents register, will appear here.')
                                 : t('Artisans registered in your LGA will appear here.')}
                         />
                     }

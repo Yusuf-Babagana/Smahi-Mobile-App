@@ -241,8 +241,9 @@ export default function CoordinatorDashboardScreen() {
           </LinearGradient>
         </TouchableOpacity>
 
-        {/* STATE-WIDE STRATEGIC KPIS */}
-        <Text style={styles.deckSectionHeader}>{t('State Overview Metrics')}</Text>
+        {/* MY NETWORK KPIS — ownership-scoped, not state-wide (see
+            app/agent/clients.tsx / app/agent/artisans.tsx for the same rule) */}
+        <Text style={styles.deckSectionHeader}>{t('My Network Overview')}</Text>
         <View style={styles.statsDeckGrid}>
           {/* Card 1: Active Agents */}
           <TouchableOpacity
@@ -265,7 +266,7 @@ export default function CoordinatorDashboardScreen() {
             </Text>
           </TouchableOpacity>
 
-          {/* Card 2: State Artisans */}
+          {/* Card 2: My Artisans */}
           <TouchableOpacity
             style={styles.metricCard}
             onPress={() => router.push({ pathname: '/agent/artisans', params: { filter: 'approved' } })}
@@ -280,7 +281,7 @@ export default function CoordinatorDashboardScreen() {
               </Text>
             </View>
             <Text style={styles.metricValue}>{stats.total_artisans || 0}</Text>
-            <Text style={styles.metricLabel}>{t('State Artisans')}</Text>
+            <Text style={styles.metricLabel}>{t('My Artisans')}</Text>
             <Text style={styles.metricSubtext}>
               {stats.pending_verification} {t('pending verification')}
             </Text>
@@ -425,7 +426,7 @@ export default function CoordinatorDashboardScreen() {
               <Text style={styles.referralStatNum}>
                 {referral?.total_service_providers_recorded ?? stats.total_artisans ?? 0}
               </Text>
-              <Text style={styles.referralStatSub}>{t('State Providers')}</Text>
+              <Text style={styles.referralStatSub}>{t('My Providers')}</Text>
             </View>
           </View>
         </View>

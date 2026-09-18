@@ -16,7 +16,10 @@ type StatusFilter = 'all' | 'unpaid' | 'pending';
 // business's registration and verification status are visible here
 // automatically, the same way app/agent/artisans.tsx already works for
 // artisans — no separate system, no Django Admin needed. Scoped
-// server-side to the caller's own LGA (agent) or state (coordinator).
+// server-side to the caller's own network: their own LGA for a plain
+// agent, or what they registered directly plus what their own agents
+// registered for a coordinator (never a colleague coordinator's, even
+// in the same state).
 export default function AgentBusinessListScreen() {
     const router = useRouter();
     const { user } = useAuth();
@@ -305,14 +308,16 @@ export default function AgentBusinessListScreen() {
             </SafeAreaView>
 
             <View style={styles.subHeader}>
-                <MaterialIcons name="place" size={14} color={color.brand600} />
+                <MaterialIcons name={isCoordinator ? 'groups' : 'place'} size={14} color={color.brand600} />
                 <Text style={styles.subHeaderText}>
-                    {t('Businesses in')}{' '}
-                    <Text style={styles.subHeaderStrong}>
-                        {isCoordinator
-                            ? (user?.state_details?.name || t('your state'))
-                            : (user?.lga_details?.name || t('your LGA'))}
-                    </Text>
+                    {isCoordinator ? (
+                        t('Registered by you or your agents')
+                    ) : (
+                        <>
+                            {t('Businesses in')}{' '}
+                            <Text style={styles.subHeaderStrong}>{user?.lga_details?.name || t('your LGA')}</Text>
+                        </>
+                    )}
                 </Text>
             </View>
 
