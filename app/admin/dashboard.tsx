@@ -1,5 +1,5 @@
 import React, { useCallback, useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, RefreshControl, Pressable } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, RefreshControl, Pressable, ActivityIndicator } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { MaterialIcons } from '@expo/vector-icons';
@@ -10,34 +10,42 @@ import Animated, { FadeInDown, FadeInUp } from 'react-native-reanimated';
 import { adminAPI } from '@/src/api/client';
 import { useAuth } from '@/src/contexts/AuthContext';
 import { color, font, radius, shadow, space } from '@/constants/theme';
-import { StatTile, EmptyState, SkeletonCard, useConfirm } from '@/src/components/ui';
+import { StatTile, EmptyState, SkeletonCard, useConfirm, useToast } from '@/src/components/ui';
 import { NotificationBell } from '@/src/components/NotificationBell';
 
-// This dashboard is read-only monitoring, with ONE deliberate exception:
-// Coordinator management (app/admin/coordinators.tsx, app/admin/
-// create-coordinator.tsx) — Admin creating/suspending/dismissing state
-// coordinators in-app, mirroring Coordinator-creates-Agent one level up
-// the hierarchy, so the whole Admin:Coordinator:Agent chain is
-// self-sufficient without needing Django Admin/server access for routine
-// growth. Every OTHER privileged action (approve a verification,
-// moderate a review, resolve a dispute, suspend an artisan/client) still
-// lives only in Django Admin, session-authenticated and separate from the
-// mobile JWT surface — this was a conscious, narrow trade: a lost or
-// unlocked phone can now create/suspend a coordinator, but nothing else.
+// This dashboard is read-only monitoring, with a few deliberate
+// exceptions: Coordinator management (app/admin/coordinators.tsx, app/
+// admin/create-coordinator.tsx) — Admin creating/suspending/dismissing
+// state coordinators in-app, mirroring Coordinator-creates-Agent one
+// level up the hierarchy; full User CRUD (app/admin/users.tsx); and the
+// one-tap Verification section below — approving an artisan/business
+// straight from here, routed through the same approve_artisan_verification/
+// approve_business_verification functions the agent verify flow uses
+// (core/services.py on the backend), so it enforces the same rules
+// (registration fee paid) instead of being a raw is_verified toggle.
+// Everything else privileged (moderate a review, resolve a dispute,
+// suspend an artisan/client) still lives only in Django Admin.
 export default function AdminDashboard() {
   const { t } = useTranslation();
   const router = useRouter();
   const { user, logout } = useAuth();
   const confirm = useConfirm();
+  const { show: showToast } = useToast();
 
   const [stats, setStats] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [pendingVerifications, setPendingVerifications] = useState<any[]>([]);
+  const [verifyingId, setVerifyingId] = useState<number | null>(null);
 
   const load = useCallback(async () => {
     try {
-      const data = await adminAPI.getStats();
-      setStats(data);
+      const [statsData, pending] = await Promise.all([
+        adminAPI.getStats(),
+        adminAPI.getPendingVerifications().catch(() => []),
+      ]);
+      setStats(statsData);
+      setPendingVerifications(pending);
     } catch (error) {
       console.log('Admin stats error:', error);
     } finally {
@@ -45,6 +53,29 @@ export default function AdminDashboard() {
       setRefreshing(false);
     }
   }, []);
+
+  const handleVerify = async (targetUser: any) => {
+    const name = `${targetUser.first_name || ''} ${targetUser.last_name || ''}`.trim() || targetUser.email;
+    const ok = await confirm({
+      title: t('Verify this account?'),
+      message: t('{{name}} will get the verified badge immediately.', { name }),
+      confirmLabel: t('Verify'),
+    });
+    if (!ok) return;
+
+    setVerifyingId(targetUser.id);
+    try {
+      await adminAPI.verifyUser(targetUser.id);
+      setPendingVerifications(prev => prev.filter(u => u.id !== targetUser.id));
+      showToast(t('{{name}} is now verified.', { name }), { type: 'success' });
+      load();
+    } catch (error: any) {
+      const msg = error.response?.data?.error || t('Could not verify this account.');
+      showToast(msg, { type: 'error' });
+    } finally {
+      setVerifyingId(null);
+    }
+  };
 
   useFocusEffect(
     useCallback(() => {
@@ -217,6 +248,47 @@ export default function AdminDashboard() {
                   tileBg={color.warn100}
                   tileFg={color.warn600}
                 />
+              </View>
+
+              <View style={styles.card}>
+                {pendingVerifications.length === 0 ? (
+                  <Text style={styles.emptyText}>{t('No one is waiting on verification.')}</Text>
+                ) : (
+                  pendingVerifications.map((u: any, i: number) => {
+                    const name = `${u.first_name || ''} ${u.last_name || ''}`.trim() || u.email;
+                    return (
+                      <View key={u.id} style={[styles.verifyRow, i > 0 && styles.horizontalDivider]}>
+                        <View style={{ flex: 1 }}>
+                          <Text style={styles.userName} numberOfLines={1}>{name}</Text>
+                          <View style={styles.metaRow}>
+                            <View style={styles.roleBadge}>
+                              <Text style={styles.roleText}>{t(u.role)}</Text>
+                            </View>
+                            {u.state_details?.name && (
+                              <Text style={styles.userEmail}>{u.state_details.name}</Text>
+                            )}
+                          </View>
+                        </View>
+                        <Pressable
+                          style={({ pressed }) => [styles.verifyButton, pressed && { opacity: 0.85 }]}
+                          onPress={() => handleVerify(u)}
+                          disabled={verifyingId === u.id}
+                          accessibilityRole="button"
+                          accessibilityLabel={t('Verify {{name}}', { name })}
+                        >
+                          {verifyingId === u.id ? (
+                            <ActivityIndicator size="small" color="#FFF" />
+                          ) : (
+                            <>
+                              <MaterialIcons name="check" size={15} color="#FFF" />
+                              <Text style={styles.verifyButtonText}>{t('Verify')}</Text>
+                            </>
+                          )}
+                        </Pressable>
+                      </View>
+                    );
+                  })
+                )}
               </View>
             </Animated.View>
 
@@ -402,4 +474,13 @@ const styles = StyleSheet.create({
   userEmail: { fontFamily: font.medium, fontSize: 11.5, color: color.ink300, marginTop: 1 },
   roleBadge: { backgroundColor: color.brand100, borderRadius: radius.full, paddingHorizontal: 10, paddingVertical: 4 },
   roleText: { fontFamily: font.extrabold, fontSize: 10, color: color.brand600, textTransform: 'uppercase' },
+
+  verifyRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: space.sm, gap: space.sm },
+  metaRow: { flexDirection: 'row', alignItems: 'center', gap: space.sm, marginTop: 3 },
+  verifyButton: {
+    flexDirection: 'row', alignItems: 'center', gap: 4,
+    backgroundColor: color.accent600, borderRadius: radius.full,
+    paddingHorizontal: 12, paddingVertical: 7, minWidth: 74, justifyContent: 'center',
+  },
+  verifyButtonText: { color: '#FFF', fontFamily: font.extrabold, fontSize: 12 },
 });

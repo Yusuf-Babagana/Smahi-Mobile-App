@@ -571,6 +571,88 @@ export const businessAPI = {
     const response = await apiClient.patch('business/profile/', data);
     return response.data;
   },
+
+  // Public directory — the client-facing "Businesses" browse/search
+  // screen. Mirrors artisanAPI.getArtisans, but no location/distance
+  // params: BusinessProfileViewSet is a plain filtered list, deliberately
+  // without the ranking/distance features ArtisanViewSet's custom list()
+  // has — those don't exist for businesses yet (BusinessProfileViewSet's
+  // own docstring).
+  getBusinesses: async (filters?: { category?: number | string; search?: string }, page: number = 1) => {
+    const params: any = { page };
+    if (filters?.category) params.category = filters.category;
+    if (filters?.search) params.search = filters.search;
+    const response = await apiClient.get('businesses/', { params });
+    return response.data;
+  },
+
+  getBusinessById: async (id: string | number) => {
+    const response = await apiClient.get(`businesses/${id}/`);
+    return response.data;
+  },
+};
+
+// --- PORTFOLIO / SHOWCASE ---
+// Shared by both artisan and business roles (core.models.PortfolioItem on
+// the backend) — a few photos of the owner's work or what they sell.
+// Lives under /api/v1/ (a genuinely new resource, see disputeAPI's own
+// comment on this project's versioning convention), not /api/auth/ — no
+// backend route exists at auth/portfolio/, despite older code elsewhere
+// once assuming one did.
+export const portfolioAPI = {
+  // Own items — the owner's own dashboard/gallery.
+  getMine: async () => {
+    const response = await apiClient.get('v1/portfolio/');
+    return getData(response);
+  },
+
+  // Any user's items, unauthenticated-safe — for a future client-facing
+  // profile/discovery screen; not yet consumed anywhere else in the app.
+  getForUser: async (userId: number) => {
+    const response = await apiClient.get('v1/portfolio/', { params: { user: userId } });
+    return getData(response);
+  },
+
+  // Same expo-file-system uploadAsync fix as authAPI.uploadProfilePicture/
+  // bookingAPI.uploadPhoto above — raw axios FormData reliably fails with a
+  // bare "Network Error" (never reaches the server) on this app's RN New
+  // Architecture build.
+  add: async (
+    asset: { uri: string; type?: string },
+    fields: { kind: 'service' | 'for_sale'; caption?: string; price_label?: string }
+  ) => {
+    const token = await SecureStore.getItemAsync('accessToken');
+    const result = await FileSystem.uploadAsync(
+      `${API_URL}/v1/portfolio/`,
+      asset.uri,
+      {
+        httpMethod: 'POST',
+        uploadType: FileSystem.FileSystemUploadType.MULTIPART,
+        fieldName: 'image',
+        mimeType: asset.type || 'image/jpeg',
+        parameters: {
+          kind: fields.kind,
+          caption: fields.caption || '',
+          price_label: fields.price_label || '',
+        },
+        headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+      }
+    );
+
+    let data: any = {};
+    try { data = JSON.parse(result.body); } catch {}
+
+    if (result.status < 200 || result.status >= 300) {
+      const error: any = new Error(data?.error || data?.detail || 'Upload failed');
+      error.response = { status: result.status, data };
+      throw error;
+    }
+    return data;
+  },
+
+  remove: async (itemId: number) => {
+    await apiClient.delete(`v1/portfolio/${itemId}/`);
+  },
 };
 
 // --- REVIEWS ---
@@ -684,6 +766,20 @@ export const adminAPI = {
 
   setCoordinatorStatus: async (coordinatorId: number, status: 'active' | 'suspended' | 'dismissed') => {
     const response = await apiClient.post(`/admin/coordinators/${coordinatorId}/status/`, { status });
+    return response.data;
+  },
+
+  // Quick one-tap verification for the dashboard's Verification section —
+  // artisans/businesses awaiting review, across every state. Routed
+  // server-side through the same approve functions the agent verify
+  // flow uses, so it enforces the same rules (e.g. registration fee paid).
+  getPendingVerifications: async () => {
+    const response = await apiClient.get('/admin/verification/pending/');
+    return response.data;
+  },
+
+  verifyUser: async (userId: number) => {
+    const response = await apiClient.post(`/admin/verification/${userId}/verify/`);
     return response.data;
   },
 };

@@ -9,7 +9,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useTranslation } from 'react-i18next';
 
-import { artisanAPI, favoriteAPI } from '@/src/api/client';
+import { artisanAPI, favoriteAPI, portfolioAPI } from '@/src/api/client';
 import { useLocation } from '@/src/contexts/LocationContext';
 import { openDirections, openDirectionsToAddress } from '@/src/utils/directions';
 import { BACKEND_URL } from '@/src/constants/env';
@@ -65,6 +65,7 @@ export default function ArtisanProfileRoom() {
   const [artisan, setArtisan] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [reviews, setReviews] = useState<any[]>([]);
+  const [portfolioItems, setPortfolioItems] = useState<any[]>([]);
   const [favorited, setFavorited] = useState(false);
   const [togglingFavorite, setTogglingFavorite] = useState(false);
 
@@ -93,6 +94,15 @@ export default function ArtisanProfileRoom() {
     };
     fetchReviews();
   }, [id]);
+
+  // Portfolio photos key off the artisan's USER id (PortfolioItem.user),
+  // not the ArtisanProfile id this whole screen is otherwise keyed by —
+  // only available once the profile itself has loaded.
+  useEffect(() => {
+    const userId = artisan?.user_details?.id || artisan?.user;
+    if (!userId) return;
+    portfolioAPI.getForUser(userId).then(setPortfolioItems).catch(() => {});
+  }, [artisan]);
 
   const handleCall = () => {
     const phone = artisan?.user_details?.phone_number || artisan?.user?.phone_number;
@@ -210,11 +220,6 @@ export default function ArtisanProfileRoom() {
     : typeof artisan.skills === 'string' && artisan.skills.length > 0
       ? artisan.skills.split(',').map((s: string) => s.trim()).filter(Boolean)
       : [];
-
-  // Work gallery — backend may expose portfolio items under different keys.
-  const gallery: string[] = (artisan.portfolio || artisan.portfolio_images || artisan.work_photos || [])
-    .map(resolveMediaUrl)
-    .filter(Boolean) as string[];
 
   const priceFrom = artisan.call_out_fee ?? artisan.price_from ?? artisan.hourly_rate ?? null;
 
@@ -343,13 +348,29 @@ export default function ArtisanProfileRoom() {
           )}
 
           {/* Work gallery */}
-          {gallery.length > 0 && (
+          {portfolioItems.length > 0 && (
             <View style={styles.card}>
               <Text style={styles.sectionTitle}>{t('Work gallery')}</Text>
               <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.galleryScroll}>
-                {gallery.map((uri, i) => (
-                  <Image key={i} source={{ uri }} style={styles.galleryImage} />
-                ))}
+                {portfolioItems.map((item) => {
+                  const uri = resolveMediaUrl(item.image);
+                  if (!uri) return null;
+                  return (
+                    <View key={item.id} style={styles.galleryItem}>
+                      <Image source={{ uri }} style={styles.galleryImage} />
+                      {(item.caption || item.price_label) ? (
+                        <View style={{ marginTop: 4 }}>
+                          {item.caption ? (
+                            <Text style={styles.galleryCaption} numberOfLines={1}>{item.caption}</Text>
+                          ) : null}
+                          {item.kind === 'for_sale' && item.price_label ? (
+                            <Text style={styles.galleryPrice} numberOfLines={1}>{item.price_label}</Text>
+                          ) : null}
+                        </View>
+                      ) : null}
+                    </View>
+                  );
+                })}
               </ScrollView>
             </View>
           )}
@@ -486,12 +507,15 @@ const styles = StyleSheet.create({
   skillsWrap: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
 
   galleryScroll: { gap: space.md },
+  galleryItem: { width: 140 },
   galleryImage: {
     width: 140,
     height: 110,
     borderRadius: radius.md,
     backgroundColor: color.surfaceChip,
   },
+  galleryCaption: { fontFamily: font.bold, fontSize: 12, color: color.ink900 },
+  galleryPrice: { fontFamily: font.bold, fontSize: 11.5, color: color.brand600, marginTop: 1 },
 
   reviewRow: { flexDirection: 'row', gap: space.md, paddingVertical: space.md },
   reviewDivider: { borderTopWidth: 1, borderTopColor: '#F1F5F9' },

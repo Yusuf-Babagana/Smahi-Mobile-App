@@ -6,7 +6,7 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 
-import { artisanAPI } from '@/src/api/client';
+import { artisanAPI, portfolioAPI } from '@/src/api/client';
 import { color, font, radius, shadow, space, type } from '@/constants/theme';
 import { useTranslation } from 'react-i18next';
 import { useToast } from '@/src/components/ui';
@@ -21,10 +21,15 @@ export default function PublicArtisanProfile() {
 
     const [artisan, setArtisan] = useState<any>(null);
     const [loading, setLoading] = useState(true);
+    const [portfolio, setPortfolio] = useState<any[]>([]);
 
     useEffect(() => {
         if (id) {
             fetchDetails();
+            // id here is already the USER id (see fetchDetails' own
+            // comment below), same id PortfolioItem.user is keyed by —
+            // no need to wait on the artisan profile fetch first.
+            portfolioAPI.getForUser(Number(id)).then(setPortfolio).catch(() => {});
         }
     }, [id]);
 
@@ -96,7 +101,6 @@ export default function PublicArtisanProfile() {
     );
 
     const profilePic = getImageUrl(artisan.profile_picture);
-    const portfolio = artisan.portfolio_images || [];
 
     return (
         <View style={styles.container}>

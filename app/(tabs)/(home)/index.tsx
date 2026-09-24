@@ -639,6 +639,15 @@ export default function ClientHomeScreen() {
               />
             );
           })}
+          {/* Not a filter — navigates away to the businesses directory,
+              which has no location/distance ranking to fit into this
+              artisan-search screen's map/distance UI (businessAPI's own
+              comment). */}
+          <Chip
+            label={t('Businesses')}
+            icon="storefront"
+            onPress={() => router.push('/businesses')}
+          />
         </ScrollView>
         {expandedParent && (
           <ScrollView

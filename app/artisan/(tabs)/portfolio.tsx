@@ -1,49 +1,71 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useCallback } from 'react';
 import {
-    View, Text, StyleSheet, FlatList, Image, TouchableOpacity, ActivityIndicator, StatusBar
+    View, Text, StyleSheet, FlatList, Image, TouchableOpacity, ActivityIndicator, StatusBar,
+    Modal, TextInput, Pressable,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useRouter } from 'expo-router';
+import { useRouter, useFocusEffect } from 'expo-router';
 import * as ImagePicker from 'expo-image-picker';
 import { LinearGradient } from 'expo-linear-gradient';
-import { Ionicons } from '@expo/vector-icons';
-import axios from 'axios';
-import * as SecureStore from 'expo-secure-store';
+import { Ionicons, MaterialIcons } from '@expo/vector-icons';
+import { useTranslation } from 'react-i18next';
 
-import { color, font, radius, shadow, space, type } from '@/constants/theme';
-import { API_URL as BASE_URL, CLOUDINARY_CLOUD_NAME as CLOUD_NAME } from '@/src/constants/env';
-import { useToast, useConfirm } from '@/src/components/ui';
+import { color, font, radius, shadow, space } from '@/constants/theme';
+import { CLOUDINARY_CLOUD_NAME as CLOUD_NAME } from '@/src/constants/env';
+import { portfolioAPI } from '@/src/api/client';
+import { Button, useToast, useConfirm } from '@/src/components/ui';
+
+const MAX_ITEMS = 12;
 
 export default function PortfolioScreen() {
     const router = useRouter();
+    const { t } = useTranslation();
     const { show: showToast } = useToast();
     const confirm = useConfirm();
+
     const [images, setImages] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
+    const [deletingId, setDeletingId] = useState<number | null>(null);
+
+    const [pickedAsset, setPickedAsset] = useState<ImagePicker.ImagePickerAsset | null>(null);
+    const [kind, setKind] = useState<'service' | 'for_sale'>('service');
+    const [priceLabel, setPriceLabel] = useState('');
+    const [caption, setCaption] = useState('');
     const [uploading, setUploading] = useState(false);
 
-    useEffect(() => {
-        fetchPortfolio();
-    }, []);
-
-    const fetchPortfolio = async () => {
+    const fetchPortfolio = useCallback(async () => {
         try {
-            const token = await SecureStore.getItemAsync('accessToken');
-            const response = await axios.get(`${BASE_URL}/auth/profile/`, {
-                headers: { Authorization: `Bearer ${token}` }
-            });
-            setImages(response.data.portfolio_images || []);
+            const data = await portfolioAPI.getMine();
+            setImages(data || []);
         } catch (error) {
             console.log("Error fetching portfolio", error);
+            showToast(t('Could not load your photos.'), { type: 'error' });
         } finally {
             setLoading(false);
         }
+    }, [t]);
+
+    useFocusEffect(
+        useCallback(() => {
+            fetchPortfolio();
+        }, [fetchPortfolio])
+    );
+
+    const closeSheet = () => {
+        setPickedAsset(null);
+        setKind('service');
+        setPriceLabel('');
+        setCaption('');
     };
 
     const pickImage = async () => {
+        if (images.length >= MAX_ITEMS) {
+            showToast(t('You can have up to {{max}} photos — remove one first.', { max: MAX_ITEMS }), { type: 'warn' });
+            return;
+        }
         const { granted } = await ImagePicker.requestMediaLibraryPermissionsAsync();
         if (!granted) {
-            showToast("Allow access to photos to upload work samples.", { type: 'warn' });
+            showToast(t("Allow access to photos to upload work samples."), { type: 'warn' });
             return;
         }
 
@@ -55,37 +77,24 @@ export default function PortfolioScreen() {
         });
 
         if (!result.canceled) {
-            uploadImage(result.assets[0]);
+            setPickedAsset(result.assets[0]);
         }
     };
 
-    const uploadImage = async (asset: ImagePicker.ImagePickerAsset) => {
+    const submitUpload = async () => {
+        if (!pickedAsset) return;
         setUploading(true);
         try {
-            const token = await SecureStore.getItemAsync('accessToken');
-            const formData = new FormData();
-
-            const uri = asset.uri;
-            const name = uri.split('/').pop();
-            const type = 'image/jpeg';
-
-            // @ts-ignore
-            formData.append('image', { uri, name, type });
-            formData.append('caption', 'My Work');
-
-            const response = await axios.post(`${BASE_URL}/auth/portfolio/upload/`, formData, {
-                headers: {
-                    'Content-Type': 'multipart/form-data',
-                    Authorization: `Bearer ${token}`,
-                },
-            });
-
-            showToast("Image uploaded!", { type: 'success' });
-            setImages(prev => [response.data, ...prev]);
-
+            const created = await portfolioAPI.add(
+                { uri: pickedAsset.uri, type: pickedAsset.mimeType },
+                { kind, caption: caption.trim(), price_label: kind === 'for_sale' ? priceLabel.trim() : '' }
+            );
+            setImages(prev => [created, ...prev]);
+            showToast(t('Photo added.'), { type: 'success' });
+            closeSheet();
         } catch (error: any) {
-            console.error("Upload Error:", error.response?.data || error.message);
-            showToast("Upload failed — please check your internet connection.", { type: 'error' });
+            const msg = error.response?.data?.error || t('Could not upload this photo. Please try again.');
+            showToast(msg, { type: 'error' });
         } finally {
             setUploading(false);
         }
@@ -93,21 +102,21 @@ export default function PortfolioScreen() {
 
     const deleteImage = async (id: number) => {
         const ok = await confirm({
-            title: "Delete",
-            message: "Remove this image?",
-            confirmLabel: "Delete",
+            title: t("Delete"),
+            message: t("Remove this image?"),
+            confirmLabel: t("Delete"),
             destructive: true,
         });
         if (!ok) return;
 
+        setDeletingId(id);
         try {
-            const token = await SecureStore.getItemAsync('accessToken');
-            await axios.delete(`${BASE_URL}/auth/portfolio/${id}/delete/`, {
-                headers: { Authorization: `Bearer ${token}` }
-            });
+            await portfolioAPI.remove(id);
             setImages(prev => prev.filter(img => img.id !== id));
         } catch (error) {
-            showToast("Could not delete image.", { type: 'error' });
+            showToast(t("Could not delete image."), { type: 'error' });
+        } finally {
+            setDeletingId(null);
         }
     };
 
@@ -149,10 +158,10 @@ export default function PortfolioScreen() {
                         <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
                             <Ionicons name="arrow-back" size={20} color="#FFF" />
                         </TouchableOpacity>
-                        <Text style={styles.title}>My Portfolio</Text>
+                        <Text style={styles.title}>{t('My Portfolio')}</Text>
                         <View style={{ width: 40 }} />
                     </View>
-                    <Text style={styles.subtitle}>Showcase your best work to attract more clients.</Text>
+                    <Text style={styles.subtitle}>{t('Showcase your best work to attract more clients.')}</Text>
                 </SafeAreaView>
             </LinearGradient>
 
@@ -168,17 +177,11 @@ export default function PortfolioScreen() {
                     renderItem={({ item }) => {
                         if (item.id === 'add_btn') {
                             return (
-                                <TouchableOpacity style={styles.addCard} onPress={pickImage} disabled={uploading}>
-                                    {uploading ? (
-                                        <ActivityIndicator color={color.brand600} />
-                                    ) : (
-                                        <>
-                                            <View style={styles.iconCircle}>
-                                                <Ionicons name="camera" size={24} color={color.brand600} />
-                                            </View>
-                                            <Text style={styles.addText}>Add Photo</Text>
-                                        </>
-                                    )}
+                                <TouchableOpacity style={styles.addCard} onPress={pickImage}>
+                                    <View style={styles.iconCircle}>
+                                        <Ionicons name="camera" size={24} color={color.brand600} />
+                                    </View>
+                                    <Text style={styles.addText}>{t('Add Photo')}</Text>
                                 </TouchableOpacity>
                             );
                         }
@@ -198,14 +201,99 @@ export default function PortfolioScreen() {
                                         <Ionicons name="image-outline" size={24} color={color.ink300} />
                                     </View>
                                 )}
-                                <TouchableOpacity style={styles.deleteBtn} onPress={() => deleteImage(item.id)}>
-                                    <Ionicons name="trash-outline" size={14} color="#FFF" />
+                                {(item.caption || item.price_label) ? (
+                                    <View style={styles.captionWrap}>
+                                        {item.caption ? (
+                                            <Text style={styles.captionText} numberOfLines={1}>{item.caption}</Text>
+                                        ) : null}
+                                        {item.kind === 'for_sale' && item.price_label ? (
+                                            <Text style={styles.priceText} numberOfLines={1}>{item.price_label}</Text>
+                                        ) : null}
+                                    </View>
+                                ) : null}
+                                <TouchableOpacity
+                                    style={styles.deleteBtn}
+                                    onPress={() => deleteImage(item.id)}
+                                    disabled={deletingId === item.id}
+                                >
+                                    {deletingId === item.id ? (
+                                        <ActivityIndicator size="small" color="#FFF" />
+                                    ) : (
+                                        <Ionicons name="trash-outline" size={14} color="#FFF" />
+                                    )}
                                 </TouchableOpacity>
                             </View>
                         );
                     }}
                 />
             )}
+
+            <Modal
+                visible={pickedAsset !== null}
+                transparent
+                animationType="fade"
+                onRequestClose={closeSheet}
+            >
+                <View style={styles.modalBackdrop}>
+                    <View style={styles.modalCard}>
+                        <View style={styles.modalTop}>
+                            <Text style={styles.modalTitle}>{t('Add a photo')}</Text>
+                            <Pressable onPress={closeSheet} accessibilityRole="button" accessibilityLabel={t('Close')} style={styles.modalCloseBtn}>
+                                <MaterialIcons name="close" size={16} color={color.ink900} />
+                            </Pressable>
+                        </View>
+
+                        {pickedAsset ? (
+                            <Image source={{ uri: pickedAsset.uri }} style={styles.previewImage} resizeMode="cover" />
+                        ) : null}
+
+                        <Text style={styles.fieldLabel}>{t('What is this photo?')}</Text>
+                        <View style={styles.kindRow}>
+                            <Pressable
+                                onPress={() => setKind('service')}
+                                style={[styles.kindChip, kind === 'service' && styles.kindChipActive]}
+                                accessibilityRole="button"
+                            >
+                                <Text style={[styles.kindChipText, kind === 'service' && styles.kindChipTextActive]}>{t('My work')}</Text>
+                            </Pressable>
+                            <Pressable
+                                onPress={() => setKind('for_sale')}
+                                style={[styles.kindChip, kind === 'for_sale' && styles.kindChipActive]}
+                                accessibilityRole="button"
+                            >
+                                <Text style={[styles.kindChipText, kind === 'for_sale' && styles.kindChipTextActive]}>{t('Item for sale')}</Text>
+                            </Pressable>
+                        </View>
+
+                        {kind === 'for_sale' ? (
+                            <>
+                                <Text style={styles.fieldLabel}>{t('Price')}</Text>
+                                <TextInput
+                                    style={styles.textInput}
+                                    placeholder={t('e.g. ₦18,000')}
+                                    placeholderTextColor={color.ink300}
+                                    value={priceLabel}
+                                    onChangeText={setPriceLabel}
+                                />
+                            </>
+                        ) : null}
+
+                        <Text style={styles.fieldLabel}>{t('Caption (optional)')}</Text>
+                        <TextInput
+                            style={styles.textInput}
+                            placeholder={t('e.g. Kitchen cabinet install')}
+                            placeholderTextColor={color.ink300}
+                            value={caption}
+                            onChangeText={setCaption}
+                        />
+
+                        <View style={styles.modalActions}>
+                            <Button title={t('Cancel')} variant="secondary" onPress={closeSheet} disabled={uploading} style={{ flex: 1 }} />
+                            <Button title={t('Upload')} onPress={submitUpload} loading={uploading} style={{ flex: 1 }} />
+                        </View>
+                    </View>
+                </View>
+            </Modal>
         </View>
     );
 }
@@ -277,11 +365,51 @@ const styles = StyleSheet.create({
         backgroundColor: color.surface
     },
     image: { width: '100%', height: '100%' },
+    captionWrap: {
+        position: 'absolute', left: 0, right: 0, bottom: 0,
+        paddingHorizontal: 6, paddingTop: 14, paddingBottom: 5,
+        backgroundColor: 'rgba(11,31,63,0.55)',
+    },
+    captionText: { fontFamily: font.extrabold, fontSize: 9.5, color: '#FFF' },
+    priceText: { fontFamily: font.bold, fontSize: 9, color: '#FDE68A', marginTop: 1 },
     deleteBtn: {
         position: 'absolute', top: 6, right: 6,
         backgroundColor: 'rgba(220, 38, 38, 0.9)',
         width: 26, height: 26, borderRadius: 13,
         justifyContent: 'center', alignItems: 'center',
         borderWidth: 1.5, borderColor: color.surface
-    }
+    },
+
+    modalBackdrop: { flex: 1, backgroundColor: 'rgba(15,23,42,0.5)', justifyContent: 'flex-end' },
+    modalCard: {
+        backgroundColor: color.surface,
+        borderTopLeftRadius: radius.xxl,
+        borderTopRightRadius: radius.xxl,
+        padding: space.xl,
+        paddingBottom: space.xxl,
+    },
+    modalTop: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: space.md },
+    modalTitle: { fontFamily: font.extrabold, fontSize: 16, color: color.ink900 },
+    modalCloseBtn: {
+        width: 32, height: 32, borderRadius: radius.md,
+        backgroundColor: color.surfaceSunken,
+        alignItems: 'center', justifyContent: 'center',
+    },
+    previewImage: { width: '100%', height: 160, borderRadius: radius.lg, marginBottom: space.lg, backgroundColor: color.surfaceSunken },
+    fieldLabel: { fontFamily: font.extrabold, fontSize: 12, color: color.ink900, marginBottom: space.sm },
+    kindRow: { flexDirection: 'row', gap: space.sm, marginBottom: space.lg },
+    kindChip: {
+        flex: 1, paddingVertical: 11, borderRadius: radius.md,
+        borderWidth: 1.5, borderColor: color.border, backgroundColor: color.surface,
+        alignItems: 'center',
+    },
+    kindChipActive: { backgroundColor: color.brand600, borderColor: color.brand600 },
+    kindChipText: { fontFamily: font.extrabold, fontSize: 12.5, color: color.ink600 },
+    kindChipTextActive: { color: '#FFF' },
+    textInput: {
+        height: 46, borderWidth: 1.5, borderColor: color.border, borderRadius: radius.md,
+        paddingHorizontal: space.md, fontFamily: font.semibold, fontSize: 14, color: color.ink900,
+        marginBottom: space.lg,
+    },
+    modalActions: { flexDirection: 'row', gap: space.md, marginTop: space.xs },
 });

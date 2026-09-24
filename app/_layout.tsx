@@ -182,6 +182,7 @@ export default function RootLayout() {
                   <Stack.Screen name="artisan/profile" options={{ headerShown: false }} />
                   <Stack.Screen name="agent/dashboard" options={{ headerShown: false }} />
                   <Stack.Screen name="business/dashboard" options={{ headerShown: false }} />
+                  <Stack.Screen name="business/showcase" options={{ headerShown: false }} />
                   <Stack.Screen name="coordinator/agents" options={{ headerShown: false }} />
                   <Stack.Screen name="coordinator/create-agent" options={{ headerShown: false }} />
                   <Stack.Screen name="coordinator/reports" options={{ headerShown: false }} />
@@ -194,6 +195,8 @@ export default function RootLayout() {
                   {/* ✅ 3. Add Chat & Profile Screens */}
                   <Stack.Screen name="artisan-profile" options={{ headerShown: false }} />
                   <Stack.Screen name="artisan/[id]" options={{ headerShown: false }} />
+                  <Stack.Screen name="businesses" options={{ headerShown: false }} />
+                  <Stack.Screen name="business/[id]" options={{ headerShown: false }} />
                   <Stack.Screen name="booking/[artisanId]" options={{ headerShown: false }} />
                   <Stack.Screen name="booking/detail/[id]" options={{ headerShown: false }} />
                   <Stack.Screen name="chat/index" options={{ headerShown: false }} />
