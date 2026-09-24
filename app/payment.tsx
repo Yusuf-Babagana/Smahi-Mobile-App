@@ -15,6 +15,7 @@ import { agentAPI, authAPI, paymentAPI } from '@/src/api/client';
 import { useAuth } from '@/src/contexts/AuthContext';
 import { color, font, radius, shadow, space } from '@/constants/theme';
 import { useToast, useConfirm } from '@/src/components/ui';
+import { BACKEND_URL } from '@/src/constants/env';
 
 // This screen is reachable via a deep link (natively://payment?authorizationUrl=...),
 // so `authorizationUrl` must be treated as untrusted input, not just a value we
@@ -28,6 +29,31 @@ function isTrustedPaystackUrl(url: string): boolean {
   try {
     const { protocol, hostname } = new URL(url);
     return protocol === 'https:' && hostname === 'checkout.paystack.com';
+  } catch {
+    return false;
+  }
+}
+
+// Only OUR OWN callback_url (set when initializing the transaction — see
+// accounts/views.py's initialize_registration_payment: '<backend>/api/auth/
+// payments/callback/?reference=...') means the transaction has actually been
+// resolved, one way or the other. Before this fix, handleNavigationStateChange
+// matched any URL anywhere in the WebView's navigation history containing
+// 'reference=', 'trxref=', '/callback', or 'status=success' — loose enough
+// that a card issuer's own 3D-Secure/OTP redirect page (a normal, expected
+// mid-flow hop through a third-party domain, not our backend) could contain
+// one of those substrings in its own unrelated query string or path and
+// falsely trigger verification. That both marked hasVerified permanently
+// true (blocking the real, later verification) and — worse — navigated the
+// user straight out of the WebView via handleVerify's failure branch while
+// they were still mid-checkout, which is exactly what turns a real payment
+// into a Paystack-side 'abandoned' transaction.
+function isOwnPaymentCallback(url: string): boolean {
+  try {
+    const parsed = new URL(url);
+    const backend = new URL(BACKEND_URL);
+    return parsed.origin === backend.origin
+      && parsed.pathname.startsWith('/api/auth/payments/callback');
   } catch {
     return false;
   }
@@ -142,22 +168,11 @@ export default function PaymentScreen() {
 
   const handleNavigationStateChange = useCallback((navState: any) => {
     const url = navState.url || '';
+    if (!isOwnPaymentCallback(url)) return;
 
-    // Paystack redirects to a URL containing the reference after success
-    if (url.includes('reference=') || url.includes('trxref=')) {
-      const refMatch = url.match(/[?&](?:reference|trxref)=([^&]+)/);
-      if (refMatch) {
-        handleVerify(refMatch[1]);
-        return;
-      }
-    }
-
-    // Also check for Paystack's callback pattern
-    if (url.includes('/callback') || url.includes('status=success')) {
-      if (reference) {
-        handleVerify(reference);
-      }
-    }
+    const refMatch = url.match(/[?&](?:reference|trxref)=([^&]+)/);
+    const ref = refMatch ? refMatch[1] : reference;
+    if (ref) handleVerify(ref);
   }, [reference, handleVerify]);
 
   const handleRetry = () => {
