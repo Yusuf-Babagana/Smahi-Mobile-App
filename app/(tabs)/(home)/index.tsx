@@ -27,6 +27,9 @@ import {
 import { recordSearch } from '@/src/utils/recommendations';
 import { openDirections } from '@/src/utils/directions';
 import { NotificationBell } from '@/src/components/NotificationBell';
+import { BackToDashboard } from '@/src/components/BackToDashboard';
+import { PromoBanner } from '@/src/components/PromoBanner';
+import { CategoryStrip } from '@/src/components/CategoryStrip';
 
 const DISTANCE_OPTIONS = [
   { label: '5 km', value: 5 },
@@ -566,15 +569,43 @@ export default function ClientHomeScreen() {
 
   const listHeader = (
     <View>
-      {/* Trust banner */}
-      <View style={styles.trustBanner}>
-        <View style={styles.trustIcon}>
-          <MaterialIcons name="verified-user" size={18} color={color.accent600} />
-        </View>
-        <Text style={styles.trustText}>
-          {t('Every artisan is ID-verified by our field agents before they appear here.')}
-        </Text>
+      {/* Hero banner (carries the ID-verified trust message) */}
+      <PromoBanner />
+
+      {/* Category graphics */}
+      <Text style={[styles.sectionHeading, styles.categoryHeading]}>{t('Browse categories')}</Text>
+      <View style={styles.categoryStripBleed}>
+      <CategoryStrip
+        categories={parentCategories}
+        language={i18n.language}
+        activeParentId={expandedParentId ?? selectedCategoryId}
+        allSelected={selectedCategoryId === null && expandedParentId === null}
+        onSelectAll={() => handleParentSelect(null)}
+        onSelectParent={handleParentSelect}
+        onBusinesses={() => router.push('/businesses')}
+      />
       </View>
+      {expandedParent && (
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.categoryListScroll}
+          style={{ marginTop: space.sm }}
+        >
+          {expandedParent.subcategories.map((sub) => {
+            const subLabel = i18n.language === 'ha' && sub.name_ha ? sub.name_ha : sub.name;
+            return (
+              <Chip
+                key={sub.id}
+                label={subLabel}
+                subcategory
+                selected={selectedSubcategoryId === sub.id}
+                onPress={() => handleSubcategorySelect(sub.id)}
+              />
+            );
+          })}
+        </ScrollView>
+      )}
 
       {/* Top rated rail */}
       {topRated.length > 0 && (
@@ -615,61 +646,6 @@ export default function ClientHomeScreen() {
       {artisans.length > 0 && (
         <Text style={[styles.sectionHeading, styles.listHeading]}>{t('All artisans')}</Text>
       )}
-
-      {/* Category chips (moved from filtersArea) */}
-      <View style={styles.categoryListWrap}>
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={styles.categoryListScroll}
-        >
-          <Chip
-            label={t('All')}
-            selected={selectedCategoryId === null && expandedParentId === null}
-            onPress={() => handleParentSelect(null)}
-          />
-          {parentCategories.map((cat) => {
-            const catLabel = i18n.language === 'ha' && cat.name_ha ? cat.name_ha : cat.name;
-            return (
-              <Chip
-                key={cat.id}
-                label={catLabel}
-                selected={expandedParentId === cat.id || selectedCategoryId === cat.id}
-                onPress={() => handleParentSelect(cat.id)}
-              />
-            );
-          })}
-          {/* Not a filter — navigates away to the businesses directory,
-              which has no location/distance ranking to fit into this
-              artisan-search screen's map/distance UI (businessAPI's own
-              comment). */}
-          <Chip
-            label={t('Businesses')}
-            icon="storefront"
-            onPress={() => router.push('/businesses')}
-          />
-        </ScrollView>
-        {expandedParent && (
-          <ScrollView
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            contentContainerStyle={styles.categoryListScroll}
-          >
-            {expandedParent.subcategories.map((sub) => {
-              const subLabel = i18n.language === 'ha' && sub.name_ha ? sub.name_ha : sub.name;
-              return (
-                <Chip
-                  key={sub.id}
-                  label={subLabel}
-                  subcategory
-                  selected={selectedSubcategoryId === sub.id}
-                  onPress={() => handleSubcategorySelect(sub.id)}
-                />
-              );
-            })}
-          </ScrollView>
-        )}
-      </View>
     </View>
   );
 
@@ -885,6 +861,7 @@ export default function ClientHomeScreen() {
 
       {/* --- FILTERS (light area) --- */}
       <View style={styles.filtersArea}>
+        <BackToDashboard />
         {/* View toggle + distance chips */}
         <View style={styles.controlsRow}>
           <SegmentedControl
@@ -1440,6 +1417,8 @@ const styles = StyleSheet.create({
   sectionHeading: { ...type.heading },
   listHeading: { marginBottom: space.md },
   categoryListWrap: { marginBottom: space.sm },
+  categoryHeading: { marginTop: space.xl, marginBottom: space.sm },
+  categoryStripBleed: { marginHorizontal: -space.xl },
   categoryListScroll: { paddingHorizontal: space.xl, gap: 8 },
   railSection: { marginBottom: space.lg },
   railScroll: { gap: space.md, paddingVertical: space.md },

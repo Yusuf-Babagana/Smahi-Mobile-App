@@ -476,7 +476,7 @@ export default function BookingDetailScreen() {
         )}
 
         {/* Rate this job — only the client, only once, only after completion */}
-        {booking.status === 'completed' && user?.role === 'client' && (
+        {booking.status === 'completed' && user?.id === booking.client && (
           <View style={styles.card}>
             {booking.has_review ? (
               <View style={styles.reviewDoneRow}>

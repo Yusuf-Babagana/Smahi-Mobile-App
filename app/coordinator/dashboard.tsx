@@ -21,6 +21,7 @@ import { agentAPI, coordinatorAPI, referralAPI, locationAPI } from '@/src/api/cl
 import { color, font, radius, shadow, space } from '@/constants/theme';
 import { Avatar, useToast, useConfirm } from '@/src/components/ui';
 import { ReferralSummary } from '@/src/types';
+import { MarketplaceShortcut } from '@/src/components/MarketplaceShortcut';
 
 const { width } = Dimensions.get('window');
 
@@ -223,6 +224,7 @@ export default function CoordinatorDashboardScreen() {
           <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={color.brand600} />
         }
       >
+        <MarketplaceShortcut />
         {/* HERO CTA: RECRUIT & ONBOARD NEW AGENT */}
         <TouchableOpacity
           activeOpacity={0.9}

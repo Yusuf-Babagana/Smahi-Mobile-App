@@ -17,6 +17,8 @@ import { CLOUDINARY_CLOUD_NAME as CLOUD_NAME } from '@/src/constants/env';
 import { color, font, radius, shadow, space, type } from '@/constants/theme';
 import { Avatar, Badge, Button, Input, StatTile, useToast, useConfirm } from '@/src/components/ui';
 import type { BadgeStatus } from '@/src/components/ui';
+import { MarketplaceShortcut } from '@/src/components/MarketplaceShortcut';
+import { HeaderDecor } from '@/src/components/HeaderDecor';
 
 function verificationBadgeStatus(status: string): BadgeStatus {
   if (status === 'rejected') return 'cancelled';
@@ -175,6 +177,7 @@ export default function BusinessDashboard() {
         start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
         style={styles.header}
       >
+        <HeaderDecor />
         <SafeAreaView edges={['top', 'left', 'right']}>
           <View style={styles.topBar}>
             <Text style={styles.brandName}>S-MAHII {t('Business')}</Text>
@@ -421,6 +424,7 @@ export default function BusinessDashboard() {
             </View>
           </View>
         </Pressable>
+        <MarketplaceShortcut style={{ marginTop: 24 }} />
       </ScrollView>
     </View>
   );
@@ -431,6 +435,7 @@ const styles = StyleSheet.create({
   centerFill: { alignItems: 'center', justifyContent: 'center' },
 
   header: {
+    overflow: 'hidden',
     paddingBottom: 56,
     borderBottomLeftRadius: radius.xxl,
     borderBottomRightRadius: radius.xxl,

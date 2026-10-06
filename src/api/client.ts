@@ -313,8 +313,10 @@ export const locationAPI = {
 
 // --- BOOKINGS ---
 export const bookingAPI = {
-  getBookings: async () => {
-    const response = await apiClient.get('bookings/');
+  // `as: 'client'` = "bookings I made" for roles whose default list is
+  // something else (artisans default to jobs they were hired for).
+  getBookings: async (params?: { as?: 'client' }) => {
+    const response = await apiClient.get('bookings/', { params });
     return getData(response);
   },
 

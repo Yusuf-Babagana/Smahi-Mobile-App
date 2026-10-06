@@ -21,6 +21,9 @@ import { color, font, radius, space, shadow } from '@/constants/theme';
 import { Avatar, Button, StatTile, useToast, useConfirm } from '@/src/components/ui';
 import { useOfflineQueue } from '@/src/utils/offlineQueue';
 import { ReferralSummary } from '@/src/types';
+import { MarketplaceShortcut } from '@/src/components/MarketplaceShortcut';
+import { StatusBar } from 'expo-status-bar';
+import { HeaderDecor } from '@/src/components/HeaderDecor';
 
 export default function AgentDashboard() {
   const router = useRouter();
@@ -146,9 +149,12 @@ export default function AgentDashboard() {
   return (
     <View style={styles.container}>
       <Stack.Screen options={{ headerShown: false }} />
+      <StatusBar style="light" />
 
       {/* HEADER */}
-      <SafeAreaView edges={['top']} style={styles.headerSafe}>
+      <View style={styles.headerSafe}>
+      <HeaderDecor gradient />
+      <SafeAreaView edges={['top']} style={styles.headerInner}>
         <View style={styles.headerRow}>
           <Avatar name={displayName} uri={user?.profile_picture} gender={user?.gender} size={48} borderRadius={14} />
 
@@ -156,7 +162,7 @@ export default function AgentDashboard() {
             <Text style={styles.headerRole}>{t('Field Agent')}</Text>
             <Text style={styles.headerName} numberOfLines={1}>{displayName}</Text>
             <View style={styles.headerMetaRow}>
-              <MaterialIcons name="place" size={13} color={color.ink300} />
+              <MaterialIcons name="place" size={13} color="rgba(255,255,255,0.7)" />
               <Text style={styles.headerMetaText} numberOfLines={1}>{lgaName}, {stateName}</Text>
             </View>
           </View>
@@ -168,7 +174,7 @@ export default function AgentDashboard() {
               accessibilityRole="button"
               accessibilityLabel={t('Change password')}
             >
-              <Ionicons name="key-outline" size={18} color={color.ink600} />
+              <Ionicons name="key-outline" size={18} color="#FFF" />
             </TouchableOpacity>
             <TouchableOpacity
               style={styles.iconButton}
@@ -176,23 +182,23 @@ export default function AgentDashboard() {
               accessibilityRole="button"
               accessibilityLabel={t('Log out')}
             >
-              <MaterialIcons name="logout" size={18} color={color.ink600} />
+              <MaterialIcons name="logout" size={18} color="#FFF" />
             </TouchableOpacity>
           </View>
         </View>
 
         <View style={styles.idRow}>
           <View style={styles.idPill}>
-            <MaterialIcons name="badge" size={13} color={color.brand600} />
+            <MaterialIcons name="badge" size={13} color="#FFF" />
             <Text style={styles.idPillText}>{user?.serial_number || t('No ID assigned')}</Text>
           </View>
           <TouchableOpacity onPress={copyAgentId} accessibilityRole="button" accessibilityLabel={t('Copy Agent ID')}>
-            <MaterialIcons name="content-copy" size={14} color={color.ink300} />
+            <MaterialIcons name="content-copy" size={14} color="rgba(255,255,255,0.7)" />
           </TouchableOpacity>
 
           {referral?.coordinator && (
             <View style={styles.sponsorRow}>
-              <MaterialIcons name="verified-user" size={13} color={color.accent600} />
+              <MaterialIcons name="verified-user" size={13} color="#7FE3D6" />
               <Text style={styles.sponsorText} numberOfLines={1}>
                 {t('Supervised by {{name}}', { name: referral.coordinator.name })}
               </Text>
@@ -200,6 +206,7 @@ export default function AgentDashboard() {
           )}
         </View>
       </SafeAreaView>
+      </View>
 
       <ScrollView
         style={styles.scrollContent}
@@ -207,6 +214,7 @@ export default function AgentDashboard() {
         showsVerticalScrollIndicator={false}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={color.brand600} />}
       >
+        <MarketplaceShortcut />
         {/* STATS */}
         <View style={styles.statsRow}>
           <TouchableOpacity style={styles.statCell} onPress={() => router.push('/agent/artisans')} activeOpacity={0.7}>
@@ -486,11 +494,14 @@ const styles = StyleSheet.create({
 
   /* HEADER */
   headerSafe: {
-    backgroundColor: color.surface,
-    borderBottomWidth: 1,
-    borderBottomColor: color.border,
+    backgroundColor: color.brand900,
+    overflow: 'hidden',
+    borderBottomLeftRadius: radius.xxl,
+    borderBottomRightRadius: radius.xxl,
+  },
+  headerInner: {
     paddingHorizontal: space.lg,
-    paddingBottom: space.md,
+    paddingBottom: space.lg,
   },
   headerRow: {
     flexDirection: 'row',
@@ -504,14 +515,14 @@ const styles = StyleSheet.create({
   headerRole: {
     fontFamily: font.bold,
     fontSize: 11.5,
-    color: color.ink400,
+    color: 'rgba(255,255,255,0.75)',
     textTransform: 'uppercase',
     letterSpacing: 0.4,
   },
   headerName: {
     fontFamily: font.extrabold,
     fontSize: 18,
-    color: color.ink900,
+    color: '#FFF',
     marginTop: 1,
   },
   headerMetaRow: {
@@ -523,7 +534,7 @@ const styles = StyleSheet.create({
   headerMetaText: {
     fontFamily: font.medium,
     fontSize: 12,
-    color: color.ink400,
+    color: 'rgba(255,255,255,0.75)',
   },
   headerActions: {
     flexDirection: 'row',
@@ -533,7 +544,7 @@ const styles = StyleSheet.create({
     width: 38,
     height: 38,
     borderRadius: radius.md,
-    backgroundColor: color.surfaceChip,
+    backgroundColor: 'rgba(255,255,255,0.14)',
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -548,7 +559,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
-    backgroundColor: color.brand100,
+    backgroundColor: 'rgba(255,255,255,0.14)',
     borderRadius: radius.sm,
     paddingHorizontal: 8,
     paddingVertical: 3,
@@ -556,7 +567,7 @@ const styles = StyleSheet.create({
   idPillText: {
     fontFamily: font.bold,
     fontSize: 11.5,
-    color: color.brand600,
+    color: '#FFF',
   },
   sponsorRow: {
     flexDirection: 'row',
@@ -567,7 +578,7 @@ const styles = StyleSheet.create({
   sponsorText: {
     fontFamily: font.medium,
     fontSize: 11.5,
-    color: color.ink400,
+    color: 'rgba(255,255,255,0.8)',
     flexShrink: 1,
   },
 

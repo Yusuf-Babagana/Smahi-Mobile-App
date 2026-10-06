@@ -51,7 +51,7 @@ export default function BookingsTab() {
 
   const load = useCallback(async () => {
     try {
-      const data = await bookingAPI.getBookings();
+      const data = await bookingAPI.getBookings({ as: 'client' });
       const list = Array.isArray(data) ? data : (data?.results || []);
       setBookings(list);
     } catch (err) {

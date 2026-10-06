@@ -12,6 +12,8 @@ import { useAuth } from '@/src/contexts/AuthContext';
 import { color, font, radius, shadow, space } from '@/constants/theme';
 import { StatTile, EmptyState, SkeletonCard, useConfirm, useToast } from '@/src/components/ui';
 import { NotificationBell } from '@/src/components/NotificationBell';
+import { MarketplaceShortcut } from '@/src/components/MarketplaceShortcut';
+import { HeaderDecor } from '@/src/components/HeaderDecor';
 
 // This dashboard is read-only monitoring, with a few deliberate
 // exceptions: Coordinator management (app/admin/coordinators.tsx, app/
@@ -112,6 +114,7 @@ export default function AdminDashboard() {
       <StatusBar style="light" />
 
       <View style={styles.header}>
+        <HeaderDecor gradient />
         <SafeAreaView edges={['top', 'left', 'right']}>
           <View style={styles.topBar}>
             <View>
@@ -358,6 +361,7 @@ export default function AdminDashboard() {
             </Animated.View>
           </>
         )}
+        <MarketplaceShortcut style={{ marginTop: 24 }} />
       </ScrollView>
     </View>
   );
@@ -368,6 +372,7 @@ const styles = StyleSheet.create({
 
   header: {
     backgroundColor: color.brand900,
+    overflow: 'hidden',
     paddingBottom: space.lg,
     borderBottomLeftRadius: radius.xxl,
     borderBottomRightRadius: radius.xxl,

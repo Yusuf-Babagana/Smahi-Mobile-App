@@ -17,6 +17,8 @@ import { NotificationBell } from '@/src/components/NotificationBell';
 import { CLOUDINARY_CLOUD_NAME as CLOUD_NAME } from '@/src/constants/env';
 import { color, font, radius, shadow, space, type } from '@/constants/theme';
 import { Avatar, Badge, Button, LanguagePickerChip, StatTile, useToast, useConfirm } from '@/src/components/ui';
+import { MarketplaceShortcut } from '@/src/components/MarketplaceShortcut';
+import { HeaderDecor } from '@/src/components/HeaderDecor';
 
 export default function ArtisanDashboard() {
   const router = useRouter();
@@ -286,6 +288,7 @@ export default function ArtisanDashboard() {
 
       {/* 1. HEADER (brand900, flat) */}
       <View style={styles.header}>
+        <HeaderDecor gradient />
         <SafeAreaView edges={['top']}>
           <View style={styles.headerContent}>
             <TouchableOpacity onPress={() => router.push('/artisan/profile')} accessibilityRole="button">
@@ -523,6 +526,7 @@ export default function ArtisanDashboard() {
 
         {/* Bottom clearance for the floating tab bar */}
         <View style={{ height: 100 }} />
+        <MarketplaceShortcut style={{ marginTop: 24 }} />
       </ScrollView>
 
       {/* Late cancellation/decline — a reason is required this close to scheduled_date */}
@@ -579,6 +583,7 @@ const styles = StyleSheet.create({
   // Header
   header: {
     backgroundColor: color.brand900,
+    overflow: 'hidden',
     paddingBottom: 56,
     borderBottomLeftRadius: radius.xxl,
     borderBottomRightRadius: radius.xxl,
