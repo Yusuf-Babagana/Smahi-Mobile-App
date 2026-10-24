@@ -1,0 +1,54 @@
+node_modules/
+
+.git/
+.expo/
+
+dist/
+web-build/
+expo-env.d.ts
+
+*.orig.*
+*.jks
+*.p8
+*.p12
+*.key
+*.mobileprovision
+
+.metro-health-check*
+
+npm-debug.*
+yarn-debug.*
+yarn-error.*
+
+.DS_Store
+*.pem
+
+.env*.local
+
+*.tsbuildinfo
+
+.natively/
+
+android/
+ios/
+
+netlify.toml
+.netlify/
+
+pnpm-lock.yaml
+# package-lock.json is committed for deterministic EAS builds
+
+# local env files (EXPO_PUBLIC_* values) — never commit
+.env
+
+# Python
+__pycache__/
+
+# Debug / scratch files
+check_dbs.py
+major_key_code.txt
+backend_ai_proxy.py
+*.pyc
+
+# local release artefacts
+*.aab
