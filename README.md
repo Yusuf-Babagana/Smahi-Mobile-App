@@ -140,3 +140,4 @@ c:\Users\DELL\Desktop\DESKTOP\smahiapp
 -   **API Configuration**: Check `src/api/client.ts` for backend URL configuration.
 -   **Navigation**: Defined in `app/_layout.tsx` and directory structure (file-based routing).
 
+"# smahi-mobile" 
